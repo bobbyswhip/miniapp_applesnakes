@@ -1,0 +1,2268 @@
+.App {
+  text-align: center;
+  overflow-x: hidden; /* Hide horizontal scrollbar */
+  overflow: hidden;
+  background: #121212;
+  
+}
+body {
+
+  overflow-x: hidden; /* Hide horizontal scrollbar */
+}
+#root {
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: #508bff;
+  
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: #888;
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+.App-logo {
+  height: 40vmin;
+  
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+
+
+.App-header {
+  background-color: #282c34;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: #949FBB;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+.App-jailInput {
+  border: 0px solid #3276ff00;
+  border-radius: 25px;
+  background-color: #3276ff00;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 28px;
+
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 35vw;
+
+  height: 20vh;
+
+  z-index: 150;
+
+
+  bottom: 0;
+  left: 0vw;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 0vh;
+
+}
+
+.App-ChatText {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 200%;
+  color:  #FFFDFA;
+  font-weight: 900;
+
+
+  height: 100vh;
+  width: 60vw;
+  bottom: 0;
+  left: 15vw;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 72%;
+  z-index: 105;
+  
+}
+.App-ChatText2 {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 140%;
+  color:  #FFFDFA;
+  font-weight: 900;
+
+
+  height: 100vh;
+  width: 70vw;
+  bottom: 0;
+  left: 15vw;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 72%;
+  z-index: 105;
+  
+}
+.App-buttonTextScaleable {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 90%;
+  color:  #282c34;
+  font-weight: 900;
+  width: 100%;
+  height: 100%;
+  
+
+
+
+  
+}
+.App-mainButtonMint {
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 100%;
+  width: 33%;
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #f9690e;
+  color: #000000;
+
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 90%;
+  color:  #282c34;
+  font-weight: 900;
+
+
+  
+}
+
+
+.App-mainButtonMint:hover {
+  background-color: #ff9470;
+  cursor: pointer;
+
+
+
+}
+
+
+
+
+
+.stretch {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 1;
+  background-color: #5492D3;
+  
+}
+.jailpage {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 150;
+  background-color: #5491d300;
+
+}
+
+.foreground {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 100;
+  background-color: #5491d300;
+  pointer-events: none;
+}
+.mintpage {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 105;
+  background-color: #5491d300;
+
+}
+.mintpage2 {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0vh;
+  left: 0vw;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 105;
+  background-color: #5491d300;
+
+}
+.sacrafice {
+  height: 50vh;
+  width: 70vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 105;
+  background-color: #5491d300;
+
+}
+
+
+
+.daytime {
+  height: 100vh;
+  width: 100vw;
+  bottom: 0;
+  left: 0;
+  margin: auto;
+  overflow: auto;
+  position: fixed;
+  right: 0;
+  top: 100px;
+  z-index: 2;
+  
+}
+.town {
+  position: fixed;
+  height: 30%;
+  width: 40%;
+  bottom: 0;
+  left: 25vw;
+  z-index: 10;
+  right: 0;
+  top: 60vh;
+
+}
+
+.town:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+.mountain{
+  position: fixed;
+  height: 25%;
+  width: 25%;
+  bottom: 0;
+  left: 46vw;
+  z-index: 10;
+  right: 0;
+  top: 45vh;
+
+}
+
+.mountain:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+.cave{
+  position: fixed;
+  height: 15%;
+  width: 15%;
+  bottom: 0;
+  left: 80vw;
+  z-index: 10;
+  right: 0;
+  top: 50vh;
+
+}
+
+.cave:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+.townStore{
+  position: fixed;
+  height: 40%;
+  width: 35%;
+  bottom: 0;
+  left: 2vw;
+  z-index: 10;
+  right: 0;
+  top: 60vh;
+
+}
+
+.townStore:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+.wizardHouse{
+  position: fixed;
+  height: 40%;
+  width: 35%;
+  bottom: 0;
+  left: 30vw;
+  z-index: 10;
+  right: 0;
+  top: 45vh;
+
+}
+
+.wizardHouse:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.mountainHouse{
+  position: fixed;
+  height: 25%;
+  width: 20%;
+  bottom: 0;
+  left: 40vw;
+  z-index: 10;
+  right: 0;
+  top: 55vh;
+
+}
+
+.mountainHouse:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.wilfred{
+  position: fixed;
+  height: 50%;
+  width: 60%;
+  bottom: 0;
+  left: 40vw;
+  z-index: 10;
+  right: 0;
+  top: 55vh;
+
+}
+
+.wilfred:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.jailHouse{
+  position: fixed;
+  height: 40%;
+  width: 40%;
+  bottom: 0;
+  left: 60vw;
+  z-index: 10;
+  right: 0;
+  top: 55vh;
+
+}
+
+.jailHouse:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.back{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 5vw;
+  z-index: 1155;
+  right: 0;
+  top: 25vh;
+
+}
+
+.back:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.mintBack{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 0.2vw;
+  z-index: 151;
+  right: 0;
+  top: 80vh;
+
+}
+
+.mintBack:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.bailButton{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 20vw;
+  z-index: 151;
+  right: 0;
+  top: 84vh;
+
+}
+
+.bailButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.lawsButton{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 45vw;
+  z-index: 151;
+  right: 0;
+  top: 84vh;
+
+}
+
+.lawsButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.jailButton{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 70vw;
+  z-index: 151;
+  right: 0;
+  top: 84vh;
+
+}
+
+.jailButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.jailButtonA{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 20vw;
+  z-index: 151;
+  right: 0;
+  top: 65vh;
+
+}
+
+.jailButtonA:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.jailButtonB{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 50vw;
+  z-index: 151;
+  right: 0;
+  top: 65vh;
+
+}
+
+.jailButtonB:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.jailButtonC{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 35vw;
+  z-index: 151;
+  right: 0;
+  top: 65vh;
+
+}
+
+.jailButtonC:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.claimButton{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 35vw;
+  z-index: 151;
+  right: 0;
+  top: 80vh;
+
+}
+
+.claimButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.jailOpen{
+  position: fixed;
+  height: 20%;
+  width: 20%;
+  bottom: 0;
+  left: 45vw;
+  z-index: 151;
+  right: 0;
+  top: 80vh;
+
+}
+
+.jailOpen:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.mintButton{
+  position: fixed;
+  height: 16%;
+  width: 16%;
+  bottom: 0;
+  left: 35vw;
+  z-index: 201;
+  right: 0;
+  top: 70vh;
+
+}
+
+.mintButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.mintButton2{
+  position: fixed;
+  height: 16%;
+  width: 16%;
+  bottom: 0;
+  left: 25vw;
+  z-index: 201;
+  right: 0;
+  top: 65vh;
+
+}
+
+.mintButton2:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+.exploreButton{
+  position: fixed;
+  height: 16%;
+  width: 16%;
+  bottom: 0;
+  right: 25vw;
+  z-index: 201;
+
+  top: 65vh;
+
+}
+
+.exploreButton:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.inventory{
+  position: fixed;
+  height: 16%;
+  width: 16%;
+  bottom: 0;
+  left: 0vw;
+  z-index: 201;
+  right: 0;
+  top: 3vh;
+
+}
+
+.inventory:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+.upgrade{
+  position: fixed;
+  height: 16%;
+  width: 75%;
+  bottom: 0;
+  left: 15vw;
+  z-index: 201;
+  right: 0;
+  top: 7vh;
+
+}
+
+.upgrade:hover {
+  transform: scale(1.05);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+
+
+
+
+
+.price{
+  position: fixed;
+  height: 10%;
+  width: 45%;
+  bottom: 0;
+  left: 24vw;
+  z-index: 101;
+  right: 0;
+  top: 59vh;
+
+}
+
+
+
+
+
+.mintBox{
+  position: fixed;
+  height: 10%;
+  width: 35%;
+  bottom: 0;
+  left: 30vw;
+  z-index: 201;
+  right: 0;
+  top: 24vh;
+  background-color: #5491d300;
+}
+.minus{
+  position: fixed;
+  height: 10%;
+  width: 10%;
+  left: 30vw;
+  z-index: 101;
+
+
+}
+.minus:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+.number{
+  position: fixed;
+  height: 10%;
+  width: 10%;
+  left: 43vw;
+  z-index: 101;
+
+
+}
+
+.plus{
+  position: fixed;
+  height: 10%;
+  width: 10%;
+  right: 35vw;
+  z-index: 101;
+
+
+}
+
+.plus:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+
+
+
+
+.warden{
+  position: fixed;
+  height: 40%;
+  width: 35%;
+  bottom: 0;
+  left: 65vw;
+  z-index: 101;
+  right: 0;
+  top: 65vh;
+
+}
+
+.warden:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+
+.shopkeep{
+  position: fixed;
+  height: 40%;
+  width: 35%;
+  bottom: 0;
+  left: 30vw;
+  z-index: 10;
+  right: 0;
+  top: 35vh;
+
+}
+
+.shopkeep:hover {
+  transform: scale(1.35);
+  transform-origin: bottom;
+  cursor: pointer;
+}
+
+
+
+
+.textSelected {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 80%;
+  color:  #ff002b;
+  font-weight: 900;
+  width: 100%;
+  height: 1vh;
+
+
+
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.App-textNormalBold {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color: #949FBB;
+  font-weight: 900;
+}
+.App-textSmallBold {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  color: #949FBB;
+  font-weight: 900;
+}
+.App-textSmallBoldHighlight {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  color: #4c67ac;
+  font-weight: 900;
+}
+
+.App-roundCorners {
+  display: flex;
+  background-color: #282c34;
+  border-radius: 25px;
+  border: 2px solid #949FBB;
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  color: #949FBB;
+  font-weight: 900;
+
+  width: 15%;
+  height: 100%;
+  display: flex;
+  align-items:center;
+  justify-content: center;
+
+  
+}
+.App-paragraph {
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,0.25);
+  background-color: #4a629223;
+  border-radius: 25px;
+  border: 2px solid #13131400;
+
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items:center;
+  justify-content: center;
+
+  
+}
+.App-paragraph2 {
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,0.25);
+  background-color: #4a629223;
+  border-radius: 25px;
+  border: 2px solid #13131400;
+
+  width: 200%;
+  height: 100%;
+  display: flex;
+  align-items:center;
+  justify-content: center;
+
+  
+}
+.App-paragraphLine {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color: #949FBB;
+  font-weight: 900;
+  margin-top: -40px;
+  border: 2px solid #949FBB;
+  border-radius: 5px;
+
+  width: 50%;
+  height: 50%;
+  display: flex;
+  align-items:center;
+  justify-content: center;
+
+
+}
+.App-sidebarLine {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color: #125486;
+  font-weight: 900;
+  border: 1px solid #12548631;
+  border-radius: 5px;
+
+  width: 50%;
+  height: 50%;
+  display: flex;
+  align-items:center;
+  justify-content: center;
+
+
+}
+.App-sidebarOption {
+  margin-top:-2px;
+  
+}
+.bar {
+  fill: #647ebe;
+}
+.bar:hover {
+  fill: #4970d1;
+}
+.axis {
+  font: 10px sans-serif;
+  color: #647ebe; 
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #647ebe;
+  shape-rendering: crispEdges;
+}
+
+.x.axis path {
+  display: none;
+}
+.App-pageHeader {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 32px;
+  color:  #647ebe;
+  font-weight: 900;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.App-paragraphHeader {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color:  #647ebe;;
+  font-weight: 900;
+  margin-top: 0px;
+}
+.App-paragraphBody {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 25px;
+  color: #949FBB;
+  font-weight: 900;
+  margin-top: -25px;
+
+}
+.App-textScaleable3 {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 12px;
+  font-size: 1vw;
+  color: #647ebe;
+  font-weight: 900;
+  height: 3vh;
+  width: 50%;
+
+  
+
+  
+}
+.App-textScaleable3Input {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 12px;
+  font-size: 2vw;
+  color: #647ebe;
+  font-weight: 900;
+  height: 3vh;
+  width: 50%;
+
+  
+
+  
+}
+.App-textScaleable2 {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  font-size: 4vw;
+  color: #949FBB;
+  font-weight: 900;
+  
+
+  
+}
+.App-textScaleable {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  font-size: 4vw;
+  color: #949FBB;
+  font-weight: 900;
+  
+  border-radius: 25px;
+  border: 2px solid #949FBB;
+
+  
+}
+.App-microFlipperBody {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 25px;
+  color: #949FBB;
+  font-weight: 900;
+  margin-top: -25px;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  height: 800px;
+}
+
+.App-microFlipperBodySmall {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 25px;
+  color: #949FBB;
+  font-weight: 900;
+  margin-top: -25px;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  height: 400px;
+}
+.App-microFlipperHeader {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color:  #647ebe;;
+  font-weight: 900;
+  margin-top: 0px;
+}
+
+.App-headerBody {
+  align-self: center;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 25px;
+  color: #949FBB;
+  font-weight: 900;
+  margin-top: 50px;
+}
+.App-roundCorners:hover {
+  background-color: #3c3e42;
+
+}
+.aadf{
+  background-color: #2ed10d;
+}
+.App-centeredText {
+  display: flex;
+  align-self: center;
+  padding-left: 10px;
+  width: 100px;
+  text-overflow: unset;
+  word-wrap: break-word;
+  justify-content: center;
+  background-color: #113d94d7;
+}
+.App-offsetButton {
+  display: flex;
+  align-self: center;
+  margin-left: -150px;
+  height: 40px;
+  width: 180px;
+  background-color: #3c3e4200;
+  border-color: #3c3e4200;
+
+}
+.App-offsetButton:hover {
+  cursor: pointer;
+}
+.App-tokenImage {
+  display: flex;
+  padding-left: 10px;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+
+}
+.App-roundedMintButton {
+  border-radius: 25px;
+  border: 7px solid #3c538f;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  background-color: #3277FF;
+  color: #3c538f;
+  width: 200px;
+  height: 86px;
+
+}
+.App-roundedMintButton:hover {
+  background-color: #478AFF;
+  cursor: pointer;
+
+
+
+}
+.App-polygonImage {
+  
+
+  width: 28px;
+  height: 28px;
+
+}
+.App-roundedImage {
+  border-radius: 25px;
+  border: 7px solid #3c538f;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  background-color: #3c538f;
+  color: #3c538f;
+  width: 200px;
+  height: 200px;
+
+}
+
+.App-roundedAppBackground {
+  text-align: center;
+  border-radius: 25px;
+  border: 7px solid #3c538f;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  background-color: #3277FF;
+  color: #3c538f;
+  width: 100%;
+  margin-left: 0%;
+  height: calc(80vh - 50px);
+
+
+}
+.App-appHeader {
+  text-align: center;
+  border-radius: 25px 25px 0px 0px;
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 100%;
+  margin-left: 0%;
+  height: 10vh;
+  margin-top: calc((80vh - 40px)*-1);
+  margin-left: 4px;
+
+
+}
+.App-appPage {
+  
+  text-align: center;
+  background-color: #508aff00;
+  color: #3c538f;
+  width: 100%;
+  margin-left: 0%;
+  height: calc(70vh - 50px);
+  margin-top: 3px;
+  margin-left: 0px;
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.parentHeader {
+
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+}
+.childHeader {
+
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 10vh;
+  width: 30%;
+  margin-left: 1vw;
+  margin-top: -3px;
+
+
+}
+.childHeader:hover {
+  background-color: #679fff;
+  cursor: pointer;
+
+
+
+}
+.App-appHeaderImage {
+  height: 10vh;
+  width: 10vh;
+  
+}
+.App-appHeaderImageSpin {
+  height: 10vh;
+  width: 10vh;
+  animation: App-logo-spin infinite 20s linear;
+}
+
+
+.App-pageHeader {
+  text-align: center;
+  font-family: 'Quicksand', sans-serif;
+
+  font-size: 3vh;
+
+  border-radius: 25px 25px 25px 25px;
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  width: 90%;
+  margin-left: 5%;
+
+  
+ 
+  color:  #FFFDFA;
+  font-weight: 900;
+  margin-top: 0px;
+
+}
+
+
+
+.parentButtons {
+
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+}
+.childButton1 {
+
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 10vh;
+  margin-left: 10%;
+  width: 33%;
+
+
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #bd0240;
+  color: #3c538f;
+
+
+}
+.childButton1:hover {
+  background-color: #f04d8c;
+  cursor: pointer;
+
+
+
+}
+
+.childButton2 {
+
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 10vh;
+  margin-left: 10%;
+  width: 33%;
+
+
+  border-radius: 25px;
+  border: 3px solid #3c538f;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #19b405;
+  color: #3c538f;
+
+
+}
+.childButton2:hover {
+  background-color: #8effc6;
+  cursor: pointer;
+
+
+
+}
+
+
+
+
+div.scroll2 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  
+  
+  border: 3px solid #3c538f;
+  background-color: #7ca8ff;
+  color: #3c538f;
+  width: 90%;
+  margin-left: 0px;
+  
+  
+  
+  height: calc(40vh);
+  text-align: center;
+
+
+  margin-left: 0%;
+
+
+
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+}
+
+
+div.scroll {
+
+
+  
+  text-align: center;
+  border-radius: 25px 25px 25px 25px;
+  border: 3px solid #FFFDFA;
+  background-color: #3277FF;
+  color: #3c538f;
+  width: 60%;
+  margin-left: 0%;
+  height: 12vh;
+
+
+
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+
+
+
+
+.App-mainButtonRed {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  margin-left: 0%;
+  width: 50%;
+
+
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #bd0240;
+  color: #3c538f;
+
+
+}
+
+.App-mainButtonRed:hover {
+  background-color: #f04d8c;
+  cursor: pointer;
+
+
+
+}
+.App-mainButtonGreen {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  margin-left: 0%;
+  width: 50%;
+
+
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #19b405;
+  color: #3c538f;
+
+
+}
+.App-mainButtonGreen:hover {
+  background-color: #8effc6;
+  cursor: pointer;
+
+
+
+}
+
+
+
+
+
+
+
+.parentAppContent {
+  text-align: center;
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+  white-space:pre-wrap;
+
+}
+.childAppContent {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  white-space:pre-wrap;
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 50%;
+  margin-left: 0px;
+  
+
+
+  height: calc(57vh - 50px);
+  text-align: center;
+
+}
+.childAppContent:hover {
+  background-color: #6b9cff;
+
+
+
+
+}
+
+
+.childAppContentETH {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  white-space:pre-wrap;
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 50%;
+  margin-left: 0px;
+  
+
+
+  height: calc(52vh - 50px);
+  text-align: center;
+
+}
+.childAppContentETH:hover {
+  background-color: #6b9cff;
+
+
+
+
+}
+
+
+
+
+
+.parentAppContent2 {
+  text-align: center;
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+  white-space:pre-wrap;
+
+}
+.childAppContent2 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  white-space:pre-wrap;
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 50%;
+  margin-left: 0px;
+  
+
+
+  height: calc(51.5vh);
+  text-align: center;
+
+}
+.childAppContent2:hover {
+  background-color: #6b9cff;
+
+
+
+
+}
+
+
+
+
+
+
+
+.parentAppContent3 {
+  text-align: center;
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+  white-space:pre-wrap;
+
+}
+.childAppContent3 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  white-space:pre-wrap;
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 50%;
+  margin-left: 0px;
+  
+
+
+  height: calc(30vh);
+  text-align: center;
+
+}
+.childAppContent3:hover {
+  background-color: #6b9cff;
+
+
+
+
+}
+
+
+
+.parentAppContent721 {
+  text-align: center;
+  white-space: nowrap;
+  height: 10vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+  white-space:pre-wrap;
+
+}
+.childAppContent721 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  white-space:pre-wrap;
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 50%;
+  margin-left: 0px;
+  
+
+
+  height: calc(47vh);
+  text-align: center;
+
+}
+.childAppContent721:hover {
+  background-color: #6b9cff;
+
+
+
+
+}
+
+
+
+
+.parentSmallButtons {
+  text-align: center;
+  white-space: nowrap;
+  height: 5vh;
+  display:flex;
+  align-items: center;
+  margin-top: 2vh;
+  
+}
+.childSmallButton1 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  margin-left: 10%;
+  width: 33%;
+  margin-top: -2.5vh;
+
+
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #bd0240;
+  color: #3c538f;
+
+
+}
+.childSmallButton1:hover {
+  background-color: #f04d8c;
+  cursor: pointer;
+
+
+
+}
+
+.childSmallButton2 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  margin-left: 10%;
+  width: 33%;
+
+  margin-top: -2.5vh;
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #19b405;
+  color: #3c538f;
+
+
+}
+.childSmallButton2:hover {
+  background-color: #8effc6;
+  cursor: pointer;
+
+
+
+}
+
+.childSmallButton3 {
+  text-align: center;
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  margin-left: 10%;
+  width: 33%;
+
+  margin-top: -2.5vh;
+  border-radius: 25px;
+  border: 3px solid #383838;
+  box-shadow: 0px 0px 28px 3px rgb(61, 61, 61);
+  background-color: #23aacc;
+
+
+}
+.childSmallButton3:hover {
+  background-color: #57d7f7;
+  cursor: pointer;
+
+
+
+}
+
+.App-textScaleable7Button {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 80%;
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 100%;
+  height: 100px;
+
+
+
+  
+}
+.App-textScaleable7 {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 80%;
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 100%;
+  height: 1vh;
+
+
+
+  
+}
+.App-textScaleable7Highlight {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 80%;
+  color:  #ea00ff;
+  font-weight: 900;
+  width: 100%;
+  height: 1vh;
+
+
+
+  
+}
+
+.App-textScaleable8 {
+
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 20px;
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 90%;
+  margin-left: 5%;
+  height: 5vh;
+  text-align: center;
+
+  
+}
+
+
+.App-textScaleable9 {
+
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 14px;
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 90%;
+  margin-left: 5%;
+  height: 5vh;
+  text-align: center;
+
+  
+}
+
+.App-appContentImage2 {
+  height: 20px;
+  width: 20px;
+
+}
+
+
+.App-appContentImage3 {
+  height: 12px;
+  width: 12px;
+
+}
+
+.App-appContentImage4 {
+  height: 48px;
+  width: 48px;
+
+
+}
+
+
+
+
+
+
+
+.App-textScaleable4 {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 28px;
+  font-size: 4vw;
+  color:  #FFFDFA;
+  font-weight: 900;
+  margin-top: -0%;
+  width: 100%;
+  height: 100%;
+  
+
+  
+}
+.App-textScaleable5 {
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 22px;
+  font-size: 4vw;
+  color:  #0796d8;
+  font-weight: 900;
+  width: 50%;
+  height: 20%;
+  margin-left: 25%;
+  margin-top: 1vh;
+
+  
+}
+
+
+.App-textScaleable6Input {
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 22px;
+  font-size: 2.5vw;
+  color:  #0796d8;
+  font-weight: 900;
+  width: 80%;
+  height: 20%;
+
+
+  
+}
+.App-textScaleable6 {
+
+  font-family: 'Quicksand', sans-serif;
+  font-size: 22px;
+  font-size: 2.5vw;
+  color:  #0796d8;
+  font-weight: 900;
+  width: 100%;
+  height: 20%;
+
+
+  
+}
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+::placeholder { /* Chrome, Firefox, Opera, Safari 10.1+ */
+  color: #FFFDFA;
+  opacity: 1; /* Firefox */
+}
+.App-textContent2 {
+  border: 3px solid #3c538f;
+  border-radius: 25px;
+  background-color: #3277FF;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 28px;
+
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 50%;
+  margin-left: 0%;
+  height: 10%;
+  margin-top: -30vh;
+
+  
+}
+.App-textContent {
+  border: 7px solid #3c538f;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 28px;
+
+  color:  #FFFDFA;
+  font-weight: 900;
+  width: 100%;
+  height: 20%;
+  margin-top: 1vh;
+
+  
+}
+.App-appContent {
+  
+  border: 3px solid #3c538f;
+  background-color: #508bff;
+  color: #3c538f;
+  width: 100%;
+
+  height: calc(57vh - 50px);
+  text-align: center;
+
+
+}
+.App-appContentInvis {
+  
+  border: 3px solid #3c548f00;
+  background-color: #508aff00;
+  color: #3c548f00;
+  width: 100%;
+
+  height: calc(57vh - 50px);
+  text-align: center;
+
+
+}
+
+.App-appContentImage {
+  height: 5vh;
+  width: 5vh;
+  margin-top: -2vh;
+}
+
+.parentContent {
+
+  white-space: nowrap;
+  height: 5vh;
+  display:flex;
+  align-items: center;
+}
+.childContent {
+
+  display: inline-block;
+  align-items: center;
+  vertical-align: center;
+  height: 5vh;
+  width: 40%;
+  margin-left: 5%;
+  margin-top: -3px;
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+.App-roundedImage2 {
+  border-radius: 25px;
+  border: 7px solid #3c538f;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  background-color: #3c538f;
+  color: #3c538f;
+  width: 100px;
+  height: 100px;
+
+}
+.App-roundedImageLarge {
+  border-radius: 25px;
+  border: 7px solid #3c538f;
+  box-shadow: 0px 0px 28px 13px rgba(148,159,187,1);
+  background-color: #3c538f;
+  color: #3c538f;
+  width: 10vw;
+  height: 10vw;
+
+
+}
+.App-imageText {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 48px;
+  color: #FFFDFA;
+  font-weight: 900;
+}
+.App-sidebarImage {
+  display: flex;
+  margin-left: 0px;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+
+}
+.App-specialLink {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 32px;
+  color: #647ebe;
+  font-weight: 900;
+  margin-top: -10px;
+}
+.App-specialLink:link { text-decoration: none; }
+.App-specialLink:visited { text-decoration: none; }
+.App-specialLink:hover { text-decoration: none; }
+.App-specialLink:active { text-decoration: none; }
+
+.App-specialLinkSmall {
+  font-family: 'Quicksand', sans-serif;
+  font-size: 28px;
+  color: #647ebe;
+  font-weight: 900;
+  margin-top: -10px;
+}
+.App-specialLinkSmall:link { text-decoration: none; }
+.App-specialLinkSmall:visited { text-decoration: none; }
+.App-specialLinkSmall:hover { text-decoration: none; }
+.App-specialLinkSmall:active { text-decoration: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-paragraphHeaderImage {
+    width: 128px;
+    height: 128px;
+    padding-top: 20px;
+    
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+
+.container {
+  display: flex;
+  justify-content: space-evenly; /* or space-between or space-around */
+
+}
+

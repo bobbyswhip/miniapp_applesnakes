@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-blue: #0052FF;
+  --secondary-blue: #1E3A8A;
+  --accent-blue: #3B82F6;
+  --background-dark: #0A0B0D;
+  --card-dark: #1A1B1F;
+  --text-primary: #FFFFFF;
+  --text-secondary: #94A3B8;
+  --border-color: #27272A;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #0A0B0D 0%, #1A1B1F 100%);
+  color: var(--text-primary);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-blue);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(26, 27, 31, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+/* Transaction notification animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Snow falling animation with fade-out after 50% */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-20vh) translateX(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(50vh) translateX(25px);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(85vh) translateX(37px);
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(120vh) translateX(50px);
+    opacity: 0;
+  }
+}
+
+.animate-snow {
+  animation: snowfall linear infinite;
+}
+
+/* Cloud drift animation */
+@keyframes cloudDrift {
+  0% {
+    transform: translateX(-10%);
+  }
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+.animate-cloud {
+  animation: cloudDrift linear infinite;
+}
+
+/* Cave shifting spooky ambiance animation */
+@keyframes caveShift {
+  0%, 100% {
+    opacity: 0.85;
+    background-position: 0% 50%;
+  }
+  25% {
+    opacity: 0.88;
+    background-position: 100% 50%;
+  }
+  50% {
+    opacity: 0.82;
+    background-position: 100% 100%;
+  }
+  75% {
+    opacity: 0.87;
+    background-position: 0% 100%;
+  }
+}
+
+.animate-cave-shift {
+  animation: caveShift 8s ease-in-out infinite;
+  background-size: 200% 200%;
+}
+
+/* Chat interface floating animation */
+@keyframes chatFloat {
+  0%, 100% {
+    transform: translateX(-50%) translateY(0px);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-8px);
+  }
+}
+
+.animate-chat-float {
+  animation: chatFloat 3s ease-in-out infinite;
+}
