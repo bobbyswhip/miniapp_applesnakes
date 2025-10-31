@@ -1,5 +1,7 @@
 # Base Crypto Wallet App
 
+
+
 A TypeScript crypto wallet application for Base blockchain that supports multiple wallet connection methods including Farcaster miniapps, BaseApp, and standard web3 wallets.
 
 ## Features
