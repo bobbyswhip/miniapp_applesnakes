@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useReadContract } from 'wagmi';
 import { parseEther, formatUnits, formatEther } from 'viem';
 import { base } from 'wagmi/chains';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, POOL_CONFIG } from '@/config';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory } from '@/contexts/InventoryContext';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAddress } from '@coinbase/onchainkit/identity';
 import { JailInterface } from '@/components/JailInterface';
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
@@ -41,7 +40,7 @@ const LOCATIONS: Record<LocationId, Location> = {
   mountain: {
     id: 'mountain',
     name: 'Mount Blowamanjaro',
-    backgroundImage: '/Images/mountian.png',
+    backgroundImage: '/Images/Mountain.png',
     description: 'A mysterious mountain',
     classification: 'Snow',
     musicPath: '/Music/Frozen_Heights.wav',
@@ -59,7 +58,7 @@ const LOCATIONS: Record<LocationId, Location> = {
   cave: {
     id: 'cave',
     name: 'The Hollow',
-    backgroundImage: '/Images/cavebackground.png',
+    backgroundImage: '/Images/CaveBackground.png',
     description: 'A dark and mysterious cave',
     classification: 'Cave',
     musicPath: '/Music/Echoes_in_the_Hollow.wav',
@@ -86,7 +85,7 @@ const LOCATIONS: Record<LocationId, Location> = {
   store: {
     id: 'store',
     name: 'Town Store',
-    backgroundImage: '/Images/storebackground.png',
+    backgroundImage: '/Images/StoreBackground.png',
     description: 'The town general store',
     classification: 'Valley',
     musicPath: '/Music/Grassy_Valley_River_Basin.wav',
@@ -95,7 +94,7 @@ const LOCATIONS: Record<LocationId, Location> = {
   wizardhouse: {
     id: 'wizardhouse',
     name: 'Wizard House',
-    backgroundImage: '/Images/wizardhousebackground.png',
+    backgroundImage: '/Images/WizardHouseBackground.png',
     description: 'The wizard\'s mysterious dwelling',
     classification: 'Valley',
     musicPath: '/Music/Grassy_Valley_River_Basin.wav',
@@ -103,7 +102,7 @@ const LOCATIONS: Record<LocationId, Location> = {
   }
 };
 
-export default function Home() {
+function HomeContent() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [currentLocation, setCurrentLocation] = useState<LocationId>('main');
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -144,7 +143,7 @@ export default function Home() {
   // Swap state management
   const [ethAmount, setEthAmount] = useState<string>('');
   const [tokenEstimate, setTokenEstimate] = useState<string>('0');
-  const [slippage, setSlippage] = useState<number>(0.5);
+  const [_slippage, _setSlippage] = useState<number>(0.5);
   const [isLoadingQuote, setIsLoadingQuote] = useState<boolean>(false);
 
   // Wrap state management
@@ -152,6 +151,7 @@ export default function Home() {
   const [wrapMode, setWrapMode] = useState<'wrap' | 'unwrap'>('wrap');
   const [unwrapCount, setUnwrapCount] = useState(1);
   const [unwrapError, setUnwrapError] = useState<string>('');
+  const [currentOperationType, setCurrentOperationType] = useState<'mint' | 'hatch' | 'breed' | 'wrap' | 'unwrap' | null>(null);
 
   // Hatch state management
   const [selectedEggs, setSelectedEggs] = useState<Set<number>>(new Set());
@@ -169,7 +169,7 @@ export default function Home() {
   const [showJail, setShowJail] = useState(false);
 
   // Wagmi hooks for wallet and contract interaction
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
 
@@ -240,7 +240,7 @@ export default function Home() {
   });
 
   // Read approval status for wrapper
-  const { data: isWrapperApproved, refetch: refetchWrapperApproval } = useReadContract({
+  const { data: isWrapperApproved } = useReadContract({
     address: contracts.nft.address,
     abi: contracts.nft.abi,
     functionName: 'isApprovedForAll',
@@ -293,11 +293,13 @@ export default function Home() {
             address: contracts.nft.address as `0x${string}`,
             abi: contracts.nft.abi,
             functionName: 'poolIdRaw',
+            args: [],
           }) as Promise<`0x${string}`>,
           publicClient.readContract({
             address: contracts.nft.address as `0x${string}`,
             abi: contracts.nft.abi,
             functionName: 'hook',
+            args: [],
           }) as Promise<`0x${string}`>,
         ]);
 
@@ -372,7 +374,8 @@ export default function Home() {
   // Calculate ETH needed for target NFT count using quoter
   const calculateETHForNFTs = async (targetNFTCount: number): Promise<string> => {
     if (!publicClient) {
-      throw new Error('Public client not available');
+      console.warn('Public client not available for price calculation');
+      return '0';
     }
 
     try {
@@ -385,11 +388,13 @@ export default function Home() {
           address: contracts.nft.address as `0x${string}`,
           abi: contracts.nft.abi,
           functionName: 'poolIdRaw',
+          args: [],
         }) as Promise<`0x${string}`>,
         publicClient.readContract({
           address: contracts.nft.address as `0x${string}`,
           abi: contracts.nft.abi,
           functionName: 'hook',
+          args: [],
         }) as Promise<`0x${string}`>,
       ]);
 
@@ -484,6 +489,7 @@ export default function Home() {
         address: contracts.nft.address as `0x${string}`,
         abi: contracts.nft.abi,
         functionName: 'swapMint',
+        args: [],
         value: parseEther(ethAmount),
       });
     } catch (error) {
@@ -622,6 +628,8 @@ export default function Home() {
       const tokenIds = Array.from(selectedNFTs);
       const totalFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(tokenIds.length) : 0n;
 
+      setCurrentOperationType('wrap'); // Track operation type to skip NFT refetch
+
       writeContract({
         address: contracts.wrapper.address as `0x${string}`,
         abi: contracts.wrapper.abi,
@@ -631,6 +639,7 @@ export default function Home() {
       });
     } catch (error) {
       console.error('Wrap error:', error);
+      setCurrentOperationType(null); // Clear on error
     }
   };
 
@@ -648,6 +657,8 @@ export default function Home() {
     try {
       const totalFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(unwrapCount) : 0n;
 
+      setCurrentOperationType('unwrap'); // Track operation type
+
       writeContract({
         address: contracts.wrapper.address as `0x${string}`,
         abi: contracts.wrapper.abi,
@@ -657,6 +668,7 @@ export default function Home() {
       });
     } catch (error) {
       console.error('Unwrap error:', error);
+      setCurrentOperationType(null); // Clear on error
     }
   };
 
@@ -691,7 +703,14 @@ export default function Home() {
   useEffect(() => {
     if (isConfirmed && !hasRefreshedRef.current) {
       hasRefreshedRef.current = true;
-      console.log('✅ Transaction confirmed! Operation successful.');
+      console.log(`✅ Transaction confirmed! Operation: ${currentOperationType || 'unknown'}`);
+
+      // Skip NFT refetch for wrap operations (NFTs are removed via optimistic update)
+      if (currentOperationType === 'wrap') {
+        console.log('⏭️ Skipping NFT refetch for wrap operation (using optimistic update)');
+        setCurrentOperationType(null);
+        return;
+      }
 
       // Handle successful hatch - show success UI with revealed images
       if (selectedEggs.size > 0) {
@@ -786,7 +805,7 @@ export default function Home() {
         .then(() => {
           console.log('🎵 Background music started successfully');
         })
-        .catch((e) => {
+        .catch((_e) => {
           console.log('⚠️ Audio autoplay prevented by browser. Music will start on first user interaction.');
           // Try to play on first user click anywhere
           const startAudio = () => {
@@ -1387,7 +1406,7 @@ export default function Home() {
             title="Explore the Mountain"
           >
             <img
-              src="/Images/mountian.png"
+              src="/Images/Mountain.png"
               alt="Mountain"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
@@ -1500,12 +1519,12 @@ export default function Home() {
         />
       )}
 
-      {/* Cave location background - cavebackground.png full screen */}
+      {/* Cave location background - CaveBackground.png full screen */}
       {currentLocation === 'cave' && (
         <div
           className="absolute inset-0 z-20 pointer-events-none"
           style={{
-            backgroundImage: 'url(/Images/cavebackground.png)',
+            backgroundImage: 'url(/Images/CaveBackground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1539,12 +1558,12 @@ export default function Home() {
         />
       )}
 
-      {/* Store location background - storebackground.png full screen */}
+      {/* Store location background - StoreBackground.png full screen */}
       {currentLocation === 'store' && (
         <div
           className="absolute inset-0 z-20 pointer-events-none"
           style={{
-            backgroundImage: 'url(/Images/storebackground.png)',
+            backgroundImage: 'url(/Images/StoreBackground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1552,12 +1571,12 @@ export default function Home() {
         />
       )}
 
-      {/* Wizard House location background - wizardhousebackground.png full screen */}
+      {/* Wizard House location background - WizardHouseBackground.png full screen */}
       {currentLocation === 'wizardhouse' && (
         <div
           className="absolute inset-0 z-20 pointer-events-none"
           style={{
-            backgroundImage: 'url(/Images/wizardhousebackground.png)',
+            backgroundImage: 'url(/Images/WizardHouseBackground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1583,7 +1602,7 @@ export default function Home() {
             title="Jail House"
           >
             <img
-              src="/Images/JailHouse.png"
+              src="/Images/Jailhouse.png"
               alt="Jail House"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
@@ -1730,7 +1749,7 @@ export default function Home() {
           }}
         >
           <img
-            src="/Images/jailhousedesk.png"
+            src="/Images/JailhouseDesk.png"
             alt="Jail House Desk"
             className="w-full h-full object-contain"
           />
@@ -1750,7 +1769,7 @@ export default function Home() {
           }}
         >
           <img
-            src="/Images/jailhouselarge.png"
+            src="/Images/JailhouseLarge.png"
             alt="Jail House Large"
             className="w-full h-full object-contain"
           />
@@ -1776,7 +1795,7 @@ export default function Home() {
             transform: 'translate(-50%, -50%) scale(1)',
             width: 'clamp(132px, min(22vw, 22vh), 352px)',
             aspectRatio: '1 / 1',
-            backgroundImage: 'url(/Images/storeshopkeep.png)',
+            backgroundImage: 'url(/Images/StoreShopkeep.png)',
             backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1798,7 +1817,7 @@ export default function Home() {
         <div
           className="absolute inset-0 z-30 pointer-events-none"
           style={{
-            backgroundImage: 'url(/Images/storeforeground.png)',
+            backgroundImage: 'url(/Images/StoreForeground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1825,7 +1844,7 @@ export default function Home() {
             transform: 'translate(-50%, -50%) scale(1)',
             width: 'clamp(132px, min(22vw, 22vh), 352px)',
             aspectRatio: '1 / 1',
-            backgroundImage: 'url(/Images/wizard.png)',
+            backgroundImage: 'url(/Images/Wizard.png)',
             backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -1847,7 +1866,7 @@ export default function Home() {
         <div
           className="absolute inset-0 z-30 pointer-events-none"
           style={{
-            backgroundImage: 'url(/Images/wizardhouseforeground.png)',
+            backgroundImage: 'url(/Images/WizardHouseForeground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -3118,7 +3137,7 @@ export default function Home() {
                   ) : nfts.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
                       <p style={{ fontSize: 'clamp(14px, 3vw, 18px)', fontWeight: 700, color: '#FFFFFF', marginTop: 'clamp(8px, 1.6vw, 12px)' }}>No NFTs Found</p>
-                      <p style={{ fontSize: 'clamp(11px, 2.2vw, 13px)', color: 'rgba(255, 255, 255, 0.6)', marginTop: 'clamp(4px, 0.8vw, 6px)' }}>You don't own any NFTs to wrap</p>
+                      <p style={{ fontSize: 'clamp(11px, 2.2vw, 13px)', color: 'rgba(255, 255, 255, 0.6)', marginTop: 'clamp(4px, 0.8vw, 6px)' }}>You don&apos;t own any NFTs to wrap</p>
                     </div>
                   ) : (
                     <div style={{
@@ -4759,5 +4778,13 @@ export default function Home() {
         }
       `}</style>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -216,6 +216,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
         ownerIsWarden: info.ownerIsWarden,
         ownerIsJailExempt: info.ownerIsJailExempt,
         metadata: metadata.raw,
+        swapMintTime: 0,
+        canUnwrap: false,
       }]);
     }
   };
@@ -252,7 +254,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
 
     // Step 2: Batch load token info and tokenURI
     const batchSize = 30;
-    let allInfos: any[] = [];
+    const allInfos: any[] = [];
     const tokenURIMap = new Map<number, string>();
 
     for (let i = 0; i < tokenIds.length; i += batchSize) {
@@ -332,6 +334,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
           ownerIsWarden: info.ownerIsWarden,
           ownerIsJailExempt: info.ownerIsJailExempt,
           metadata: metadata.raw,
+          swapMintTime: 0,
+          canUnwrap: false,
         };
       })
       .filter((nft): nft is NonNullable<typeof nft> =>

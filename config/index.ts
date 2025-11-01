@@ -13,6 +13,8 @@ export {
   QUOTER_ADDRESS,
   QUOTER_ABI,
   POOL_CONFIG,
+  HOOK_ADDRESS,
+  POOL_MANAGER_ADDRESS,
 } from './contracts';
 
 export type { ContractConfig, ChainContracts, AppContracts } from './types';

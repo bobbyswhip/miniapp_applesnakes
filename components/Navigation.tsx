@@ -13,10 +13,10 @@ import { useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 
 export function Navigation() {
-  const pathname = usePathname();
+  const _pathname = usePathname();
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { nfts } = useNFTContext();
+  const { nfts: _nfts } = useNFTContext();
   const { toggleInventory } = useInventory();
   const { displayName, hasBasename } = useBasename(address);
   const contracts = getContracts(base.id);
@@ -51,7 +51,8 @@ export function Navigation() {
         const response = await fetch(url);
 
         if (!response.ok) {
-          throw new Error(`Alchemy API error: ${response.status}`);
+          console.warn(`Alchemy API error: ${response.status}`);
+          return; // Fail gracefully, price will remain null
         }
 
         const data = await response.json();
@@ -90,11 +91,13 @@ export function Navigation() {
             address: contracts.nft.address as `0x${string}`,
             abi: contracts.nft.abi,
             functionName: 'poolIdRaw',
+            args: [],
           }) as Promise<`0x${string}`>,
           publicClient.readContract({
             address: contracts.nft.address as `0x${string}`,
             abi: contracts.nft.abi,
             functionName: 'hook',
+            args: [],
           }) as Promise<`0x${string}`>,
         ]);
 
@@ -204,7 +207,7 @@ export function Navigation() {
     router.push('/?fastTravelMint=true');
   };
 
-  const shortenAddress = (addr: string) => {
+  const _shortenAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
@@ -369,6 +372,60 @@ export function Navigation() {
               />
             </a>
 
+            {/* Docs Button */}
+            <Link
+              href="/docs"
+              className="relative overflow-hidden border bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer flex items-center"
+              style={{
+                boxShadow: '0 0 10px rgba(168, 85, 247, 0.1), inset 0 0 10px rgba(168, 85, 247, 0.03)',
+                minHeight: 'clamp(40px, 8vw, 56px)',
+                borderRadius: 'clamp(6px, 1vw, 8px)'
+              }}
+            >
+              {/* Shimmer effect */}
+              <div
+                className="absolute inset-0 opacity-30"
+                style={{
+                  background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.3), transparent)',
+                  animation: 'shimmer 3s infinite',
+                }}
+              />
+
+              {/* Content */}
+              <div className="relative flex items-center" style={{ gap: 'clamp(0.4rem, 1vw, 0.75rem)', padding: 'clamp(0.375rem, 1vw, 0.5rem) clamp(0.625rem, 1.5vw, 0.75rem)' }}>
+                <svg
+                  className="text-purple-400 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style={{ width: 'clamp(14px, 2.8vw, 16px)', height: 'clamp(14px, 2.8vw, 16px)' }}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                  />
+                </svg>
+                <div className="flex flex-col">
+                  <span className="font-medium tracking-wider text-purple-200" style={{ fontSize: 'clamp(9px, 1.8vw, 12px)' }}>
+                    DOCS
+                  </span>
+                  <span className="font-bold tracking-wide text-white" style={{ fontSize: 'clamp(11px, 2.2vw, 14px)' }}>
+                    Whitepaper
+                  </span>
+                </div>
+              </div>
+
+              {/* Glow effect on hover */}
+              <div
+                className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                style={{
+                  background: 'radial-gradient(circle at center, rgba(168, 85, 247, 0.1), transparent 70%)'
+                }}
+              />
+            </Link>
+
             {/* Add shimmer animation */}
             <style jsx>{`
               @keyframes shimmer {
@@ -384,7 +441,7 @@ export function Navigation() {
               {({
                 account,
                 chain,
-                openAccountModal,
+                openAccountModal: _openAccountModal,
                 openChainModal,
                 openConnectModal,
                 authenticationStatus,

@@ -45,5 +45,5 @@ export const config = getDefaultConfig({
   },
   ssr: true,
   // Enable wallet storage and connection persistence
-  storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  storage: typeof window !== 'undefined' ? window.localStorage as any : undefined,
 });

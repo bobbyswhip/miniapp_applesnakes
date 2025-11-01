@@ -1,6 +1,6 @@
 import { base, baseSepolia } from 'wagmi/chains';
 import { ERC20_ABI } from '@/abis/erc20';
-import { NFT_ABI } from '@/abis/nft';
+import { NFT_ABI } from '@/abis/nft'; // Full ABI with poolIdRaw and hook functions
 import { WRAPPER_ABI } from '@/abis/wrapper';
 import { QUOTER_ABI } from '@/abis/quoter';
 import type { ChainContracts } from './types';
@@ -8,13 +8,19 @@ import type { ChainContracts } from './types';
 // Uniswap V4 Quoter address on Base
 export const QUOTER_ADDRESS = '0x0d5e0f971ed27fbff6c2837bf31316121532048d' as const;
 
+// Hook address for V4 Super Strategy
+export const HOOK_ADDRESS = '0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8' as const;
+
+// Pool Manager address on Base
+export const POOL_MANAGER_ADDRESS = '0x498581fF718922c3f8e6A244956aF099B2652b2b' as const;
+
 // Pool configuration for ETH/Token swap
 export const POOL_CONFIG = {
   currency0: '0x0000000000000000000000000000000000000000', // ETH
-  currency1: '0xcc3440d13e1A7805e45b1Bde3376DA5d90d95d55', // Token1
+  currency1: '0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6', // Token1
   fee: 3000, // 0.3% fee tier
   tickSpacing: 60,
-  hooks: '0xca51C787E7136dB1cbFd92a24287ea8E9363b0c8', // Hook address
+  hooks: HOOK_ADDRESS, // Hook address
 } as const;
 
 export { QUOTER_ABI };
@@ -24,12 +30,12 @@ export { QUOTER_ABI };
  */
 export const BASE_MAINNET_CONTRACTS: ChainContracts = {
   nft: {
-    address: '0xDAaBc7Ff7874cC80275950372F4b34fFB93CF18F',
+    address: '0xa85D49d8B7a041c339D18281a750dE3D7c15A628',
     abi: NFT_ABI,
     name: 'Applesnakes NFT',
   },
   token: {
-    address: '0xcc3440d13e1A7805e45b1Bde3376DA5d90d95d55',
+    address: '0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6',
     abi: ERC20_ABI,
     name: 'Token1',
   },
@@ -50,7 +56,7 @@ export const BASE_SEPOLIA_CONTRACTS: ChainContracts = {
     name: 'Applesnakes NFT (Testnet)',
   },
   token: {
-    address: '0xcc3440d13e1A7805e45b1Bde3376DA5d90d95d55',
+    address: '0xc1e1fEf47Ec73b5572494f63234aAC18e344490D',
     abi: ERC20_ABI,
     name: 'Token1 (Testnet)',
   },

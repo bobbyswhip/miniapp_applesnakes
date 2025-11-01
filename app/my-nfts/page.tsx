@@ -55,7 +55,7 @@ export default function MyNFTsPage() {
         <div className="text-center space-y-4">
           <span className="text-6xl">🐍</span>
           <h2 className="text-2xl font-bold text-white">No AppleSnakes Yet</h2>
-          <p className="text-gray-400">You don't own any AppleSnakes NFTs</p>
+          <p className="text-gray-400">You don&apos;t own any AppleSnakes NFTs</p>
           <p className="text-sm text-gray-500">Mint or buy some to get started!</p>
         </div>
       </div>

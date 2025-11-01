@@ -2,9 +2,6 @@
 
 import Image from 'next/image';
 import { useState, useEffect, memo } from 'react';
-import { useReadContract } from 'wagmi';
-import { getContracts } from '@/config';
-import { base } from 'wagmi/chains';
 
 /**
  * NFTImage Component

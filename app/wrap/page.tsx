@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { formatEther, parseEther } from 'viem';
+import { formatEther } from 'viem';
 import { base } from 'wagmi/chains';
 import { getContracts } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
@@ -10,7 +10,7 @@ import { useTransactions } from '@/contexts/TransactionContext';
 
 export default function WrapPage() {
   const { isConnected, address } = useAccount();
-  const { nfts, isLoading, error } = useNFTContext();
+  const { nfts, isLoading, error: _error, refetch: refetchNFTs } = useNFTContext();
   const contracts = getContracts(base.id);
   const { addTransaction, updateTransaction } = useTransactions();
 
@@ -18,8 +18,11 @@ export default function WrapPage() {
   const [mode, setMode] = useState<'wrap' | 'unwrap'>('wrap');
   const [unwrapCount, setUnwrapCount] = useState(1);
   const [currentOperation, setCurrentOperation] = useState<'approve' | 'wrap' | 'unwrap' | null>(null);
+  const [wrappedNFTs, setWrappedNFTs] = useState<Set<number>>(new Set()); // Track wrapped NFTs for instant UI update
+  const [operationByHash, setOperationByHash] = useState<Record<string, 'approve' | 'wrap' | 'unwrap'>>({});
+  const [pendingWrapNFTs, setPendingWrapNFTs] = useState<Set<number>>(new Set()); // Track NFTs being wrapped (for error recovery)
 
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   // Read wrap fee
@@ -40,7 +43,7 @@ export default function WrapPage() {
   });
 
   // Read wToken balance
-  const { data: wTokenBalance } = useReadContract({
+  const { data: wTokenBalance, refetch: refetchWTokenBalance } = useReadContract({
     address: contracts.token.address,
     abi: contracts.token.abi,
     functionName: 'balanceOf',
@@ -59,13 +62,14 @@ export default function WrapPage() {
     setSelectedNFTs(newSelected);
   };
 
-  // Select all / Deselect all
-  const toggleSelectAll = () => {
-    if (selectedNFTs.size === nfts.length) {
-      setSelectedNFTs(new Set());
-    } else {
-      setSelectedNFTs(new Set(nfts.map(nft => nft.tokenId)));
-    }
+  // Select all
+  const handleSelectAll = () => {
+    setSelectedNFTs(new Set(displayedNFTs.map(nft => nft.tokenId)));
+  };
+
+  // Unselect all
+  const handleUnselectAll = () => {
+    setSelectedNFTs(new Set());
   };
 
   // Track transaction status
@@ -77,25 +81,85 @@ export default function WrapPage() {
         unwrap: `Unwrapping ${unwrapCount} NFT${unwrapCount > 1 ? 's' : ''}`,
       };
 
+      // Store operation type by hash for success handler
+      setOperationByHash(prev => ({ ...prev, [hash]: currentOperation }));
+
       // Add transaction when hash is available
       addTransaction(hash, descriptions[currentOperation]);
+
+      // Clear operation immediately for wrap so user can wrap again
+      if (currentOperation === 'wrap') {
+        setCurrentOperation(null);
+      }
     }
   }, [hash, currentOperation, selectedNFTs.size, unwrapCount, addTransaction]);
 
   // Update transaction status
   useEffect(() => {
-    if (hash) {
-      if (isSuccess) {
+    if (hash && isSuccess) {
+      const operation = operationByHash[hash];
+      if (operation) {
         updateTransaction(hash, 'success');
+
         // Refetch approval status after approval succeeds
-        if (currentOperation === 'approve') {
+        if (operation === 'approve') {
           refetchApproval();
+          setCurrentOperation(null);
         }
-        // Clear operation
-        setCurrentOperation(null);
+
+        // On wrap: just refetch wToken balance (UI already updated immediately)
+        if (operation === 'wrap') {
+          refetchWTokenBalance();
+          setPendingWrapNFTs(new Set()); // Clear pending wrap NFTs on success
+        }
+
+        // On unwrap: full NFT refetch to see what the user got (FIFO)
+        if (operation === 'unwrap') {
+          refetchNFTs();
+          refetchWTokenBalance();
+          setWrappedNFTs(new Set()); // Clear wrapped NFTs tracking
+          setCurrentOperation(null);
+        }
+
+        // Clean up hash tracking
+        setOperationByHash(prev => {
+          const newMap = { ...prev };
+          delete newMap[hash];
+          return newMap;
+        });
       }
     }
-  }, [hash, isSuccess, currentOperation, updateTransaction, refetchApproval]);
+  }, [hash, isSuccess, operationByHash, updateTransaction, refetchApproval, refetchNFTs, refetchWTokenBalance]);
+
+  // Handle transaction errors (including user rejection)
+  useEffect(() => {
+    if (writeError && currentOperation) {
+      const errorMessage = writeError.message || 'Unknown error';
+
+      // Check if user rejected the transaction
+      if (errorMessage.includes('User rejected') ||
+          errorMessage.includes('User denied') ||
+          errorMessage.includes('user rejected')) {
+        console.log('Transaction rejected by user');
+      } else {
+        console.error('Transaction error:', errorMessage);
+      }
+
+      // Restore NFTs if wrap operation failed
+      if (currentOperation === 'wrap' && pendingWrapNFTs.size > 0) {
+        // Remove pending NFTs from wrapped set (restore to display)
+        setWrappedNFTs(prev => {
+          const newSet = new Set(prev);
+          pendingWrapNFTs.forEach(id => newSet.delete(id));
+          return newSet;
+        });
+        setPendingWrapNFTs(new Set()); // Clear pending
+      }
+
+      // Clear current operation on error
+      setCurrentOperation(null);
+    }
+  }, [writeError, currentOperation, pendingWrapNFTs]);
 
   // Handle approval
   const handleApprove = () => {
@@ -115,6 +179,14 @@ export default function WrapPage() {
     setCurrentOperation('wrap');
     const tokenIds = Array.from(selectedNFTs);
     const totalFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(tokenIds.length) : 0n;
+
+    // Store which NFTs we're wrapping for error recovery
+    const wrappingNFTs = new Set(selectedNFTs);
+    setPendingWrapNFTs(wrappingNFTs);
+
+    // Immediately update UI for instant feedback
+    setWrappedNFTs(new Set([...wrappedNFTs, ...wrappingNFTs]));
+    setSelectedNFTs(new Set());
 
     writeContract({
       address: contracts.wrapper.address,
@@ -138,6 +210,9 @@ export default function WrapPage() {
       value: totalFee,
     });
   };
+
+  // Filter out wrapped NFTs for instant UI feedback
+  const displayedNFTs = nfts.filter(nft => !wrappedNFTs.has(nft.tokenId));
 
   const selectedCount = selectedNFTs.size;
   const totalWrapFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(selectedCount) : 0n;
@@ -166,7 +241,7 @@ export default function WrapPage() {
                 Connect Your Wallet
               </h2>
               <p className="text-gray-400">
-                Use the "Connect Wallet" button in the header above to start wrapping your NFTs
+                Use the &quot;Connect Wallet&quot; button in the header above to start wrapping your NFTs
               </p>
             </div>
           </div>
@@ -222,12 +297,22 @@ export default function WrapPage() {
                         Fee: {wrapFee ? formatEther(totalWrapFee) : '0'} ETH
                       </p>
                     </div>
-                    <button
-                      onClick={toggleSelectAll}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                    >
-                      {selectedNFTs.size === nfts.length ? 'Deselect All' : 'Select All'}
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSelectAll}
+                        disabled={selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={handleUnselectAll}
+                        disabled={selectedNFTs.size === 0}
+                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Unselect All
+                      </button>
+                    </div>
                   </div>
 
                   {/* NFT Grid */}
@@ -235,15 +320,15 @@ export default function WrapPage() {
                     <div className="flex items-center justify-center py-16">
                       <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
                     </div>
-                  ) : nfts.length === 0 ? (
+                  ) : displayedNFTs.length === 0 ? (
                     <div className="text-center py-16">
                       <span className="text-7xl">🐍</span>
                       <h3 className="text-2xl font-bold text-white mt-4">No NFTs Found</h3>
-                      <p className="text-gray-400 mt-2">You don't own any NFTs to wrap</p>
+                      <p className="text-gray-400 mt-2">You don&apos;t own any NFTs to wrap</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 max-h-[500px] overflow-y-auto pr-2">
-                      {nfts.map((nft) => {
+                      {displayedNFTs.map((nft) => {
                         const isSelected = selectedNFTs.has(nft.tokenId);
                         return (
                           <button
@@ -285,7 +370,7 @@ export default function WrapPage() {
                   )}
 
                   {/* Action Button */}
-                  {nfts.length > 0 && (
+                  {displayedNFTs.length > 0 && (
                     <div className="border-t border-gray-700 pt-6">
                       {!isApproved ? (
                         <button
@@ -298,13 +383,13 @@ export default function WrapPage() {
                       ) : (
                         <button
                           onClick={handleWrap}
-                          disabled={selectedCount === 0 || isPending || isConfirming}
+                          disabled={selectedCount === 0 || isPending}
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                         >
                           <span>🪙</span>
                           <span>
-                            {isPending || isConfirming
-                              ? 'Wrapping...'
+                            {isPending
+                              ? 'Confirm in Wallet...'
                               : `Wrap ${selectedCount} NFT${selectedCount !== 1 ? 's' : ''} for ${wrapFee ? formatEther(totalWrapFee) : '0'} ETH`}
                           </span>
                         </button>

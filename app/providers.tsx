@@ -4,6 +4,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { MiniKitProvider } from '@coinbase/onchainkit/minikit';
 import { config } from '@/lib/wagmi';
 import { ReactNode } from 'react';
 import { NFTProvider } from '@/contexts/NFTContext';
@@ -30,13 +31,20 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={config} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <AutoConnectWrapper>
-            <TransactionProvider>
-              <NFTProvider>{children}</NFTProvider>
-            </TransactionProvider>
-          </AutoConnectWrapper>
-        </RainbowKitProvider>
+        {/* @ts-expect-error - MiniKitProvider has complex return type that confuses TypeScript but works at runtime */}
+        <MiniKitProvider
+          enabled={true}
+          notificationProxyUrl="/api/notify"
+          autoConnect={true}
+        >
+          <RainbowKitProvider>
+            <AutoConnectWrapper>
+              <TransactionProvider>
+                <NFTProvider>{children}</NFTProvider>
+              </TransactionProvider>
+            </AutoConnectWrapper>
+          </RainbowKitProvider>
+        </MiniKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

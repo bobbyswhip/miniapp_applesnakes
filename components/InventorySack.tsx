@@ -112,9 +112,9 @@ export function InventorySack() {
   const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
 
   // Parse vesting data
-  const vestBalance = vestingData ? Number(vestingData[0]) / 1e18 : 0;
-  const lastMint = vestingData ? Number(vestingData[1]) : 0;
-  const lastClaim = vestingData ? Number(vestingData[2]) : 0;
+  const vestBalance = vestingData ? Number((vestingData as unknown[])[0]) / 1e18 : 0;
+  const lastMint = vestingData ? Number((vestingData as unknown[])[1]) : 0;
+  const lastClaim = vestingData ? Number((vestingData as unknown[])[2]) : 0;
   const claimableFormatted = claimableAmount ? Number(claimableAmount) / 1e18 : 0;
 
   // Calculate vesting progress and time remaining
@@ -127,7 +127,7 @@ export function InventorySack() {
   const nextClaimTime = lastClaim + DAY_SECONDS;
   const canClaimNow = now >= nextClaimTime && claimableFormatted > 0;
   const timeUntilNextClaim = canClaimNow ? 0 : Math.max(0, nextClaimTime - now);
-  const isFullyVested = lastMint > 0 && (now - lastMint >= FULL_UNLOCK_SECONDS);
+  const _isFullyVested = lastMint > 0 && (now - lastMint >= FULL_UNLOCK_SECONDS);
 
   // Format time remaining
   const formatTimeRemaining = (seconds: number): string => {
@@ -147,6 +147,7 @@ export function InventorySack() {
       address: contracts.nft.address,
       abi: contracts.nft.abi,
       functionName: 'claimVested',
+      args: [],
     });
   };
 
@@ -503,7 +504,7 @@ export function InventorySack() {
                     No NFTs Found
                   </h3>
                   <p className="text-purple-200/60 text-sm sm:text-base">
-                    You don't own any NFTs yet
+                    You don&apos;t own any NFTs yet
                   </p>
                 </div>
               ) : (
