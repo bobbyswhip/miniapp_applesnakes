@@ -1,0 +1,48 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjQ5MzUzNywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDFiYTk0ZUQzODAwMzBFNkQwMzQ4RTFmZmE0QmVhMDM1M0NlQzMzYmEifQ",
+    "payload": "eyJkb21haW4iOiJwYWlyYWJsZS5pbyJ9",
+    "signature": "MHgzNzZlNWE2ZGI1M2MxNTAzZmM1M2Y0ZGRkYWY1NTg0NDIxZmVlMjdiNmNiOTFlNGQxZGEwZmU5ZmEwN2E2MWUyMWVkOTEyMWRmYzZkZjljNDFhM2YwZjRjMDRmMjMyODVlODM0ZTNjNDJlNDU3Yzc1MTUxOTk4NTVmYjM1ZjZkYTFj"
+  },
+  "baseBuilder": {
+    "allowedAddresses": ["0xB451dB3A6420A44C8042dde989E93e36439d7639"]
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "AppleSnakes",
+    "iconUrl": "https://applesnakes.com/Images/WilfredHead.png",
+    "homeUrl": "https://applesnakes.com",
+    "imageUrl": "https://applesnakes.com/Images/WebBackground.png",
+    "buttonTitle": "Play AppleSnakes",
+    "splashImageUrl": "https://applesnakes.com/Images/Wilfred.png",
+    "splashBackgroundColor": "#87CEEB",
+    "subtitle": "NFT Gaming on Base Blockchain",
+    "description": "Fee-less NFT gaming on Base. Breed snakes, explore Apple Valley, collect items, and manage your inventory with 90-day token vesting mechanics.",
+    "primaryCategory": "games",
+    "tags": [
+      "nft",
+      "web3",
+      "onchain",
+      "snakes",
+      "adventure"
+    ],
+    "heroImageUrl": "https://applesnakes.com/Images/TownBackground.png",
+    "tagline": "Breed, Battle and Explore",
+    "ogTitle": "AppleSnakes",
+    "ogDescription": "Fee-less NFT gameplay with breeding, jailing, and token vesting. Join the adventure in Apple Valley!",
+    "ogImageUrl": "https://applesnakes.com/Images/WebBackground.png",
+    "screenshotUrls": [
+      "https://applesnakes.com/Images/TownBackground.png",
+      "https://applesnakes.com/Images/WizardHouseLarge.png",
+      "https://applesnakes.com/Images/JailhouseLarge.png"
+    ],
+    "requiredCapabilities": [
+      "actions.signIn",
+      "wallet.getEthereumProvider",
+      "actions.composeCast"
+    ],
+    "requiredChains": [
+      "eip155:8453"
+    ]
+  }
+}
