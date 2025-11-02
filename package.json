@@ -7,25 +7,28 @@
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run type-check && npm run lint"
   },
   "dependencies": {
     "@coinbase/onchainkit": "^1.1.2",
     "@rainbow-me/rainbowkit": "^2.1.6",
     "@tanstack/react-query": "^5.56.2",
-    "next": "14.2.13",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "next": "^16.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "viem": "^2.21.9",
     "wagmi": "^2.12.12"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.13",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^16.0.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5"
