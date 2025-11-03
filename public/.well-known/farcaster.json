@@ -1,15 +1,15 @@
 {
   "accountAssociation": {
-    "header": "eyJmaWQiOjQ5MzUzNywidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDFiYTk0ZUQzODAwMzBFNkQwMzQ4RTFmZmE0QmVhMDM1M0NlQzMzYmEifQ",
-    "payload": "eyJkb21haW4iOiJwYWlyYWJsZS5pbyJ9",
-    "signature": "MHgzNzZlNWE2ZGI1M2MxNTAzZmM1M2Y0ZGRkYWY1NTg0NDIxZmVlMjdiNmNiOTFlNGQxZGEwZmU5ZmEwN2E2MWUyMWVkOTEyMWRmYzZkZjljNDFhM2YwZjRjMDRmMjMyODVlODM0ZTNjNDJlNDU3Yzc1MTUxOTk4NTVmYjM1ZjZkYTFj"
+    "header": "eyJmaWQiOjQ5MjYwMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweGUxM0ZmMzE4NWFhMUZhOGQyRDNmM2Q1YzkzODAxZjQyNDEyNGQyQzMifQ",
+    "payload": "eyJkb21haW4iOiJhcHBsZXNuYWtlcy5jb20ifQ",
+    "signature": "P93u93Rs0qKjZXhdZnpB5sfdSiz9XJ2QxTWuDgzUcHUcv1y2RKprzmy1XdK44U5Xdu8/6p0IVWzUd8QR3HExAhw="
   },
   "baseBuilder": {
-    "allowedAddresses": ["0xB451dB3A6420A44C8042dde989E93e36439d7639"]
+    "allowedAddresses": ["0xB451dB3A6420A44C8042dde989E93e36439d7639", "0xBDB845a9D74AD84642f055AD5069B2D54007A820"]
   },
   "miniapp": {
     "version": "1",
-    "name": "AppleSnakes",
+    "name": "Apple Snakes",
     "iconUrl": "https://applesnakes.com/Images/WilfredHead.png",
     "homeUrl": "https://applesnakes.com",
     "imageUrl": "https://applesnakes.com/Images/WebBackground.png",
@@ -17,7 +17,7 @@
     "splashImageUrl": "https://applesnakes.com/Images/Wilfred.png",
     "splashBackgroundColor": "#87CEEB",
     "subtitle": "NFT Gaming on Base Blockchain",
-    "description": "Fee-less NFT gaming on Base. Breed snakes, explore Apple Valley, collect items, and manage your inventory with 90-day token vesting mechanics.",
+    "description": "Explore Apple Valley, collect items, and manage your inventory with 90-day token vesting mechanics.",
     "primaryCategory": "games",
     "tags": [
       "nft",
@@ -28,7 +28,7 @@
     ],
     "heroImageUrl": "https://applesnakes.com/Images/TownBackground.png",
     "tagline": "Breed, Battle and Explore",
-    "ogTitle": "AppleSnakes",
+    "ogTitle": "Apple Snakes",
     "ogDescription": "Fee-less NFT gameplay with breeding, jailing, and token vesting. Join the adventure in Apple Valley!",
     "ogImageUrl": "https://applesnakes.com/Images/WebBackground.png",
     "screenshotUrls": [

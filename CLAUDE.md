@@ -4,25 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AppleSnakes is a Next.js 14 NFT gaming application on Base blockchain featuring fee-less NFT gameplay with 90-day token vesting mechanics. The app supports Base miniapps (Farcaster Frames), standard web3 wallets, and includes game mechanics like breeding, jailing, wrapping tokens, and inventory management.
+AppleSnakes is a Next.js 16 NFT gaming application on Base blockchain featuring fee-less NFT gameplay with 90-day token vesting mechanics. The app supports Base miniapps (Farcaster Frames), standard web3 wallets, and includes game mechanics like breeding, jailing, wrapping tokens, and inventory management.
 
 ## Development Commands
 
 ### Local Development
 ```bash
-# Start dev server (always runs on port 3000)
+# Start dev server with Turbopack (default in Next.js 16)
 npm run dev
 
 # If port 3000 is in use, kill the process first
-fuser -k 3000/tcp  # then run npm run dev
+lsof -ti:3000 | xargs kill -9  # then run npm run dev
 
-# Type checking
+# Type checking (runs during build, optional standalone check)
 npm run type-check
 
-# Linting
-npm run lint
+# Code validation (type check + linting)
+npm run validate
 
-# Production build
+# Linting (TypeScript errors only - no ESLint errors displayed)
+# Note: Next.js 16 removed built-in linting from build process
+npm run lint          # Check for issues
+npm run lint:fix      # Auto-fix issues where possible
+
+# Production build (includes TypeScript checking, no linting)
 npm run build
 
 # Production start
@@ -31,7 +36,7 @@ npm start
 
 ### Port Management
 - Dev server MUST run on port 3000
-- Use `fuser -k 3000/tcp` if port is already in use before starting dev server
+- Use `lsof -ti:3000 | xargs kill -9` if port is already in use before starting dev server
 
 ## Environment Configuration
 
@@ -128,6 +133,49 @@ The app is MiniKit-enabled for Base miniapps/Farcaster Frames:
 - `useIsInMiniApp()` detects miniapp context
 - MiniKit features only activate inside Base app/Farcaster
 
+### Farcaster Metadata System (lib/farcaster/metadata.ts)
+
+Standardized Farcaster Frame/MiniApp metadata generation:
+
+**Core Function**: `generateFarcasterMetadata(options)`
+- Generates `fc:miniapp` and `fc:frame` tags with embedded JSON
+- Version 1 format with structured button actions
+- Includes OpenGraph and Twitter card metadata
+- Environment-aware base URL (uses `NEXT_PUBLIC_BASE_URL` or falls back to production)
+
+**Configuration Options**:
+- `title`, `description` - Page title and description
+- `imageUrl` - Preview image for the frame
+- `buttonTitle` - Call-to-action button text (max 32 chars)
+- `actionType` - `'launch_frame'` or `'launch_miniapp'`
+- `appName` - Application name
+- `appUrl` - Target URL when button is clicked
+- `splashImageUrl` - Splash screen image for miniapp launch
+- `splashBackgroundColor` - Splash screen background color
+- `ogTitle`, `ogDescription`, `ogImageUrl` - OpenGraph overrides
+
+**Pre-configured Page Metadata** (`farcasterPageMetadata`):
+- `home()` - Main game interface
+- `myNFTs()` - NFT collection page
+- `wrap()` - Token wrapping interface
+- `docs()` - Documentation page
+- `location(name, image)` - Dynamic location pages
+
+**Usage Example**:
+```typescript
+// In app/[page]/layout.tsx
+import { generateFarcasterMetadata } from '@/lib/farcaster/metadata';
+
+export const metadata = generateFarcasterMetadata({
+  title: 'Page Title',
+  description: 'Page description',
+  buttonTitle: 'Click Me',
+  appUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/page`,
+});
+```
+
+**Important**: Always use this system for pages that should be shareable on Farcaster to ensure proper miniapp embed formatting.
+
 ### Game Architecture (app/page.tsx)
 
 Large complex component (191KB) managing:
@@ -162,22 +210,65 @@ Next.js Image component configured for:
 - Multiple IPFS gateways (fallback)
 - See `next.config.js` for complete gateway list
 
-### Webpack Customizations
-- Disabled: `fs`, `net`, `tls` (browser compatibility)
-- External: `pino-pretty`, `lokijs`, `encoding` (wallet SDK compatibility)
-- Alias: `@react-native-async-storage/async-storage` set to false (MetaMask SDK fix)
+### Bundler Configuration (Next.js 16)
+**Turbopack** (stable, default bundler):
+- 2-5× faster production builds
+- Up to 10× faster Fast Refresh
+- File system caching available via `experimental.turbopackFileSystemCacheForDev: true`
+- Fallback webpack config for compatibility:
+  - Disabled: `fs`, `net`, `tls` (browser compatibility)
+  - External: `pino-pretty`, `lokijs`, `encoding` (wallet SDK compatibility)
+  - Alias: `@react-native-async-storage/async-storage` set to false (MetaMask SDK fix)
+
+### Linting & Quality Checks (Next.js 16 Changes)
+
+**Important Breaking Change**: Next.js 16 removed the built-in `next lint` command and automatic linting during builds.
+
+**Current Setup**:
+- ESLint 8.57.1 with legacy `.eslintrc.json` configuration
+- TypeScript checking runs during `npm run build` (catches type errors)
+- No automatic linting during build process
+- Manual linting available via `npm run lint` but has limitations
+
+**Recommended Workflow**:
+1. **Before Committing**: Run `npm run validate` (runs type-check + lint)
+2. **During Development**: Rely on TypeScript errors (shown in IDE and build)
+3. **Type Safety**: `npm run type-check` catches all TypeScript errors
+4. **Production Builds**: Only TypeScript errors will fail the build
+
+**ESLint Configuration** (.eslintrc.json):
+```json
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_"
+    }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "@next/next/no-sync-scripts": "error"
+  }
+}
+```
+
+**Migration Note**: Next.js 16 documentation recommends migrating to Biome or using ESLint directly. Current setup uses ESLint 8 with legacy config for compatibility.
 
 ### Page Structure
 - **/** - Main game interface with location system
 - **/my-nfts** - User's NFT collection gallery
 - **/wrap** - Token wrapping interface
 - **/docs** - Documentation/help page
+- **/mint** - Mint page with Farcaster Frame metadata (redirects to `/?fastTravelMint=true`)
 
 ### Build Notes
+- React 19.2 (includes View Transitions, useEffectEvent, Activity component)
 - React strict mode enabled
 - Build activity indicator disabled
 - Dev indicator position: bottom-right
 - Using Next.js App Router (not Pages Router)
+- Turbopack is the default bundler (webpack available via `--webpack` flag)
 
 ## Common Patterns
 
@@ -223,8 +314,10 @@ const contracts = getContracts(chain?.id || base.id);
 
 ## Development Notes
 
-- Hot reload works automatically with Vite/React - no hard refresh needed for changes
+- Hot reload works automatically with Turbopack - significantly faster than previous bundler
 - When adding new pages, update routing configuration if using clean URLs
 - Dev server must be killed and restarted if changing environment variables
 - Use Playwright MCP for browser automation testing (don't write Playwright tests manually)
 - Don't close browser after Playwright MCP tasks
+- TypeScript errors will fail builds, but ESLint errors won't (Next.js 16 change)
+- Run `npm run validate` before committing to catch both TypeScript and ESLint issues

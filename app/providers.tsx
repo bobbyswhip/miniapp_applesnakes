@@ -31,7 +31,6 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={config} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
-        {/* @ts-expect-error - MiniKitProvider has complex return type that confuses TypeScript but works at runtime */}
         <MiniKitProvider
           enabled={true}
           notificationProxyUrl="/api/notify"

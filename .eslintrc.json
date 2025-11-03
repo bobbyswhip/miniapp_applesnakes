@@ -3,7 +3,7 @@
   "rules": {
     "react/react-in-jsx-scope": "off",
     "react/prop-types": "off",
-    "@typescript-eslint/no-unused-vars": ["warn", {
+    "@typescript-eslint/no-unused-vars": ["error", {
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_"
     }],
@@ -12,6 +12,8 @@
     "react-hooks/rules-of-hooks": "error",
     "react-hooks/exhaustive-deps": "warn",
     "@next/next/no-img-element": "warn",
-    "@next/next/no-html-link-for-pages": "warn"
+    "@next/next/no-html-link-for-pages": "warn",
+    "@next/next/no-sync-scripts": "error",
+    "@next/next/no-page-custom-font": "warn"
   }
 }
