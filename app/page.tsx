@@ -10,10 +10,11 @@ import { useInventory } from '@/contexts/InventoryContext';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { JailInterface } from '@/components/JailInterface';
+import { StakingInterface } from '@/components/StakingInterface';
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
-type LocationId = 'main' | 'mountain' | 'meteor' | 'cave' | 'town' | 'jailhouse' | 'store' | 'wizardhouse';
+type LocationId = 'main' | 'mountain' | 'meteor' | 'cave' | 'town' | 'jailhouse' | 'store' | 'wizardhouse' | 'mountainhut';
 type LocationClassification = 'Valley' | 'Snow' | 'Cave';
 
 interface Location {
@@ -99,6 +100,15 @@ const LOCATIONS: Record<LocationId, Location> = {
     classification: 'Valley',
     musicPath: '/Music/Grassy_Valley_River_Basin.wav',
     musicVolume: 1.0
+  },
+  mountainhut: {
+    id: 'mountainhut',
+    name: 'Mountain Hut',
+    backgroundImage: '/Images/MountianHutBackground.png',
+    description: 'A cozy mountain shelter',
+    classification: 'Snow',
+    musicPath: '/Music/Frozen_Heights.wav',
+    musicVolume: 1.0
   }
 };
 
@@ -134,11 +144,15 @@ function HomeContent() {
     'Shopkeeper': 'Open Shop',
     'Wizard': 'Hatch Eggs',
     'Warden': 'Open Jail',
-    'Wilfred': 'Breed Snakes',
+    'Wilfred': 'Feed Wilfred',
+    'Mountain Man': 'Play Game',
   };
 
   // Shop tab state (mint or wrap)
   const [shopTab, setShopTab] = useState<'mint' | 'wrap'>('mint');
+
+  // Breed/Stake tab state
+  const [breedStakeTab, setBreedStakeTab] = useState<'breed' | 'stake'>('breed');
 
   // Swap state management
   const [ethAmount, setEthAmount] = useState<string>('');
@@ -164,6 +178,13 @@ function HomeContent() {
   const [showBreedSuccess, setShowBreedSuccess] = useState(false);
   const [bredNFT, setBredNFT] = useState<{tokenId: number, name: string, imageUrl: string} | null>(null);
   const [recentlyBredWardens, setRecentlyBredWardens] = useState<Set<number>>(new Set()); // Track wardens used in breeding
+
+  // Staking state management
+  const [selectedSnakesForStaking, setSelectedSnakesForStaking] = useState<Set<number>>(new Set());
+  const [selectedStakedSnakes, setSelectedStakedSnakes] = useState<Set<number>>(new Set());
+  const [stakedNFTs, setStakedNFTs] = useState<number[]>([]);
+  const [pendingRewards, setPendingRewards] = useState<string>('0');
+  const [isLoadingStaked, setIsLoadingStaked] = useState(false);
 
   // Jail state management
   const [showJail, setShowJail] = useState(false);
@@ -1012,6 +1033,69 @@ function HomeContent() {
     }
   }, [searchParams, audioElement, currentLocation, masterVolume, router, openBreed]);
 
+  // Fast travel to staking (triggered by inventory stake button)
+  useEffect(() => {
+    const shouldFastTravel = searchParams.get('fastTravelStake') === 'true';
+
+    if (shouldFastTravel) {
+      console.log('⚡ Fast travel to staking triggered!');
+
+      // Clear the query param
+      router.replace('/');
+
+      // Start fast travel sequence
+      setIsTransitioning(true);
+
+      setTimeout(() => {
+        // Change to cave location
+        setCurrentLocation('cave');
+
+        // Change music if needed (cave has different music!)
+        if (audioElement && LOCATIONS['cave'].musicPath !== LOCATIONS[currentLocation].musicPath) {
+          const targetVolume = masterVolume * LOCATIONS['cave'].musicVolume;
+
+          // Fade out current music
+          const fadeOut = setInterval(() => {
+            if (audioElement.volume > 0.05) {
+              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
+            } else {
+              clearInterval(fadeOut);
+              audioElement.pause();
+
+              // Switch to new music
+              audioElement.src = LOCATIONS['cave'].musicPath;
+              audioElement.volume = 0;
+
+              audioElement.play()
+                .then(() => {
+                  console.log(`🎵 Playing ${LOCATIONS['cave'].musicPath.split('/').pop()} from beginning`);
+
+                  // Fade in new music
+                  const fadeIn = setInterval(() => {
+                    if (audioElement.volume < targetVolume - 0.05) {
+                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
+                    } else {
+                      audioElement.volume = targetVolume;
+                      clearInterval(fadeIn);
+                    }
+                  }, 50);
+                })
+                .catch(err => console.error('Error playing music:', err));
+            }
+          }, 50);
+        }
+
+        // Open breed UI with staking tab after screen fades
+        setTimeout(() => {
+          setBreedStakeTab('stake');
+          openBreed();
+          setIsTransitioning(false);
+          console.log('✨ Fast travel complete - staking UI opened');
+        }, 600);
+      }, 400);
+    }
+  }, [searchParams, audioElement, currentLocation, masterVolume, router, openBreed]);
+
   // Fast travel to jail (triggered by inventory jail button)
   useEffect(() => {
     const shouldFastTravel = searchParams.get('fastTravelJail') === 'true';
@@ -1258,6 +1342,11 @@ function HomeContent() {
   const getWizardHouseSprite = (): string => {
     if (wizardHouseFrame === 0) return '/Images/WizardHouse.png';
     return `/Images/WizardHouse${wizardHouseFrame}.png`; // WizardHouse1.png, WizardHouse2.png, WizardHouse3.png
+  };
+
+  // MountainHut - static image (no sprite animation files available)
+  const getMountainHutSprite = (): string => {
+    return '/Images/MountainHut.png';
   };
 
   // Generate stable snow particle configurations to prevent glitchiness
@@ -1584,6 +1673,19 @@ function HomeContent() {
         />
       )}
 
+      {/* Mountain Hut location background - MountianHutBackground.png */}
+      {currentLocation === 'mountainhut' && (
+        <div
+          className="absolute inset-0 z-20 pointer-events-none"
+          style={{
+            backgroundImage: 'url(/Images/MountianHutBackground.png)',
+            backgroundSize: '100% 100%',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+      )}
+
       {/* JailHouse in Town - positioned far left, lower for culdesac vibe */}
       {currentLocation === 'town' && (
         <div
@@ -1861,12 +1963,61 @@ function HomeContent() {
         />
       )}
 
+      {/* Mountain Man - character sprite positioned in mountain hut */}
+      {currentLocation === 'mountainhut' && (
+        <div
+          className="absolute cursor-pointer transition-all duration-300"
+          onClick={() => {
+            setCurrentCharacter('MountainMan');
+            if (!showChat) {
+              openChat();
+            } else {
+              setShowChat(false);
+            }
+          }}
+          style={{
+            zIndex: 25,
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%) scale(1)',
+            width: 'clamp(132px, min(22vw, 22vh), 352px)',
+            aspectRatio: '1 / 1',
+            backgroundImage: 'url(/Images/MountainGuy.png)',
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            filter: 'drop-shadow(0 0 0px rgba(34, 197, 94, 0))',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(34, 197, 94, 0.8))';
+            e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(34, 197, 94, 0))';
+            e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+          }}
+        />
+      )}
+
       {/* Wizard House Foreground - overlay on wizardhousebackground */}
       {currentLocation === 'wizardhouse' && (
         <div
           className="absolute inset-0 z-30 pointer-events-none"
           style={{
             backgroundImage: 'url(/Images/WizardHouseForeground.png)',
+            backgroundSize: '100% 100%',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+      )}
+
+      {/* Mountain Hut Foreground - overlay on MountianHutBackground */}
+      {currentLocation === 'mountainhut' && (
+        <div
+          className="absolute inset-0 z-30 pointer-events-none"
+          style={{
+            backgroundImage: 'url(/Images/MountianHutForeground.png)',
             backgroundSize: '100% 100%',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -2018,6 +2169,41 @@ function HomeContent() {
         </div>
       )}
 
+      {/* Mountain Hut on Mountain - positioned on the left side, 10% smaller and moved down 20% */}
+      {currentLocation === 'mountain' && (
+        <div
+          className="absolute z-30"
+          style={{
+            top: '75%',
+            left: '20%',
+            transform: 'translate(-50%, -50%)',
+            width: 'clamp(108px, min(18vw, 18vh), 270px)',
+            aspectRatio: '1 / 1',
+          }}
+        >
+          <div
+            onClick={() => navigateToLocation('mountainhut')}
+            className="cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 w-full h-full"
+            title="Mountain Hut"
+          >
+            <img
+              src={getMountainHutSprite()}
+              alt="Mountain Hut"
+              className="w-full h-full object-contain transition-all duration-300"
+              style={{
+                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Meteor Crater on Mountain - responsive sizing with aspect ratio preservation */}
       {currentLocation === 'mountain' && (
         <div
@@ -2066,7 +2252,7 @@ function HomeContent() {
       {currentLocation !== 'main' && (
         <button
           onClick={() => {
-            if (currentLocation === 'meteor') {
+            if (currentLocation === 'meteor' || currentLocation === 'mountainhut') {
               navigateToLocation('mountain');
             } else if (currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse') {
               navigateToLocation('town');
@@ -2076,7 +2262,7 @@ function HomeContent() {
           }}
           className="absolute top-4 left-4 z-50 bg-black/50 hover:bg-black/70 text-white px-6 py-3 rounded-lg transition-all duration-300 hover:scale-105 backdrop-blur-sm"
         >
-          ← Back to {currentLocation === 'meteor' ? 'Mountain' : (currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse') ? 'Town' : currentLocation === 'mountain' ? 'Village' : currentLocation === 'cave' ? 'Village' : currentLocation === 'town' ? 'Village' : 'Village'}
+          ← Back to {currentLocation === 'meteor' || currentLocation === 'mountainhut' ? 'Mountain' : (currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse') ? 'Town' : currentLocation === 'mountain' ? 'Village' : currentLocation === 'cave' ? 'Village' : currentLocation === 'town' ? 'Village' : 'Village'}
         </button>
       )}
 
@@ -2101,9 +2287,9 @@ function HomeContent() {
         }}
       />
 
-      {/* Subtle color overlay on top of background for tinting - NOT shown in indoor locations (cave, jailhouse, store, wizardhouse) */}
+      {/* Subtle color overlay on top of background for tinting - NOT shown in indoor locations (cave, jailhouse, store, wizardhouse, mountainhut) */}
       {/* Day tint */}
-      {currentLocation !== 'cave' && currentLocation !== 'jailhouse' && currentLocation !== 'store' && currentLocation !== 'wizardhouse' && (
+      {currentLocation !== 'cave' && currentLocation !== 'jailhouse' && currentLocation !== 'store' && currentLocation !== 'wizardhouse' && currentLocation !== 'mountainhut' && (
         <div
           className="absolute inset-0 z-35 transition-opacity duration-[4000ms] ease-in-out pointer-events-none"
           style={{
@@ -2267,8 +2453,8 @@ function HomeContent() {
         </>
       )}
 
-      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse) - positioned behind background to color windows */}
-      {currentLocation === 'wizardhouse' && (
+      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse, mountainhut) - positioned behind background to color windows */}
+      {(currentLocation === 'wizardhouse' || currentLocation === 'mountainhut') && (
         <div
           className="absolute inset-0 z-15 pointer-events-none"
           style={{
@@ -2277,8 +2463,8 @@ function HomeContent() {
         />
       )}
 
-      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse) - topmost atmospheric layer */}
-      {(currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse') && (
+      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse, mountainhut) - topmost atmospheric layer */}
+      {(currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse' || currentLocation === 'mountainhut') && (
         <div
           className="absolute inset-0 z-50 pointer-events-none"
           style={{
@@ -2398,6 +2584,8 @@ function HomeContent() {
                 ? 'Be careful or you\'ll end up in here! Would you like to view the jail? ...Of course, a small donation could help you avoid any misunderstandings.'
                 : currentCharacter === 'Wilfred'
                 ? 'Welcome to my humble cave shop, traveler. The darkness here preserves my wares quite well. Care to browse what I have in stock?'
+                : currentCharacter === 'Mountain Man'
+                ? 'Greetings, traveler! Would you like to play a fun game?'
                 : 'Hello traveler! Welcome to my shop. I\'ve got all sorts of potions, tools, and magical items for sale. Let me know if anything catches your eye!'}
             </div>
           )}
@@ -3569,11 +3757,14 @@ function HomeContent() {
               <span
                 style={{
                   background: showHatchSuccess
-                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 50%, rgba(34, 197, 94, 1) 100%)'
-                    : 'linear-gradient(135deg, rgba(6, 182, 212, 1) 0%, rgba(168, 85, 247, 1) 50%, rgba(236, 72, 153, 1) 100%)',
+                    ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #22c55e 100%)'
+                    : 'linear-gradient(135deg, #06b6d4 0%, #a855f7 50%, #ec4899 100%)',
                   WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  MozBackgroundClip: 'text',
                   backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  MozTextFillColor: 'transparent',
+                  display: 'inline-block',
                 }}
               >
                 {showHatchSuccess ? '🎉 Hatching Complete!' : 'Hatch Early'}
@@ -4094,33 +4285,53 @@ function HomeContent() {
 
           {/* Content wrapper */}
           <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-          {/* Breed Header */}
-          <div
-            style={{
-              marginBottom: 'clamp(16px, 3.5vw, 24px)',
-              marginTop: 'clamp(16px, 3.5vw, 24px)',
-              flexShrink: 0,
-            }}
-          >
-            <div
+          {/* Header Title */}
+          {/* Breed/Stake Tabs */}
+          <div style={{ display: 'flex', gap: 'clamp(6px, 1.2vw, 8px)', marginBottom: 'clamp(12px, 2.5vw, 16px)', flexShrink: 0 }}>
+            <button
+              onClick={() => setBreedStakeTab('breed')}
               style={{
-                fontSize: 'clamp(16px, 4vw, 24px)',
+                flex: 1,
+                padding: 'clamp(8px, 1.8vw, 12px)',
+                borderRadius: 'clamp(8px, 1.5vw, 12px)',
                 fontWeight: 700,
-                background: showBreedSuccess
-                  ? 'linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 50%, rgba(34, 197, 94, 1) 100%)'
-                  : 'linear-gradient(135deg, rgba(6, 182, 212, 1) 0%, rgba(168, 85, 247, 1) 50%, rgba(236, 72, 153, 1) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                textShadow: 'none',
+                fontSize: 'clamp(12px, 2.8vw, 16px)',
+                border: breedStakeTab === 'breed' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(168, 85, 247, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                background: breedStakeTab === 'breed'
+                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))'
+                  : 'linear-gradient(135deg, rgba(75, 85, 99, 0.2), rgba(55, 65, 81, 0.2))',
+                color: breedStakeTab === 'breed' ? 'rgba(168, 85, 247, 1)' : 'rgba(156, 163, 175, 1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: breedStakeTab === 'breed' ? '0 0 20px rgba(168, 85, 247, 0.3)' : 'none',
               }}
             >
-              {showBreedSuccess ? '🎉 Breeding Complete!' : 'Breed Snake Egg'}
-            </div>
+              🍽️ Feed Wilfred
+            </button>
+            <button
+              onClick={() => setBreedStakeTab('stake')}
+              style={{
+                flex: 1,
+                padding: 'clamp(8px, 1.8vw, 12px)',
+                borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                fontWeight: 700,
+                fontSize: 'clamp(12px, 2.8vw, 16px)',
+                border: breedStakeTab === 'stake' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                background: breedStakeTab === 'stake'
+                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
+                  : 'linear-gradient(135deg, rgba(75, 85, 99, 0.2), rgba(55, 65, 81, 0.2))',
+                color: breedStakeTab === 'stake' ? 'rgba(6, 182, 212, 1)' : 'rgba(156, 163, 175, 1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: breedStakeTab === 'stake' ? '0 0 20px rgba(6, 182, 212, 0.3)' : 'none',
+              }}
+            >
+              Apple Staking
+            </button>
           </div>
 
           {/* Description */}
-          {!showBreedSuccess && (
+          {!showBreedSuccess && breedStakeTab === 'breed' && (
             <div
               style={{
                 fontSize: 'clamp(10px, 2vw, 12px)',
@@ -4131,7 +4342,7 @@ function HomeContent() {
                 flexShrink: 0,
               }}
             >
-              Select 3 humans to breed a new snake egg. Tokens unlock over 90 days.
+              Feed 3 humans to Wilfred and he will give you an applesnake egg.
             </div>
           )}
 
@@ -4146,10 +4357,13 @@ function HomeContent() {
                 flexShrink: 0,
               }}
             >
-              Your snake egg has been created! Click the egg to view in inventory.
+              Wilfred has given you a snake egg! Click the egg to view in inventory.
             </div>
           )}
 
+          {/* BREED TAB CONTENT */}
+          {breedStakeTab === 'breed' && (
+          <>
           {/* Select All/Deselect All Button */}
           {!showBreedSuccess && (
             <div
@@ -4414,7 +4628,7 @@ function HomeContent() {
             )}
           </div>
 
-          {/* Breed Fee Information */}
+          {/* Wilfred's Fee Information */}
           {!showBreedSuccess && (
             <div
               style={{
@@ -4436,7 +4650,7 @@ function HomeContent() {
                   color: 'rgba(6, 182, 212, 1)',
                 }}
               >
-                Swap Amount:
+                Wilfred's Fee:
               </span>
               <span
                 style={{
@@ -4515,7 +4729,7 @@ function HomeContent() {
                   e.currentTarget.style.boxShadow = '0 0 20px rgba(249, 115, 22, 0.5)';
                 }}
               >
-                🐍 Breed More
+                🍽️ Feed Wilfred Again
               </button>
             </div>
           ) : (
@@ -4563,43 +4777,23 @@ function HomeContent() {
               {!isWalletConnected
                 ? 'Connect Wallet'
                 : selectedHumans.size !== 3
-                ? `Select ${3 - selectedHumans.size} More Warden${3 - selectedHumans.size !== 1 ? 's' : ''}`
+                ? `Select ${3 - selectedHumans.size} More Human${3 - selectedHumans.size !== 1 ? 's' : ''}`
                 : isConfirming
-                ? '⏳ Breeding...'
-                : '🐍 Breed Snake Egg'}
+                ? '⏳ Feeding Wilfred...'
+                : '🍽️ Feed Wilfred'}
             </button>
           )}
+          </>
+          )}
 
-          {/* Transaction Status */}
-          {hash && !showBreedSuccess && selectedHumans.size > 0 && (
-            <div
-              style={{
-                marginTop: 'clamp(6px, 1.2vw, 10px)',
-                padding: 'clamp(6px, 1.2vw, 10px)',
-                backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(249, 115, 22, 0.3)',
-                borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                fontSize: 'clamp(9px, 1.8vw, 11px)',
-                color: 'rgba(249, 115, 22, 1)',
-                textAlign: 'center',
-                flexShrink: 0,
-              }}
-            >
-              {isConfirming && '⏳ Confirming...'}
-              {!isConfirming && '📝 Submitted'}
-              {' • '}
-              <a
-                href={`https://basescan.org/tx/${hash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: 'rgba(249, 115, 22, 1)',
-                  textDecoration: 'underline',
-                }}
-              >
-                View
-              </a>
-            </div>
+          {/* STAKING TAB CONTENT */}
+          {breedStakeTab === 'stake' && (
+            <StakingInterface
+              selectedSnakesForStaking={selectedSnakesForStaking}
+              setSelectedSnakesForStaking={setSelectedSnakesForStaking}
+              selectedStakedSnakes={selectedStakedSnakes}
+              setSelectedStakedSnakes={setSelectedStakedSnakes}
+            />
           )}
 
           {/* Powered by Pairable */}

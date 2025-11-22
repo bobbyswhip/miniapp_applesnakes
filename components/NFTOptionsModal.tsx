@@ -472,8 +472,13 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
                 </div>
               </button>
 
-              {/* Option 2: Placeholder for future snake-specific action */}
+              {/* Option 2: Stake Snake */}
               <button
+                onClick={() => {
+                  onClose();
+                  setIsOpen(false);
+                  router.push('/?fastTravelStake=true');
+                }}
                 className="w-full text-white rounded-lg transition-all text-left flex items-center relative overflow-hidden"
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
@@ -491,10 +496,10 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
                   e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.2)';
                 }}
               >
-                <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>🐍</span>
+                <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>💎</span>
                 <div>
-                  <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Snake Action</span>
-                  <p className="text-purple-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Coming soon...</p>
+                  <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Stake Snake</span>
+                  <p className="text-purple-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Stake your snake to earn token rewards</p>
                 </div>
               </button>
 

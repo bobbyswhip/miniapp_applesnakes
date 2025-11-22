@@ -3,6 +3,8 @@ import { ERC20_ABI } from '@/abis/erc20';
 import { NFT_ABI } from '@/abis/nft'; // Full ABI with poolIdRaw and hook functions
 import { WRAPPER_ABI } from '@/abis/wrapper';
 import { QUOTER_ABI } from '@/abis/quoter';
+import { STAKING_ABI } from '@/abis/staking';
+import { PREDICTION_ABI } from '@/abis/prediction';
 import type { ChainContracts } from './types';
 
 // Uniswap V4 Quoter address on Base
@@ -44,6 +46,16 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     abi: WRAPPER_ABI,
     name: 'wTokens',
   },
+  staking: {
+    address: '0x63b2A9Bd65f516E49Cee75C9001FB5aa3588CB3c',
+    abi: STAKING_ABI,
+    name: 'Apple Staking',
+  },
+  prediction: {
+    address: '0xDeCA3b724584169F749078099025eb83a4795DfC',
+    abi: PREDICTION_ABI,
+    name: 'Prediction Jack',
+  },
 };
 
 /**
@@ -64,6 +76,16 @@ export const BASE_SEPOLIA_CONTRACTS: ChainContracts = {
     address: '0x038b70E9311D5aE12C816c32818aeec90cBe7C29',
     abi: WRAPPER_ABI,
     name: 'wTokens (Testnet)',
+  },
+  staking: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: STAKING_ABI,
+    name: 'Apple Staking (Testnet)',
+  },
+  prediction: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: PREDICTION_ABI,
+    name: 'Prediction Jack (Testnet)',
   },
 };
 
@@ -98,3 +120,13 @@ export const NFT_ADDRESS = (chainId: number) => getContracts(chainId).nft.addres
  * Helper to get Token contract address for current chain
  */
 export const TOKEN_ADDRESS = (chainId: number) => getContracts(chainId).token.address;
+
+/**
+ * Helper to get Staking contract address for current chain
+ */
+export const STAKING_ADDRESS = (chainId: number) => getContracts(chainId).staking.address;
+
+/**
+ * Helper to get Prediction contract address for current chain
+ */
+export const PREDICTION_ADDRESS = (chainId: number) => getContracts(chainId).prediction.address;

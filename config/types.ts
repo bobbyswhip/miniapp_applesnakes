@@ -12,6 +12,8 @@ export interface ChainContracts {
   nft: ContractConfig;
   token: ContractConfig;
   wrapper: ContractConfig;
+  staking: ContractConfig;
+  prediction: ContractConfig;
 }
 
 export interface AppContracts {
