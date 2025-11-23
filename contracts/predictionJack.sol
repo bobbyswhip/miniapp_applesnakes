@@ -1284,3 +1284,4 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     receive() external payable {}
     fallback() external payable {}
 }
+
