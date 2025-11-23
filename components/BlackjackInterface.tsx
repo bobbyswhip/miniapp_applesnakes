@@ -359,7 +359,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         }}
       >
         {/* Card background */}
-        <div className="absolute inset-0 rounded-xl shadow-2xl overflow-hidden border-2 border-gray-300">
+        <div className="absolute inset-0 rounded-xl shadow-2xl overflow-hidden">
           <Image
             src="/Images/Card.png"
             alt="Card background"
@@ -370,9 +370,9 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         </div>
 
         {/* Card content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-between p-2">
-          {/* Top rank and suit */}
-          <div className="flex flex-col items-center gap-0.5" style={{ color: textColor }}>
+        <div className="absolute inset-0">
+          {/* Top left rank and suit */}
+          <div className="absolute flex flex-col items-center gap-0.5" style={{ color: textColor, top: '17px', left: '15px' }}>
             <span className="text-lg font-bold leading-none" style={{
               textShadow: '0.5px 0.5px 1px rgba(255, 255, 255, 0.8)',
               fontFamily: 'Georgia, serif',
@@ -390,8 +390,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             </div>
           </div>
 
-          {/* Center suit image */}
-          <div className="relative w-10 h-10">
+          {/* Left side suit image */}
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8">
             <Image
               src={suitImage}
               alt={card.suit}
@@ -401,8 +401,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             />
           </div>
 
-          {/* Bottom rank and suit (upside down) */}
-          <div className="flex flex-col items-center gap-0.5 rotate-180" style={{ color: textColor }}>
+          {/* Bottom right rank and suit (upside down) */}
+          <div className="absolute flex flex-col items-center gap-0.5 rotate-180" style={{ color: textColor, bottom: '17px', right: '15px' }}>
             <span className="text-lg font-bold leading-none" style={{
               textShadow: '0.5px 0.5px 1px rgba(255, 255, 255, 0.8)',
               fontFamily: 'Georgia, serif',
