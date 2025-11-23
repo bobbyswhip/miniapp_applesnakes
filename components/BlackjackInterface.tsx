@@ -17,7 +17,14 @@ interface LiveGameCardProps {
   onOpenMarket: (gameId: bigint) => void;
 }
 
-type TabType = 'play' | 'games';
+interface ClosedGameCardProps {
+  gameId: bigint;
+  userAddress: `0x${string}`;
+  onClaim: (gameId: bigint) => void;
+  isClaimPending: boolean;
+}
+
+type TabType = 'play' | 'games' | 'closed';
 
 interface CardDisplay {
   rank: string;
@@ -123,6 +130,139 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
   );
 }
 
+// Component to display a closed game card with claimable winnings
+function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: ClosedGameCardProps) {
+  const contracts = getContracts(base.id);
+
+  // Safely convert gameId to BigInt
+  let gameIdBigInt: bigint;
+  try {
+    if (typeof gameId === 'bigint') {
+      gameIdBigInt = gameId;
+    } else if (typeof gameId === 'number' || typeof gameId === 'string') {
+      gameIdBigInt = BigInt(gameId);
+    } else if (typeof gameId === 'object' && gameId !== null) {
+      // Try to extract from object - use any to bypass type narrowing
+      const stringValue = (gameId as any).toString();
+      gameIdBigInt = BigInt(stringValue);
+    } else {
+      console.error('Invalid gameId type in ClosedGameCard:', gameId);
+      return null;
+    }
+  } catch (error) {
+    console.error('Failed to convert gameId in ClosedGameCard:', gameId, error);
+    return null;
+  }
+
+  // Fetch game info
+  const { data: gameInfoData } = useReadContract({
+    address: PREDICTION_ADDRESS(base.id),
+    abi: contracts.prediction.abi,
+    functionName: 'getGameInfo',
+    args: [gameIdBigInt],
+    chainId: base.id,
+  });
+
+  // Fetch market display for user-specific data
+  const { data: marketDisplayData } = useReadContract({
+    address: PREDICTION_ADDRESS(base.id),
+    abi: contracts.prediction.abi,
+    functionName: 'getMarketDisplay',
+    args: [gameIdBigInt, userAddress],
+    chainId: base.id,
+  });
+
+  const gameInfo = gameInfoData as any;
+  const marketDisplay = marketDisplayData as any;
+
+  if (!gameInfo || !marketDisplay) {
+    return (
+      <div className="bg-gray-800/50 p-4 rounded-lg animate-pulse">
+        <div className="h-24 bg-gray-700/50 rounded"></div>
+      </div>
+    );
+  }
+
+  // Safely extract BigInt values
+  const claimableAmount = BigInt(marketDisplay.userClaimable || 0);
+  const userYesShares = BigInt(marketDisplay.userYesShares || 0);
+  const userNoShares = BigInt(marketDisplay.userNoShares || 0);
+  const hasShares = userYesShares > 0n || userNoShares > 0n;
+
+  // Only show if user has claimable winnings
+  if (!hasShares || claimableAmount === 0n) {
+    return null;
+  }
+
+  const resultLabels = ['Pending', 'Win', 'Lose', 'Push'];
+  const resultLabel = resultLabels[Number(marketDisplay.result)] || 'Unknown';
+  const totalDeposits = BigInt(marketDisplay.totalDeposits || 0);
+
+  return (
+    <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <div className="text-white font-semibold">Game #{gameIdBigInt.toString()}</div>
+          <div className="text-xs text-gray-400">
+            Player: {gameInfo.player.slice(0, 6)}...{gameInfo.player.slice(-4)}
+          </div>
+        </div>
+        <div className={`px-2 py-1 rounded text-xs font-semibold ${
+          resultLabel === 'Win' ? 'bg-green-900/50 text-green-300' :
+          resultLabel === 'Lose' ? 'bg-red-900/50 text-red-300' :
+          resultLabel === 'Push' ? 'bg-yellow-900/50 text-yellow-300' :
+          'bg-gray-700/50 text-gray-300'
+        }`}>
+          {resultLabel}
+        </div>
+      </div>
+
+      <div className="space-y-2 mb-3">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-400">Player Total:</span>
+          <span className="text-white font-semibold">{gameInfo.playerTotal.toString()}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-400">Dealer Total:</span>
+          <span className="text-white font-semibold">{gameInfo.dealerTotal.toString()}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-400">Market Volume:</span>
+          <span className="text-white font-semibold">{formatEther(totalDeposits)} tokens</span>
+        </div>
+      </div>
+
+      {/* User shares info */}
+      <div className="bg-gray-900/50 p-3 rounded-lg mb-3 space-y-1">
+        {userYesShares > 0n && (
+          <div className="flex justify-between text-xs">
+            <span className="text-green-400">YES Shares:</span>
+            <span className="text-white">{formatEther(userYesShares)}</span>
+          </div>
+        )}
+        {userNoShares > 0n && (
+          <div className="flex justify-between text-xs">
+            <span className="text-red-400">NO Shares:</span>
+            <span className="text-white">{formatEther(userNoShares)}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
+          <span className="text-purple-300">Claimable:</span>
+          <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
+        </div>
+      </div>
+
+      <button
+        onClick={() => onClaim(gameIdBigInt)}
+        disabled={isClaimPending}
+        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+      >
+        {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
+      </button>
+    </div>
+  );
+}
+
 export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const { address } = useAccount();
   const contracts = getContracts(base.id);
@@ -130,6 +270,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const [activeTab, setActiveTab] = useState<TabType>('play');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedMarketGameId, setSelectedMarketGameId] = useState<bigint | null>(null);
+  const [claimingGameId, setClaimingGameId] = useState<bigint | null>(null);
 
   // Fetch start game fee
   const { data: startGameFeeData } = useReadContract({
@@ -207,6 +348,23 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const activeGameIds = activeGamesResult?.[0] || [];
   const totalActiveGames = activeGamesResult?.[1] || 0n;
 
+  // Fetch inactive games for Closed Games tab
+  const { data: inactiveGamesData, refetch: refetchInactiveGames } = useReadContract({
+    address: PREDICTION_ADDRESS(base.id),
+    abi: contracts.prediction.abi,
+    functionName: 'getInactiveGames',
+    args: [0n, 50n], // Start at 0, fetch 50 games
+    chainId: base.id,
+    query: {
+      enabled: activeTab === 'closed', // Only fetch when on closed games tab
+      refetchInterval: activeTab === 'closed' ? 10000 : false, // Refetch every 10 seconds when active
+    },
+  });
+
+  const inactiveGamesResult = inactiveGamesData as [bigint[], bigint, boolean] | undefined;
+  const inactiveGameIds = inactiveGamesResult?.[0] || [];
+  const totalInactiveGames = inactiveGamesResult?.[1] || 0n;
+
   // Start game transaction
   const {
     data: startGameHash,
@@ -264,8 +422,10 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     if (isStartGameConfirmed || isHitConfirmed || isStandConfirmed || isClaimConfirmed) {
       refetchGame();
       refetchClaimable();
+      refetchInactiveGames();
+      setClaimingGameId(null);
     }
-  }, [isStartGameConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable]);
+  }, [isStartGameConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchInactiveGames]);
 
   // Handle errors
   useEffect(() => {
@@ -317,15 +477,64 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     });
   };
 
-  const handleClaimWinnings = () => {
-    if (!address || !gameDisplay?.gameId) return;
+  const handleClaimWinnings = (gameId?: bigint | any) => {
+    if (!address) return;
+    const targetGameId = gameId || gameDisplay?.gameId;
+    if (!targetGameId) return;
+
+    // Log the raw gameId for debugging
+    console.log('handleClaimWinnings received gameId:', {
+      value: targetGameId,
+      type: typeof targetGameId,
+      isArray: Array.isArray(targetGameId),
+      keys: typeof targetGameId === 'object' ? Object.keys(targetGameId) : null,
+      fullObject: JSON.stringify(targetGameId, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+      )
+    });
+
+    // Safely extract and convert to BigInt
+    let gameIdBigInt: bigint;
+    try {
+      if (typeof targetGameId === 'bigint') {
+        gameIdBigInt = targetGameId;
+      } else if (typeof targetGameId === 'number' || typeof targetGameId === 'string') {
+        gameIdBigInt = BigInt(targetGameId);
+      } else if (typeof targetGameId === 'object') {
+        // Try multiple extraction methods
+        if (Array.isArray(targetGameId) && targetGameId.length > 0) {
+          // Might be an array with the value at index 0
+          gameIdBigInt = BigInt(targetGameId[0]);
+        } else if ('value' in targetGameId) {
+          // Might have a .value property
+          gameIdBigInt = BigInt(targetGameId.value);
+        } else if ('_hex' in targetGameId) {
+          // Might be an ethers.js BigNumber
+          gameIdBigInt = BigInt(targetGameId._hex);
+        } else {
+          // Last resort: try toString
+          const stringValue = targetGameId.toString();
+          gameIdBigInt = BigInt(stringValue);
+        }
+      } else {
+        throw new Error('Invalid gameId type');
+      }
+
+      console.log('Successfully converted to BigInt:', gameIdBigInt);
+    } catch (error) {
+      console.error('Failed to convert gameId:', targetGameId, error);
+      setErrorMessage('Invalid game ID format - check console for details');
+      return;
+    }
+
     setErrorMessage('');
+    setClaimingGameId(gameIdBigInt);
 
     writeClaim({
       address: PREDICTION_ADDRESS(base.id),
       abi: contracts.prediction.abi,
       functionName: 'claimWinnings',
-      args: [gameDisplay.gameId],
+      args: [gameIdBigInt],
     });
   };
 
@@ -501,6 +710,16 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         >
           Live Games
         </button>
+        <button
+          onClick={() => setActiveTab('closed')}
+          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+            activeTab === 'closed'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          Closed Games
+        </button>
       </div>
 
       {/* Claimable winnings alert */}
@@ -515,7 +734,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             <span className="text-yellow-300">You must claim these before starting a new game.</span>
           </div>
           <button
-            onClick={handleClaimWinnings}
+            onClick={() => handleClaimWinnings()}
             disabled={isClaimPending || isClaimConfirming}
             className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
           >
@@ -667,6 +886,60 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Closed Games Tab */}
+      {activeTab === 'closed' && (
+        <div className="space-y-4">
+          {/* Closed games count */}
+          <div className="bg-gray-800/50 p-3 rounded-lg text-center">
+            <div className="text-purple-300 font-semibold">
+              {totalInactiveGames.toString()} Closed Game{totalInactiveGames !== 1n ? 's' : ''}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              Showing games with claimable winnings
+            </div>
+          </div>
+
+          {/* Info box */}
+          {!address && (
+            <div className="bg-blue-900/50 border border-blue-500 p-4 rounded-lg text-center">
+              <div className="text-blue-200 text-sm">
+                Connect your wallet to view games where you have claimable winnings
+              </div>
+            </div>
+          )}
+
+          {/* Games list */}
+          {address && inactiveGameIds.length === 0 ? (
+            <div className="bg-gray-800/50 p-6 rounded-lg text-center">
+              <div className="text-gray-400 mb-2">No closed games found</div>
+              <div className="text-sm text-gray-500">
+                When games finish, they will appear here if you have winnings to collect
+              </div>
+            </div>
+          ) : address ? (
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {inactiveGameIds.map((gameId, index) => {
+                // Log the gameId to see what we're getting
+                if (index === 0) {
+                  console.log('First inactive gameId type:', typeof gameId, 'value:', gameId);
+                }
+
+                // Pass the gameId directly - let ClosedGameCard handle the conversion
+                return (
+                  <ClosedGameCard
+                    key={index}
+                    gameId={gameId}
+                    userAddress={address}
+                    onClaim={handleClaimWinnings}
+                    isClaimPending={false}
+                  />
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       )}
       </div>
