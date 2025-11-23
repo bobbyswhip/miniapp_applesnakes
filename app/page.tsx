@@ -11,6 +11,7 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { JailInterface } from '@/components/JailInterface';
 import { StakingInterface } from '@/components/StakingInterface';
+import { BlackjackInterface } from '@/components/BlackjackInterface';
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
@@ -145,7 +146,7 @@ function HomeContent() {
     'Wizard': 'Hatch Eggs',
     'Warden': 'Open Jail',
     'Wilfred': 'Feed Wilfred',
-    'Mountain Man': 'Play Game',
+    'MountainMan': 'Play Game',
   };
 
   // Shop tab state (mint or wrap)
@@ -188,6 +189,9 @@ function HomeContent() {
 
   // Jail state management
   const [showJail, setShowJail] = useState(false);
+
+  // Blackjack state management
+  const [showBlackjack, setShowBlackjack] = useState(false);
 
   // Wagmi hooks for wallet and contract interaction
   const { address } = useAccount();
@@ -2584,7 +2588,7 @@ function HomeContent() {
                 ? 'Be careful or you\'ll end up in here! Would you like to view the jail? ...Of course, a small donation could help you avoid any misunderstandings.'
                 : currentCharacter === 'Wilfred'
                 ? 'Welcome to my humble cave shop, traveler. The darkness here preserves my wares quite well. Care to browse what I have in stock?'
-                : currentCharacter === 'Mountain Man'
+                : currentCharacter === 'MountainMan'
                 ? 'Greetings, traveler! Would you like to play a fun game?'
                 : 'Hello traveler! Welcome to my shop. I\'ve got all sorts of potions, tools, and magical items for sale. Let me know if anything catches your eye!'}
             </div>
@@ -2601,6 +2605,8 @@ function HomeContent() {
                   setShowJail(true);
                 } else if (currentCharacter === 'Wilfred') {
                   openBreed();
+                } else if (currentCharacter === 'MountainMan') {
+                  setShowBlackjack(true);
                 } else {
                   openSwapMint();
                 }
@@ -3763,7 +3769,6 @@ function HomeContent() {
                   MozBackgroundClip: 'text',
                   backgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
-                  MozTextFillColor: 'transparent',
                   display: 'inline-block',
                 }}
               >
@@ -4817,6 +4822,9 @@ function HomeContent() {
 
       {/* Jail Interface */}
       {showJail && <JailInterface onClose={() => setShowJail(false)} />}
+
+      {/* Blackjack Interface */}
+      {showBlackjack && <BlackjackInterface onClose={() => setShowBlackjack(false)} />}
 
       {/* CSS animations */}
       <style jsx>{`

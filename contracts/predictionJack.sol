@@ -12,12 +12,10 @@ import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.
 import {TickMath} from "v4-core/src/libraries/TickMath.sol";
 import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 
-/* ─── Local shim to settle ERC20 ─── */
 interface IPoolManagerExt is IPoolManager {
     function settle(Currency currency) external;
 }
 
-/* ─── ERC-20 minimal ─── */
 interface IERC20Minimal {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -25,17 +23,14 @@ interface IERC20Minimal {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
-/* ─── Hook view for pool lookup ─── */
 interface ISuperStratView {
     function getPoolKey(PoolId id) external view returns (PoolKey memory);
 }
 
-/* ─── Staking interface ─── */
 interface IAppleStaking {
     function addRewards(uint256 amount) external;
 }
 
-/* ─── Errors ─── */
 error SwapReverted(bytes data);
 
 contract PredictionJack is VRFConsumerBaseV2Plus {
@@ -68,16 +63,14 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     mapping(address => bool) public isAdmin;
     bool private locked;
 
-    /* ─────────── Uniswap Pool Config ─────────── */
     address public hook   = 0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8;
     bytes32 public poolIdRaw = 0x6a634d3c93c0b9402392bff565c8315f621558a49e2a00973922322ce19d4abb;
     address public token1 = 0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6;
     address public protocolOwner;
     
-    /* ─────────── Fee & Staking Config ─────────── */
     IAppleStaking public appleStaking;
-    uint256 public constant TRADING_FEE_BPS = 100; // 1% = 100 basis points
-    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000; // 20% = 2000 basis points
+    uint256 public constant TRADING_FEE_BPS = 100;
+    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000;
 
     uint256 public startGameFee = 0.00069 ether;
     uint256 public nextGameId = 1;
@@ -189,12 +182,34 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         bool    payC0AsNative;
     }
 
+    struct GameInfo {
+        uint256 gameId;
+        address player;
+        HandState state;
+        uint256 startedAt;
+        uint256 lastActionAt;
+        uint8 playerTotal;
+        uint8 dealerTotal;
+        bool marketCreated;
+    }
+
+    struct BatchGameData {
+        GameInfo gameInfo;
+        MarketDisplay marketData;
+    }
+
     mapping(address => Game) public games;
     mapping(uint256 => PredictionMarket) public predictionMarkets;
     mapping(uint256 => mapping(address => uint256)) public yesShares;
     mapping(uint256 => mapping(address => uint256)) public noShares;
     mapping(address => PlayerStats) public playerStats;
     mapping(uint256 => address) public vrfToPlayer;
+
+    uint256[] private activeGameIds;
+    uint256[] private inactiveGameIds;
+    mapping(uint256 => uint256) private activeGameIndex;
+    mapping(uint256 => uint256) private inactiveGameIndex;
+    mapping(uint256 => address) public gameIdToPlayer;
 
     event GameStarted(address indexed player, uint256 gameId, uint256 feeIn, uint256 tokensReceived, uint256 protocolFee);
     event MarketCreated(uint256 indexed gameId, address indexed player, uint256 initialLiquidityYes, uint256 initialLiquidityNo, uint256 maxDeposits);
@@ -203,13 +218,13 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     event GameResolved(address indexed player, uint256 indexed gameId, string result, uint8 playerValue, uint8 dealerValue, GameResult marketResult);
     event PlayerBusted(address indexed player, uint256 indexed gameId, uint8 playerValue);
     event GameCancelled(address indexed player, uint256 indexed gameId, string reason);
+    event GameForceResolved(address indexed player, uint256 indexed gameId, address indexed admin, string reason);
     event TradingPeriodStarted(address indexed player, uint256 indexed gameId, uint256 endsAt);
-    event YesPurchased(uint256 indexed gameId, address indexed buyer, uint256 tokensIn, uint256 sharesOut, uint256 feeAmount);
-    event NoPurchased(uint256 indexed gameId, address indexed buyer, uint256 tokensIn, uint256 sharesOut, uint256 feeAmount);
-    event YesSold(uint256 indexed gameId, address indexed seller, uint256 sharesIn, uint256 tokensOut, uint256 feeAmount);
-    event NoSold(uint256 indexed gameId, address indexed seller, uint256 sharesIn, uint256 tokensOut, uint256 feeAmount);
+    event SharesPurchased(uint256 indexed gameId, address indexed buyer, bool isYes, uint256 tokensIn, uint256 sharesOut, uint256 feeAmount);
+    event SharesSold(uint256 indexed gameId, address indexed seller, bool isYes, uint256 sharesIn, uint256 tokensOut, uint256 feeAmount);
     event WinningsClaimed(uint256 indexed gameId, address indexed claimer, uint256 amount, uint256 feeAmount);
     event TradingFeeCollected(uint256 indexed gameId, address indexed from, uint256 amount, string feeType);
+    event InstantWinRefund(address indexed player, uint256 indexed gameId, uint256 tokensRefunded);
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -244,7 +259,6 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         Game storage g = games[msg.sender];
         
-        // Check for unclaimed winnings from previous game
         if (g.gameId > 0) {
             PredictionMarket storage oldMarket = predictionMarkets[g.gameId];
             if (oldMarket.resolved) {
@@ -260,19 +274,14 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             "Game already active"
         );
 
-        // Take 20% protocol fee from ETH payment
         uint256 protocolFee = (msg.value * START_GAME_PROTOCOL_FEE_BPS) / 10000;
         uint256 swapAmount = msg.value - protocolFee;
         
-        // Send protocol fee
         (bool success, ) = payable(protocolOwner).call{value: protocolFee}("");
         require(success, "Protocol fee transfer failed");
         
-        // Swap remaining 80%
         uint256 tokensReceived = _executeSwapToContract(swapAmount);
-        
         uint256 requestId = _requestVrf();
-        
         uint256 gameId = nextGameId++;
 
         g.player = msg.sender;
@@ -289,6 +298,9 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         delete g.usedCards;
 
         vrfToPlayer[requestId] = msg.sender;
+        gameIdToPlayer[gameId] = msg.sender;
+
+        _addToActiveGames(gameId);
 
         emit GameStarted(msg.sender, gameId, msg.value, tokensReceived, protocolFee);
     }
@@ -350,6 +362,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         HandState previousState = g.state;
         g.state = HandState.Inactive;
         
+        _moveToInactiveGames(g.gameId);
+        
         emit GameCancelled(msg.sender, g.gameId, _getStateName(previousState));
     }
 
@@ -384,15 +398,21 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         pm.resolved = true;
         pm.result = GameResult.Push;
         
+        _moveToInactiveGames(g.gameId);
+        
+        emit GameForceResolved(player, g.gameId, msg.sender, "Abandoned game resolved as push");
         emit GameResolved(player, g.gameId, "Push - Abandoned", playerValue, dealerValue, GameResult.Push);
     }
 
-    /* ─────────── Prediction Market Functions ─────────── */
+    /* ─────────── Prediction Market Functions (OPTIMIZED) ─────────── */
     
     /**
-     * @notice Buy YES shares with token approval (1% fee to staking)
+     * @notice Buy shares with token approval (1% fee to staking)
+     * @param gameId The game ID
+     * @param tokensIn Amount of tokens to spend
+     * @param isYes True for YES shares, false for NO shares
      */
-    function buyYes(uint256 gameId, uint256 tokensIn) external nonReentrant {
+    function buyShares(uint256 gameId, uint256 tokensIn, bool isYes) external nonReentrant {
         PredictionMarket storage pm = predictionMarkets[gameId];
         require(pm.marketCreated, "Market not created");
         require(pm.tradingActive, "Trading not active");
@@ -400,265 +420,151 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         pm.volume += tokensIn;
         
-        // Calculate 1% fee
         uint256 feeAmount = (tokensIn * TRADING_FEE_BPS) / 10000;
         uint256 netTokens = tokensIn - feeAmount;
         
-        // Transfer tokens from user
         require(IERC20Minimal(token1).transferFrom(msg.sender, address(this), tokensIn), "Transfer failed");
         
-        // Send fee to staking contract
         if (feeAmount > 0 && address(appleStaking) != address(0)) {
             require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
             appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyYes");
+            emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "buyYes" : "buyNo");
         }
         
         uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
         uint256 allowedAmount = netTokens;
         
-        // Cap at max deposits and refund excess to protocol owner
         if (currentTotal + netTokens > pm.maxTotalDeposits) {
             allowedAmount = pm.maxTotalDeposits - currentTotal;
             uint256 excess = netTokens - allowedAmount;
             require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
         }
         
-        uint256 sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
+        uint256 sharesOut;
+        if (isYes) {
+            sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
+            pm.yesDeposits += allowedAmount;
+            pm.yesSharesTotal += sharesOut;
+            yesShares[gameId][msg.sender] += sharesOut;
+        } else {
+            sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
+            pm.noDeposits += allowedAmount;
+            pm.noSharesTotal += sharesOut;
+            noShares[gameId][msg.sender] += sharesOut;
+        }
         
-        pm.yesDeposits += allowedAmount;
-        pm.yesSharesTotal += sharesOut;
-        yesShares[gameId][msg.sender] += sharesOut;
-        
-        emit YesPurchased(gameId, msg.sender, allowedAmount, sharesOut, feeAmount);
+        emit SharesPurchased(gameId, msg.sender, isYes, allowedAmount, sharesOut, feeAmount);
     }
 
     /**
-     * @notice Buy NO shares with token approval (1% fee to staking)
+     * @notice Buy shares by swapping ETH to tokens (1% ETH fee to protocol owner)
+     * @param gameId The game ID
+     * @param isYes True for YES shares, false for NO shares
      */
-    function buyNo(uint256 gameId, uint256 tokensIn) external nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(tokensIn > 0, "Must send tokens");
-        
-        pm.volume += tokensIn;
-        
-        // Calculate 1% fee
-        uint256 feeAmount = (tokensIn * TRADING_FEE_BPS) / 10000;
-        uint256 netTokens = tokensIn - feeAmount;
-        
-        // Transfer tokens from user
-        require(IERC20Minimal(token1).transferFrom(msg.sender, address(this), tokensIn), "Transfer failed");
-        
-        // Send fee to staking contract
-        if (feeAmount > 0 && address(appleStaking) != address(0)) {
-            require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
-            appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyNo");
-        }
-        
-        uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
-        uint256 allowedAmount = netTokens;
-        
-        // Cap at max deposits and refund excess to protocol owner
-        if (currentTotal + netTokens > pm.maxTotalDeposits) {
-            allowedAmount = pm.maxTotalDeposits - currentTotal;
-            uint256 excess = netTokens - allowedAmount;
-            require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
-        
-        }
-        
-        uint256 sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
-        
-        pm.noDeposits += allowedAmount;
-        pm.noSharesTotal += sharesOut;
-        noShares[gameId][msg.sender] += sharesOut;
-        
-        emit NoPurchased(gameId, msg.sender, allowedAmount, sharesOut, feeAmount);
-    }
-
-    /**
-     * @notice Buy YES shares by swapping ETH to tokens (1% ETH fee to protocol owner)
-     */
-    function buyYesWithETH(uint256 gameId) external payable nonReentrant {
+    function buySharesWithETH(uint256 gameId, bool isYes) external payable nonReentrant {
         PredictionMarket storage pm = predictionMarkets[gameId];
         require(pm.marketCreated, "Market not created");
         require(pm.tradingActive, "Trading not active");
         require(msg.value > 0, "No ETH sent");
         
-        // Take 1% ETH fee to protocol owner
         uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
         uint256 swapAmount = msg.value - feeAmount;
         
-        // Send fee to protocol owner
         (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
         require(success, "Fee transfer failed");
         
-        // Swap remaining ETH
         uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
         _executeSwapToContract(swapAmount);
         uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
         
         uint256 tokensIn = balanceAfter - balanceBefore;
-        
         pm.volume += tokensIn;
         
         uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
         uint256 allowedAmount = tokensIn;
         
-        // Cap at max deposits
         if (currentTotal + tokensIn > pm.maxTotalDeposits) {
             allowedAmount = pm.maxTotalDeposits - currentTotal;
             uint256 excess = tokensIn - allowedAmount;
             require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
         }
         
-        uint256 sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
-        
-        pm.yesDeposits += allowedAmount;
-        pm.yesSharesTotal += sharesOut;
-        yesShares[gameId][msg.sender] += sharesOut;
-        
-        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyYesWithETH");
-        emit YesPurchased(gameId, msg.sender, allowedAmount, sharesOut, feeAmount);
-    }
-
-    /**
-     * @notice Buy NO shares by swapping ETH to tokens (1% ETH fee to protocol owner)
-     */
-    function buyNoWithETH(uint256 gameId) external payable nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(msg.value > 0, "No ETH sent");
-        
-        // Take 1% ETH fee to protocol owner
-        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
-        uint256 swapAmount = msg.value - feeAmount;
-        
-        // Send fee to protocol owner
-        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
-        require(success, "Fee transfer failed");
-        
-        // Swap remaining ETH
-        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
-        _executeSwapToContract(swapAmount);
-        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
-        
-        uint256 tokensIn = balanceAfter - balanceBefore;
-        
-        pm.volume += tokensIn;
-        
-        uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
-        uint256 allowedAmount = tokensIn;
-        
-        // Cap at max deposits
-        if (currentTotal + tokensIn > pm.maxTotalDeposits) {
-            allowedAmount = pm.maxTotalDeposits - currentTotal;
-            uint256 excess = tokensIn - allowedAmount;
-            require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
+        uint256 sharesOut;
+        if (isYes) {
+            sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
+            pm.yesDeposits += allowedAmount;
+            pm.yesSharesTotal += sharesOut;
+            yesShares[gameId][msg.sender] += sharesOut;
+        } else {
+            sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
+            pm.noDeposits += allowedAmount;
+            pm.noSharesTotal += sharesOut;
+            noShares[gameId][msg.sender] += sharesOut;
         }
         
-        uint256 sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
-        
-        pm.noDeposits += allowedAmount;
-        pm.noSharesTotal += sharesOut;
-        noShares[gameId][msg.sender] += sharesOut;
-        
-        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyNoWithETH");
-        emit NoPurchased(gameId, msg.sender, allowedAmount, sharesOut, feeAmount);
+        emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "buyYesWithETH" : "buyNoWithETH");
+        emit SharesPurchased(gameId, msg.sender, isYes, allowedAmount, sharesOut, feeAmount);
     }
 
     /**
-     * @notice Sell YES shares for tokens (1% fee to staking)
+     * @notice Sell shares for tokens (1% fee to staking)
+     * @param gameId The game ID
+     * @param sharesIn Amount of shares to sell
+     * @param isYes True for YES shares, false for NO shares
      */
-    function sellYes(uint256 gameId, uint256 sharesIn) external nonReentrant {
+    function sellShares(uint256 gameId, uint256 sharesIn, bool isYes) external nonReentrant {
         PredictionMarket storage pm = predictionMarkets[gameId];
         require(pm.tradingActive, "Trading not active");
-        require(yesShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
         require(sharesIn > 0, "Must sell shares");
         
-        uint256 tokensOut = _calculateTokensOut(pm.yesSharesTotal, pm.yesDeposits, sharesIn);
-        require(tokensOut <= pm.yesDeposits, "Insufficient liquidity");
+        uint256 tokensOut;
+        
+        if (isYes) {
+            require(yesShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
+            tokensOut = _calculateTokensOut(pm.yesSharesTotal, pm.yesDeposits, sharesIn);
+            require(tokensOut <= pm.yesDeposits, "Insufficient liquidity");
+            
+            yesShares[gameId][msg.sender] -= sharesIn;
+            pm.yesSharesTotal -= sharesIn;
+            pm.yesDeposits -= tokensOut;
+        } else {
+            require(noShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
+            tokensOut = _calculateTokensOut(pm.noSharesTotal, pm.noDeposits, sharesIn);
+            require(tokensOut <= pm.noDeposits, "Insufficient liquidity");
+            
+            noShares[gameId][msg.sender] -= sharesIn;
+            pm.noSharesTotal -= sharesIn;
+            pm.noDeposits -= tokensOut;
+        }
         
         pm.volume += tokensOut;
         
-        // Calculate 1% fee
         uint256 feeAmount = (tokensOut * TRADING_FEE_BPS) / 10000;
         uint256 netTokens = tokensOut - feeAmount;
         
-        yesShares[gameId][msg.sender] -= sharesIn;
-        pm.yesSharesTotal -= sharesIn;
-        pm.yesDeposits -= tokensOut;
-        
-        // Send net tokens to user
         require(IERC20Minimal(token1).transfer(msg.sender, netTokens), "Transfer failed");
         
-        // Send fee to staking contract
         if (feeAmount > 0 && address(appleStaking) != address(0)) {
             require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
             appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, "sellYes");
+            emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "sellYes" : "sellNo");
         }
         
-        emit YesSold(gameId, msg.sender, sharesIn, netTokens, feeAmount);
+        emit SharesSold(gameId, msg.sender, isYes, sharesIn, netTokens, feeAmount);
     }
 
-    /**
-     * @notice Sell NO shares for tokens (1% fee to staking)
-     */
-    function sellNo(uint256 gameId, uint256 sharesIn) external nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.tradingActive, "Trading not active");
-        require(noShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
-        require(sharesIn > 0, "Must sell shares");
-        
-        uint256 tokensOut = _calculateTokensOut(pm.noSharesTotal, pm.noDeposits, sharesIn);
-        require(tokensOut <= pm.noDeposits, "Insufficient liquidity");
-        
-        pm.volume += tokensOut;
-        
-        // Calculate 1% fee
-        uint256 feeAmount = (tokensOut * TRADING_FEE_BPS) / 10000;
-        uint256 netTokens = tokensOut - feeAmount;
-        
-        noShares[gameId][msg.sender] -= sharesIn;
-        pm.noSharesTotal -= sharesIn;
-        pm.noDeposits -= tokensOut;
-        
-        // Send net tokens to user
-        require(IERC20Minimal(token1).transfer(msg.sender, netTokens), "Transfer failed");
-        
-        // Send fee to staking contract
-        if (feeAmount > 0 && address(appleStaking) != address(0)) {
-            require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
-            appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, "sellNo");
-        }
-        
-        emit NoSold(gameId, msg.sender, sharesIn, netTokens, feeAmount);
-    }
-
-    /**
-     * @notice Claim winnings or refund after game resolves (1% fee to staking)
-     */
     function claimWinnings(uint256 gameId) external nonReentrant {
         uint256 payout = _calculateClaimable(gameId, msg.sender);
         require(payout > 0, "Nothing to claim");
         
-        // Calculate 1% fee
         uint256 feeAmount = (payout * TRADING_FEE_BPS) / 10000;
         uint256 netPayout = payout - feeAmount;
         
-        // Zero out shares
         yesShares[gameId][msg.sender] = 0;
         noShares[gameId][msg.sender] = 0;
         
-        // Send net payout to user
         require(IERC20Minimal(token1).transfer(msg.sender, netPayout), "Transfer failed");
         
-        // Send fee to staking contract
         if (feeAmount > 0 && address(appleStaking) != address(0)) {
             require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
             appleStaking.addRewards(feeAmount);
@@ -668,9 +574,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit WinningsClaimed(gameId, msg.sender, netPayout, feeAmount);
     }
 
-    /**
-     * @notice Internal function to calculate claimable amount
-     */
+    /* ─────────── Internal Market Functions ─────────── */
+
     function _calculateClaimable(uint256 gameId, address user) internal view returns (uint256) {
         PredictionMarket storage pm = predictionMarkets[gameId];
         if (!pm.resolved) return 0;
@@ -716,6 +621,34 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         return (sharesIn * currentDeposits) / currentShares;
     }
 
+    /* ─────────── Game Tracking Internal Functions ─────────── */
+
+    function _addToActiveGames(uint256 gameId) internal {
+        if (activeGameIndex[gameId] == 0) {
+            activeGameIds.push(gameId);
+            activeGameIndex[gameId] = activeGameIds.length;
+        }
+    }
+
+    function _moveToInactiveGames(uint256 gameId) internal {
+        uint256 activeIdx = activeGameIndex[gameId];
+        if (activeIdx > 0) {
+            activeIdx--;
+            
+            uint256 lastGameId = activeGameIds[activeGameIds.length - 1];
+            activeGameIds[activeIdx] = lastGameId;
+            activeGameIndex[lastGameId] = activeIdx + 1;
+            
+            activeGameIds.pop();
+            delete activeGameIndex[gameId];
+        }
+        
+        if (inactiveGameIndex[gameId] == 0) {
+            inactiveGameIds.push(gameId);
+            inactiveGameIndex[gameId] = inactiveGameIds.length;
+        }
+    }
+
     /* ─────────── VRF Callbacks ─────────── */
 
     function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
@@ -723,7 +656,6 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         if (player == address(0)) return;
         
         Game storage g = games[player];
-
         uint256 randomness = randomWords[0];
 
         if (g.state == HandState.PendingInitialDeal) {
@@ -765,14 +697,16 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             if (dealerValue == 21 && g.dealerHand.length == 2) {
                 g.state = HandState.Finished;
                 stats.pushes++;
-
+                emit InstantWinRefund(g.player, g.gameId, refundAmount);
                 emit GameResolved(g.player, g.gameId, "Push - Both Blackjack (No Market)", 21, 21, GameResult.Push);
             } else {
                 g.state = HandState.Finished;
                 stats.wins++;
-
+                emit InstantWinRefund(g.player, g.gameId, refundAmount);
                 emit GameResolved(g.player, g.gameId, "Blackjack! (No Market)", 21, dealerValue, GameResult.Win);
             }
+            
+            _moveToInactiveGames(g.gameId);
         } else {
             uint256 halfTokens = g.tokensHeld / 2;
             g.tokensHeld = 0;
@@ -824,6 +758,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             pm.resolved = true;
             pm.result = GameResult.Lose;
             
+            _moveToInactiveGames(g.gameId);
+            
             emit PlayerBusted(g.player, g.gameId, playerValue);
             emit GameResolved(g.player, g.gameId, "Bust", playerValue, _calculateHandValue(g.dealerHand), GameResult.Lose);
         } else {
@@ -872,6 +808,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         PredictionMarket storage pm = predictionMarkets[g.gameId];
         pm.resolved = true;
         pm.result = marketResult;
+        
+        _moveToInactiveGames(g.gameId);
         
         emit GameResolved(g.player, g.gameId, result, playerValue, dealerValue, marketResult);
     }
@@ -1006,76 +944,92 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         );
     }
 
-    /* ─────────── View Functions ─────────── */
+    /* ─────────── Paginated View Functions ─────────── */
 
-    function getQuickStatus(address player) external view returns (
-        string memory status,
-        uint8 playerTotal,
-        uint8 dealerTotal,
-        bool canAct,
-        uint256 tradingPeriodEnds,
-        uint256 gameId
-    ) {
-        Game storage g = games[player];
+    function getActiveGames(uint256 startIndex, uint256 count) 
+        external 
+        view 
+        returns (
+            uint256[] memory gameIds,
+            uint256 totalActive,
+            bool hasMore
+        ) 
+    {
+        require(count > 0 && count <= 100, "Count must be 1-100");
         
-        string memory statusStr;
-        if (g.state == HandState.Inactive) statusStr = "Inactive";
-        else if (g.state == HandState.PendingInitialDeal) statusStr = "Dealing";
-        else if (g.state == HandState.Active) statusStr = "Active";
-        else if (g.state == HandState.PendingHit) statusStr = "Hitting";
-        else if (g.state == HandState.PendingStand) statusStr = "Standing";
-        else if (g.state == HandState.Busted) statusStr = "Busted";
-        else statusStr = "Finished";
+        totalActive = activeGameIds.length;
         
-        bool tradingOver = block.timestamp >= g.tradingPeriodEnds;
+        if (startIndex >= totalActive) {
+            return (new uint256[](0), totalActive, false);
+        }
         
-        return (
-            statusStr,
-            _calculateHandValue(g.playerHand),
-            _calculateHandValue(g.dealerHand),
-            g.state == HandState.Active && tradingOver,
-            g.tradingPeriodEnds,
-            g.gameId
-        );
+        uint256 remaining = totalActive - startIndex;
+        uint256 returnCount = remaining < count ? remaining : count;
+        
+        gameIds = new uint256[](returnCount);
+        for (uint256 i = 0; i < returnCount; i++) {
+            gameIds[i] = activeGameIds[startIndex + i];
+        }
+        
+        hasMore = startIndex + returnCount < totalActive;
+        
+        return (gameIds, totalActive, hasMore);
     }
 
-    function getQuickMarketStatus(uint256 gameId) external view returns (
-        uint256 totalYesShares,
-        uint256 totalNoShares,
-        uint256 totalDeposits,
-        uint256 maxDeposits,
-        uint256 yesPrice,
-        uint256 noPrice,
-        bool tradingActive,
-        bool resolved,
-        string memory resultString,
-        bool marketCreated
-    ) {
+    function getInactiveGames(uint256 startIndex, uint256 count) 
+        external 
+        view 
+        returns (
+            uint256[] memory gameIds,
+            uint256 totalInactive,
+            bool hasMore
+        ) 
+    {
+        require(count > 0 && count <= 100, "Count must be 1-100");
+        
+        totalInactive = inactiveGameIds.length;
+        
+        if (startIndex >= totalInactive) {
+            return (new uint256[](0), totalInactive, false);
+        }
+        
+        uint256 remaining = totalInactive - startIndex;
+        uint256 returnCount = remaining < count ? remaining : count;
+        
+        gameIds = new uint256[](returnCount);
+        for (uint256 i = 0; i < returnCount; i++) {
+            gameIds[i] = inactiveGameIds[startIndex + i];
+        }
+        
+        hasMore = startIndex + returnCount < totalInactive;
+        
+        return (gameIds, totalInactive, hasMore);
+    }
+
+    function getGameCounts() external view returns (uint256 activeCount, uint256 inactiveCount) {
+        return (activeGameIds.length, inactiveGameIds.length);
+    }
+
+    function getGameInfo(uint256 gameId) public view returns (GameInfo memory) {
+        address player = gameIdToPlayer[gameId];
+        require(player != address(0), "Game does not exist");
+        
+        Game storage g = games[player];
         PredictionMarket storage pm = predictionMarkets[gameId];
         
-        string memory result;
-        if (pm.result == GameResult.Pending) result = "Pending";
-        else if (pm.result == GameResult.Win) result = "Yes Wins";
-        else if (pm.result == GameResult.Lose) result = "No Wins";
-        else result = "Push";
-        
-        uint256 totalDep = pm.yesDeposits + pm.noDeposits;
-        uint256 yesPriceBps = totalDep > 0 ? (pm.yesDeposits * 10000) / totalDep : 5000;
-        uint256 noPriceBps = totalDep > 0 ? (pm.noDeposits * 10000) / totalDep : 5000;
-        
-        return (
-            pm.yesSharesTotal,
-            pm.noSharesTotal,
-            totalDep,
-            pm.maxTotalDeposits,
-            yesPriceBps,
-            noPriceBps,
-            pm.tradingActive,
-            pm.resolved,
-            result,
-            pm.marketCreated
-        );
+        return GameInfo({
+            gameId: gameId,
+            player: player,
+            state: g.state,
+            startedAt: g.startedAt,
+            lastActionAt: g.lastActionAt,
+            playerTotal: _calculateHandValue(g.playerHand),
+            dealerTotal: _calculateHandValue(g.dealerHand),
+            marketCreated: pm.marketCreated
+        });
     }
+
+
 
     function getGameDisplay(address player) external view returns (GameDisplay memory) {
         Game storage g = games[player];
@@ -1187,15 +1141,15 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         return _calculateClaimable(gameId, user);
     }
 
-    function getPlayerGameIds(address player) external view returns (uint256[] memory activeGameIds) {
+    function getPlayerGameIds(address player) external view returns (uint256[] memory gameIds) {
         Game storage g = games[player];
         if (g.gameId > 0) {
-            activeGameIds = new uint256[](1);
-            activeGameIds[0] = g.gameId;
+            gameIds = new uint256[](1);
+            gameIds[0] = g.gameId;
         } else {
-            activeGameIds = new uint256[](0);
+            gameIds = new uint256[](0);
         }
-        return activeGameIds;
+        return gameIds;
     }
 
     function getUnclaimedTokensInMarket(uint256 gameId) external view returns (uint256) {
@@ -1230,9 +1184,6 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         );
     }
 
-    function getMinStartGameFee() external view returns (uint256) {
-        return startGameFee;
-    }
 
     /* ─────────── Admin Functions ─────────── */
 
@@ -1277,18 +1228,6 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     function setPoolId(bytes32 id) external {
         require(isAdmin[msg.sender], "Not admin");
         poolIdRaw = id;
-    }
-
-    function setProtocolOwner(address newOwner) external {
-        require(isAdmin[msg.sender], "Not admin");
-        require(newOwner != address(0), "zero address");
-        protocolOwner = newOwner;
-    }
-
-    function setStakingContract(address newStaking) external {
-        require(isAdmin[msg.sender], "Not admin");
-        require(newStaking != address(0), "zero address");
-        appleStaking = IAppleStaking(newStaking);
     }
 
     function setAdmin(address admin, bool status) external {

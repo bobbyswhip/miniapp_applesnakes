@@ -462,4 +462,74 @@ export const PREDICTION_ABI = [
     name: 'TradingFeeCollected',
     type: 'event',
   },
+
+  // New View Functions for Game Listings
+  {
+    inputs: [
+      { internalType: 'uint256', name: 'startIndex', type: 'uint256' },
+      { internalType: 'uint256', name: 'count', type: 'uint256' },
+    ],
+    name: 'getActiveGames',
+    outputs: [
+      { internalType: 'uint256[]', name: 'gameIds', type: 'uint256[]' },
+      { internalType: 'uint256', name: 'totalActive', type: 'uint256' },
+      { internalType: 'bool', name: 'hasMore', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'uint256', name: 'startIndex', type: 'uint256' },
+      { internalType: 'uint256', name: 'count', type: 'uint256' },
+    ],
+    name: 'getInactiveGames',
+    outputs: [
+      { internalType: 'uint256[]', name: 'gameIds', type: 'uint256[]' },
+      { internalType: 'uint256', name: 'totalInactive', type: 'uint256' },
+      { internalType: 'bool', name: 'hasMore', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getGameCounts',
+    outputs: [
+      { internalType: 'uint256', name: 'activeCount', type: 'uint256' },
+      { internalType: 'uint256', name: 'inactiveCount', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
+    name: 'getGameInfo',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'gameId', type: 'uint256' },
+          { internalType: 'address', name: 'player', type: 'address' },
+          { internalType: 'enum PredictionJack.HandState', name: 'state', type: 'uint8' },
+          { internalType: 'uint256', name: 'startedAt', type: 'uint256' },
+          { internalType: 'uint256', name: 'lastActionAt', type: 'uint256' },
+          { internalType: 'uint8', name: 'playerTotal', type: 'uint8' },
+          { internalType: 'uint8', name: 'dealerTotal', type: 'uint8' },
+          { internalType: 'bool', name: 'marketCreated', type: 'bool' },
+        ],
+        internalType: 'struct PredictionJack.GameInfo',
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
+    name: 'gameIdToPlayer',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;

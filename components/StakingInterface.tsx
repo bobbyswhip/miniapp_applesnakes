@@ -80,7 +80,7 @@ export function StakingInterface({
     },
   });
 
-  const { writeContract, data: hash, isPending: isWritePending } = useWriteContract();
+  const { writeContractAsync, data: hash, isPending: isWritePending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
 
   // Update staked token IDs when data changes
@@ -250,7 +250,7 @@ export function StakingInterface({
     if (!address) return;
 
     try {
-      const hash = await writeContract({
+      const hash = await writeContractAsync({
         address: nftConfig.address,
         abi: nftConfig.abi,
         functionName: 'setApprovalForAll',
@@ -268,7 +268,7 @@ export function StakingInterface({
 
     try {
       const tokenIds = Array.from(selectedSnakesForStaking);
-      const hash = await writeContract({
+      const hash = await writeContractAsync({
         address: stakingConfig.address,
         abi: stakingConfig.abi,
         functionName: 'stake',
@@ -286,7 +286,7 @@ export function StakingInterface({
 
     try {
       const tokenIds = Array.from(selectedStakedSnakes);
-      const hash = await writeContract({
+      const hash = await writeContractAsync({
         address: stakingConfig.address,
         abi: stakingConfig.abi,
         functionName: 'unstake',
@@ -303,10 +303,11 @@ export function StakingInterface({
     if (!address) return;
 
     try {
-      const hash = await writeContract({
+      const hash = await writeContractAsync({
         address: stakingConfig.address,
         abi: stakingConfig.abi,
         functionName: 'claimRewards',
+        args: [],
       });
 
       addTransaction(hash, 'Claiming staking rewards');
