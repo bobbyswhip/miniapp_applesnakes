@@ -456,55 +456,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit SharesPurchased(gameId, msg.sender, isYes, allowedAmount, sharesOut, feeAmount);
     }
 
-    /**
-     * @notice Buy shares by swapping ETH to tokens (1% ETH fee to protocol owner)
-     * @param gameId The game ID
-     * @param isYes True for YES shares, false for NO shares
-     */
-    function buySharesWithETH(uint256 gameId, bool isYes) external payable nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(msg.value > 0, "No ETH sent");
-        
-        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
-        uint256 swapAmount = msg.value - feeAmount;
-        
-        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
-        require(success, "Fee transfer failed");
-        
-        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
-        _executeSwapToContract(swapAmount);
-        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
-        
-        uint256 tokensIn = balanceAfter - balanceBefore;
-        pm.volume += tokensIn;
-        
-        uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
-        uint256 allowedAmount = tokensIn;
-        
-        if (currentTotal + tokensIn > pm.maxTotalDeposits) {
-            allowedAmount = pm.maxTotalDeposits - currentTotal;
-            uint256 excess = tokensIn - allowedAmount;
-            require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
-        }
-        
-        uint256 sharesOut;
-        if (isYes) {
-            sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
-            pm.yesDeposits += allowedAmount;
-            pm.yesSharesTotal += sharesOut;
-            yesShares[gameId][msg.sender] += sharesOut;
-        } else {
-            sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
-            pm.noDeposits += allowedAmount;
-            pm.noSharesTotal += sharesOut;
-            noShares[gameId][msg.sender] += sharesOut;
-        }
-        
-        emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "buyYesWithETH" : "buyNoWithETH");
-        emit SharesPurchased(gameId, msg.sender, isYes, allowedAmount, sharesOut, feeAmount);
-    }
+
+
 
     /**
      * @notice Sell shares for tokens (1% fee to staking)
@@ -552,6 +505,99 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         emit SharesSold(gameId, msg.sender, isYes, sharesIn, netTokens, feeAmount);
     }
+
+
+    /**
+    * @notice Buy YES shares by swapping ETH to tokens (1% ETH fee to protocol owner)
+    */
+    function buyYesWithETH(uint256 gameId) external payable nonReentrant {
+        PredictionMarket storage pm = predictionMarkets[gameId];
+        require(pm.marketCreated, "Market not created");
+        require(pm.tradingActive, "Trading not active");
+        require(msg.value > 0, "No ETH sent");
+        
+        // Deduct 1% fee before swap
+        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
+        uint256 swapAmount = msg.value - feeAmount;
+        
+        // Send fee to protocol owner
+        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
+        require(success, "Fee transfer failed");
+        
+        // Execute swap
+        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
+        _executeSwapToContract(swapAmount);
+        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
+        
+        uint256 tokensIn = balanceAfter - balanceBefore;
+        pm.volume += tokensIn;
+        
+        uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
+        uint256 allowedAmount = tokensIn;
+        
+        // Cap at max deposits and send excess to protocol owner
+        if (currentTotal + tokensIn > pm.maxTotalDeposits) {
+            allowedAmount = pm.maxTotalDeposits - currentTotal;
+            uint256 excess = tokensIn - allowedAmount;
+            require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
+        }
+        
+        uint256 sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, allowedAmount);
+        
+        pm.yesDeposits += allowedAmount;
+        pm.yesSharesTotal += sharesOut;
+        yesShares[gameId][msg.sender] += sharesOut;
+        
+        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyYes");
+        emit SharesPurchased(gameId, msg.sender, true, allowedAmount, sharesOut, feeAmount);
+    }
+
+    /**
+    * @notice Buy NO shares by swapping ETH to tokens (1% ETH fee to protocol owner)
+    */
+    function buyNoWithETH(uint256 gameId) external payable nonReentrant {
+        PredictionMarket storage pm = predictionMarkets[gameId];
+        require(pm.marketCreated, "Market not created");
+        require(pm.tradingActive, "Trading not active");
+        require(msg.value > 0, "No ETH sent");
+        
+        // Deduct 1% fee before swap
+        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
+        uint256 swapAmount = msg.value - feeAmount;
+        
+        // Send fee to protocol owner
+        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
+        require(success, "Fee transfer failed");
+        
+        // Execute swap
+        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
+        _executeSwapToContract(swapAmount);
+        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
+        
+        uint256 tokensIn = balanceAfter - balanceBefore;
+        pm.volume += tokensIn;
+        
+        uint256 currentTotal = pm.yesDeposits + pm.noDeposits;
+        uint256 allowedAmount = tokensIn;
+        
+        // Cap at max deposits and send excess to protocol owner
+        if (currentTotal + tokensIn > pm.maxTotalDeposits) {
+            allowedAmount = pm.maxTotalDeposits - currentTotal;
+            uint256 excess = tokensIn - allowedAmount;
+            require(IERC20Minimal(token1).transfer(protocolOwner, excess), "Excess transfer failed");
+        }
+        
+        uint256 sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, allowedAmount);
+        
+        pm.noDeposits += allowedAmount;
+        pm.noSharesTotal += sharesOut;
+        noShares[gameId][msg.sender] += sharesOut;
+        
+        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyNo");
+        emit SharesPurchased(gameId, msg.sender, false, allowedAmount, sharesOut, feeAmount);
+    }
+
+
 
     function claimWinnings(uint256 gameId) external nonReentrant {
         uint256 payout = _calculateClaimable(gameId, msg.sender);

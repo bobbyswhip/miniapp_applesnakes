@@ -2,13 +2,56 @@
 > applesnakes@0.1.0 build
 > next build
 
-  ▲ Next.js 14.2.13
-  - Environments: .env.local
+   ▲ Next.js 16.0.1 (Turbopack)
+   - Environments: .env.local
 
    Creating an optimized production build ...
-uncaughtException [Error: EPERM: operation not permitted, open 'C:\Users\khugh\Desktop\Studio\SealMobile\AppleSnakes\miniapp\.next\trace'] {
-  errno: -4048,
-  code: 'EPERM',
-  syscall: 'open',
-  path: 'C:\\Users\\khugh\\Desktop\\Studio\\SealMobile\\AppleSnakes\\miniapp\\.next\\trace'
+ ✓ Compiled successfully in 15.0s
+   Running TypeScript ...
+   Collecting page data ...
+   Generating static pages (0/9) ...
+   Generating static pages (2/9) 
+   Generating static pages (4/9) 
+   Generating static pages (6/9) 
+[Reown Config] Failed to fetch remote project configuration. Using local/default values. Error: HTTP status code: 403
+    at ignore-listed frames {
+  [cause]: Response {
+    status: 403,
+    statusText: 'Forbidden',
+    headers: Headers {
+      date: 'Sun, 23 Nov 2025 07:14:41 GMT',
+      'content-type': 'text/plain; charset=UTF-8',
+      'content-length': '9',
+      connection: 'keep-alive',
+      'cf-ray': '9a2edeffab880c34-EZE',
+      'access-control-allow-origin': '*',
+      'cache-control': 'public, max-age=300, s-maxage=300',
+      vary: 'Accept-Encoding',
+      server: 'cloudflare',
+      'alt-svc': 'h3=":443"; ma=86400'
+    },
+    body: undefined,
+    bodyUsed: false,
+    ok: false,
+    redirected: false,
+    type: 'default',
+    url: 'https://api.web3modal.org/appkit/v1/config?projectId=your_project_id_here&st=appkit&sv=html-core-1.7.8'
+  }
 }
+ ✓ Generating static pages (9/9) in 1117.1ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/notify
+├ ○ /docs
+├ ○ /ethglobal
+├ ○ /mint
+├ ○ /my-nfts
+└ ○ /wrap
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

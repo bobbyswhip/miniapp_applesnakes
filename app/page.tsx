@@ -1162,6 +1162,68 @@ function HomeContent() {
     }
   }, [searchParams, audioElement, currentLocation, masterVolume, router]);
 
+  // Fast travel to mountain hut and open prediction market (triggered by /ethglobal page)
+  useEffect(() => {
+    const shouldFastTravel = searchParams.get('fastTravelPrediction') === 'true';
+
+    if (shouldFastTravel) {
+      console.log('⚡ Fast travel to mountain hut (prediction market) triggered!');
+
+      // Clear the query param
+      router.replace('/');
+
+      // Start fast travel sequence
+      setIsTransitioning(true);
+
+      setTimeout(() => {
+        // Change to mountainhut location
+        setCurrentLocation('mountainhut');
+
+        // Change music if needed
+        if (audioElement && LOCATIONS['mountainhut'].musicPath !== LOCATIONS[currentLocation].musicPath) {
+          const targetVolume = masterVolume * LOCATIONS['mountainhut'].musicVolume;
+
+          // Fade out current music
+          const fadeOut = setInterval(() => {
+            if (audioElement.volume > 0.05) {
+              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
+            } else {
+              clearInterval(fadeOut);
+              audioElement.pause();
+
+              // Switch to new music
+              audioElement.src = LOCATIONS['mountainhut'].musicPath;
+              audioElement.volume = 0;
+
+              audioElement.play()
+                .then(() => {
+                  console.log(`🎵 Playing ${LOCATIONS['mountainhut'].musicPath.split('/').pop()} from beginning`);
+
+                  // Fade in new music
+                  const fadeIn = setInterval(() => {
+                    if (audioElement.volume < targetVolume - 0.05) {
+                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
+                    } else {
+                      audioElement.volume = targetVolume;
+                      clearInterval(fadeIn);
+                    }
+                  }, 50);
+                })
+                .catch(err => console.error('Error playing music:', err));
+            }
+          }, 50);
+        }
+
+        // Open blackjack UI after screen fades
+        setTimeout(() => {
+          setShowBlackjack(true);
+          setIsTransitioning(false);
+          console.log('✨ Fast travel complete - prediction market opened');
+        }, 600);
+      }, 400);
+    }
+  }, [searchParams, audioElement, currentLocation, masterVolume, router]);
+
   // Handle opening shop with wrap tab from inventory
   useEffect(() => {
     const shouldOpenShopWrap = searchParams.get('openShopWrap') === 'true';

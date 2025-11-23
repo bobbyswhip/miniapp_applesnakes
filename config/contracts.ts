@@ -52,7 +52,7 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     name: 'Apple Staking',
   },
   prediction: {
-    address: '0x1d6BEa822D99182f8FB53625A9Fd4149EdAb31C1',
+    address: '0x3f41da980296F543c57FA394cD44A614995629e8',
     abi: PREDICTION_ABI,
     name: 'Prediction Jack',
   },

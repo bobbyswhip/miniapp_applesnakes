@@ -165,26 +165,26 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
           // Buy with tokens
           if (!tokenDecimals) return;
           const amountInWei = parseUnits(amount, tokenDecimals);
-          const functionName = position === 'yes' ? 'buyYes' : 'buyNo';
+          const isYes = position === 'yes';
 
           writeTx({
             address: PREDICTION_ADDRESS(base.id),
             abi: contracts.prediction.abi,
-            functionName,
-            args: [gameId, amountInWei],
+            functionName: 'buyShares',
+            args: [gameId, amountInWei, isYes],
           });
         }
       } else {
         // Sell shares
         if (!tokenDecimals) return;
         const sharesIn = parseUnits(amount, tokenDecimals);
-        const functionName = position === 'yes' ? 'sellYes' : 'sellNo';
+        const isYes = position === 'yes';
 
         writeTx({
           address: PREDICTION_ADDRESS(base.id),
           abi: contracts.prediction.abi,
-          functionName,
-          args: [gameId, sharesIn],
+          functionName: 'sellShares',
+          args: [gameId, sharesIn, isYes],
         });
       }
     } catch (error: any) {
