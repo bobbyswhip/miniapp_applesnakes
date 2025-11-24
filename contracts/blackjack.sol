@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
-/* ─── Uniswap v4 Core ─── */
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
@@ -27,8 +26,17 @@ interface ISuperStratView {
     function getPoolKey(PoolId id) external view returns (PoolKey memory);
 }
 
-interface IAppleStaking {
-    function addRewards(uint256 amount) external;
+interface IPredictionMarketHub {
+    enum GameResult { Pending, Win, Lose, Push }
+    
+    function createMarket(uint256 gameId, address creator, uint256 initialLiquidity) external returns (bool);
+    function pauseTrading(uint256 gameId) external;
+    function resumeTrading(uint256 gameId) external;
+    function resolveMarket(uint256 gameId, GameResult result) external;
+    function marketExists(uint256 gameId) external view returns (bool);
+    function isMarketActive(uint256 gameId) external view returns (bool);
+    function isMarketResolved(uint256 gameId) external view returns (bool);
+    function getClaimableAmount(uint256 gameId, address user) external view returns (uint256);
 }
 
 error SwapReverted(bytes data);
@@ -42,6 +50,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     bool public constant NATIVE_PAYMENT = true;
 
     IPoolManagerExt public constant MANAGER = IPoolManagerExt(0x498581fF718922c3f8e6A244956aF099B2652b2b);
+    IPredictionMarketHub public marketHub;
 
     struct VrfConfig {
         uint256 subscriptionId;
@@ -63,14 +72,13 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     mapping(address => bool) public isAdmin;
     bool private locked;
 
-    address public hook   = 0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8;
+    address public hook = 0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8;
     bytes32 public poolIdRaw = 0x6a634d3c93c0b9402392bff565c8315f621558a49e2a00973922322ce19d4abb;
     address public token1 = 0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6;
     address public protocolOwner;
-    
-    IAppleStaking public appleStaking;
-    uint256 public constant TRADING_FEE_BPS = 100;
-    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000;
+
+    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000; // 20% on game start
+    uint256 public constant NO_MARKET_RAKE_BPS = 500; // 5% rake when no market created
 
     uint256 public startGameFee = 0.00069 ether;
     uint256 public nextGameId = 1;
@@ -104,20 +112,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         uint8[] playerHand;
         uint8[] dealerHand;
         uint8[] usedCards;
-    }
-
-    struct PredictionMarket {
-        uint256 gameId;
-        uint256 yesSharesTotal;
-        uint256 noSharesTotal;
-        uint256 yesDeposits;
-        uint256 noDeposits;
-        bool tradingActive;
-        bool resolved;
-        GameResult result;
-        uint256 initialLiquidity;
         bool marketCreated;
-        uint256 volume;
     }
 
     struct PlayerStats {
@@ -150,34 +145,16 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         uint256 tradingPeriodEnds;
         uint256 secondsUntilCanAct;
         uint256 gameId;
-    }
-
-    struct MarketDisplay {
-        uint256 gameId;
-        uint256 yesSharesTotal;
-        uint256 noSharesTotal;
-        uint256 yesDeposits;
-        uint256 noDeposits;
-        uint256 totalDeposits;
-        uint256 yesPrice;
-        uint256 noPrice;
-        bool tradingActive;
-        bool resolved;
-        GameResult result;
-        uint256 userYesShares;
-        uint256 userNoShares;
-        uint256 userClaimable;
         bool marketCreated;
-        uint256 volume;
     }
 
     struct SwapData {
         PoolKey key;
-        bool    zeroForOne;
+        bool zeroForOne;
         uint256 amountIn;
         address recipient;
         address payer;
-        bool    payC0AsNative;
+        bool payC0AsNative;
     }
 
     struct GameInfo {
@@ -191,15 +168,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         bool marketCreated;
     }
 
-    struct BatchGameData {
-        GameInfo gameInfo;
-        MarketDisplay marketData;
-    }
-
     mapping(address => Game) public games;
-    mapping(uint256 => PredictionMarket) public predictionMarkets;
-    mapping(uint256 => mapping(address => uint256)) public yesShares;
-    mapping(uint256 => mapping(address => uint256)) public noShares;
     mapping(address => PlayerStats) public playerStats;
     mapping(uint256 => address) public vrfToPlayer;
 
@@ -216,15 +185,10 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     event PlayerStood(address indexed player, uint256 indexed gameId);
     event GameResolved(address indexed player, uint256 indexed gameId, string result, uint8 playerValue, uint8 dealerValue, GameResult marketResult);
     event PlayerBusted(address indexed player, uint256 indexed gameId, uint8 playerValue);
-    event GameCancelled(address indexed player, uint256 indexed gameId, string reason);
+    event GameCancelled(address indexed player, uint256 indexed gameId, string reason, uint256 tokensRefunded);
     event GameForceResolved(address indexed player, uint256 indexed gameId, address indexed admin, string reason);
     event TradingPeriodStarted(address indexed player, uint256 indexed gameId, uint256 endsAt);
-    event SharesPurchased(uint256 indexed gameId, address indexed buyer, bool isYes, uint256 tokensIn, uint256 sharesOut, uint256 feeAmount);
-    event SharesSold(uint256 indexed gameId, address indexed seller, bool isYes, uint256 sharesIn, uint256 tokensOut, uint256 feeAmount);
-    event WinningsClaimed(uint256 indexed gameId, address indexed claimer, uint256 amount, uint256 feeAmount);
-    event TradingFeeCollected(uint256 indexed gameId, address indexed from, uint256 amount, string feeType);
-    event InstantWinRefund(address indexed player, uint256 indexed gameId, uint256 tokensRefunded);
-    event DealerBlackjack(address indexed player, uint256 indexed gameId, uint256 tokensRefunded);
+    event NoMarketRefund(address indexed player, uint256 indexed gameId, uint256 tokensRefunded, uint256 rakeTaken, string reason);
 
     modifier nonReentrant() {
         require(!locked, "Reentrant call");
@@ -233,36 +197,37 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         locked = false;
     }
 
-    constructor() VRFConsumerBaseV2Plus(COORDINATOR) {
+    constructor(address _marketHub) VRFConsumerBaseV2Plus(COORDINATOR) {
         isAdmin[msg.sender] = true;
         protocolOwner = msg.sender;
-        appleStaking = IAppleStaking(0x63b2A9Bd65f516E49Cee75C9001FB5aa3588CB3c);
+        marketHub = IPredictionMarketHub(_marketHub);
         
         poolIdRaw = 0x6a634d3c93c0b9402392bff565c8315f621558a49e2a00973922322ce19d4abb;
 
         vrfConfig = VrfConfig({
             subscriptionId: 88998617156719755233131168053267278275887903458817697624281142359274673133163,
-            callbackGasLimit: 600_000,
+            callbackGasLimit: 800_000,
             requestConfirmations: 3,
             vrfFee: 0
         });
 
         bjConfig.gameExpiryDelay = 5 minutes;
-        bjConfig.minActionDelay  = 0;
+        bjConfig.minActionDelay = 0;
         bjConfig.vrfTimeout = 5 minutes;
         bjConfig.tradingDelay = 1 minutes;
         bjConfig.gameAbandonmentPeriod = 24 hours;
     }
+
+    /* ─────────── Game Start Functions ─────────── */
 
     function startGame() external payable nonReentrant {
         require(msg.value >= startGameFee, "Insufficient start game fee");
         
         Game storage g = games[msg.sender];
         
-        if (g.gameId > 0) {
-            PredictionMarket storage oldMarket = predictionMarkets[g.gameId];
-            if (oldMarket.resolved) {
-                uint256 unclaimed = _calculateClaimable(g.gameId, msg.sender);
+        if (g.gameId > 0 && g.marketCreated) {
+            if (marketHub.isMarketResolved(g.gameId)) {
+                uint256 unclaimed = marketHub.getClaimableAmount(g.gameId, msg.sender);
                 require(unclaimed == 0, "Claim previous winnings first");
             }
         }
@@ -292,6 +257,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         g.tradingPeriodEnds = 0;
         g.tokensHeld = tokensReceived;
         g.state = HandState.PendingInitialDeal;
+        g.marketCreated = false;
         
         delete g.playerHand;
         delete g.dealerHand;
@@ -310,10 +276,9 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         Game storage g = games[msg.sender];
         
-        if (g.gameId > 0) {
-            PredictionMarket storage oldMarket = predictionMarkets[g.gameId];
-            if (oldMarket.resolved) {
-                uint256 unclaimed = _calculateClaimable(g.gameId, msg.sender);
+        if (g.gameId > 0 && g.marketCreated) {
+            if (marketHub.isMarketResolved(g.gameId)) {
+                uint256 unclaimed = marketHub.getClaimableAmount(g.gameId, msg.sender);
                 require(unclaimed == 0, "Claim previous winnings first");
             }
         }
@@ -343,6 +308,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         g.tradingPeriodEnds = 0;
         g.tokensHeld = gameTokens;
         g.state = HandState.PendingInitialDeal;
+        g.marketCreated = false;
         
         delete g.playerHand;
         delete g.dealerHand;
@@ -355,6 +321,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
 
         emit GameStartedWithTokens(msg.sender, gameId, tokenAmount, gameTokens, protocolFee);
     }
+
+    /* ─────────── Player Actions ─────────── */
 
     function hit() external nonReentrant {
         Game storage g = games[msg.sender];
@@ -382,8 +350,9 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         require(g.playerHand.length > 0, "Cannot stand: no cards dealt yet");
         require(block.timestamp >= g.tradingPeriodEnds, "Cannot stand: trading period active");
 
-        PredictionMarket storage pm = predictionMarkets[g.gameId];
-        pm.tradingActive = false;
+        if (g.marketCreated) {
+            marketHub.pauseTrading(g.gameId);
+        }
 
         uint256 requestId = _requestVrf();
         vrfToPlayer[requestId] = msg.sender;
@@ -394,6 +363,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         emit PlayerStood(msg.sender, g.gameId);
     }
+
+    /* ─────────── Cancel / Recovery Functions ─────────── */
 
     function cancelStuckGame() external nonReentrant {
         Game storage g = games[msg.sender];
@@ -411,11 +382,26 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         );
 
         HandState previousState = g.state;
-        g.state = HandState.Inactive;
+        uint256 refundAmount = 0;
+        
+        // Only refund if VRF failed before market was created (PendingInitialDeal)
+        // In this case tokens are still held by this contract and no market exists
+        if (previousState == HandState.PendingInitialDeal && g.tokensHeld > 0) {
+            refundAmount = g.tokensHeld;
+            g.tokensHeld = 0;
+            require(IERC20Minimal(token1).transfer(msg.sender, refundAmount), "Refund failed");
+        }
+        
+        g.state = HandState.Finished;
+        
+        // If market exists, resolve as push - users claim from hub
+        if (g.marketCreated && !marketHub.isMarketResolved(g.gameId)) {
+            marketHub.resolveMarket(g.gameId, IPredictionMarketHub.GameResult.Push);
+        }
         
         _moveToInactiveGames(g.gameId);
         
-        emit GameCancelled(msg.sender, g.gameId, _getStateName(previousState));
+        emit GameCancelled(msg.sender, g.gameId, _getStateName(previousState), refundAmount);
     }
 
     function forceResolvePush(address player) external nonReentrant {
@@ -444,10 +430,10 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
 
         g.state = HandState.Finished;
         
-        PredictionMarket storage pm = predictionMarkets[g.gameId];
-        pm.tradingActive = false;
-        pm.resolved = true;
-        pm.result = GameResult.Push;
+        // Market should exist at this point - resolve as push, users claim from hub
+        if (g.marketCreated && !marketHub.isMarketResolved(g.gameId)) {
+            marketHub.resolveMarket(g.gameId, IPredictionMarketHub.GameResult.Push);
+        }
         
         _moveToInactiveGames(g.gameId);
         
@@ -455,212 +441,132 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit GameResolved(player, g.gameId, "Push - Abandoned", playerValue, dealerValue, GameResult.Push);
     }
 
-    /* ─────────── Prediction Market Functions ─────────── */
-    
-    function buyShares(uint256 gameId, uint256 tokensIn, bool isYes) external nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(tokensIn > 0, "Must send tokens");
-        
-        pm.volume += tokensIn;
-        
-        uint256 feeAmount = (tokensIn * TRADING_FEE_BPS) / 10000;
-        uint256 netTokens = tokensIn - feeAmount;
-        
-        require(IERC20Minimal(token1).transferFrom(msg.sender, address(this), tokensIn), "Transfer failed");
-        
-        if (feeAmount > 0 && address(appleStaking) != address(0)) {
-            require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
-            appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "buyYes" : "buyNo");
-        }
-        
-        uint256 sharesOut;
-        if (isYes) {
-            sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, netTokens);
-            pm.yesDeposits += netTokens;
-            pm.yesSharesTotal += sharesOut;
-            yesShares[gameId][msg.sender] += sharesOut;
-        } else {
-            sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, netTokens);
-            pm.noDeposits += netTokens;
-            pm.noSharesTotal += sharesOut;
-            noShares[gameId][msg.sender] += sharesOut;
-        }
-        
-        emit SharesPurchased(gameId, msg.sender, isYes, netTokens, sharesOut, feeAmount);
+    /* ─────────── Guaranteed Outcome Detection ─────────── */
+
+    function _isDealerHandFinal(uint8 dealerValue) internal pure returns (bool) {
+        return dealerValue >= 17;
     }
 
-    function sellShares(uint256 gameId, uint256 sharesIn, bool isYes) external nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(sharesIn > 0, "Must sell shares");
-        
-        uint256 tokensOut;
-        
-        if (isYes) {
-            require(yesShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
-            tokensOut = _calculateTokensOut(pm.yesSharesTotal, pm.yesDeposits, sharesIn);
-            require(tokensOut <= pm.yesDeposits, "Insufficient liquidity");
-            
-            yesShares[gameId][msg.sender] -= sharesIn;
-            pm.yesSharesTotal -= sharesIn;
-            pm.yesDeposits -= tokensOut;
-        } else {
-            require(noShares[gameId][msg.sender] >= sharesIn, "Insufficient shares");
-            tokensOut = _calculateTokensOut(pm.noSharesTotal, pm.noDeposits, sharesIn);
-            require(tokensOut <= pm.noDeposits, "Insufficient liquidity");
-            
-            noShares[gameId][msg.sender] -= sharesIn;
-            pm.noSharesTotal -= sharesIn;
-            pm.noDeposits -= tokensOut;
+    function _checkGuaranteedOutcome(uint8 playerValue, uint8 dealerValue) 
+        internal 
+        pure 
+        returns (bool isGuaranteed, GameResult result) 
+    {
+        if (playerValue > 21) {
+            return (true, GameResult.Lose);
         }
         
-        pm.volume += tokensOut;
-        
-        uint256 feeAmount = (tokensOut * TRADING_FEE_BPS) / 10000;
-        uint256 netTokens = tokensOut - feeAmount;
-        
-        require(IERC20Minimal(token1).transfer(msg.sender, netTokens), "Transfer failed");
-        
-        if (feeAmount > 0 && address(appleStaking) != address(0)) {
-            require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
-            appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, isYes ? "sellYes" : "sellNo");
+        if (dealerValue > 21) {
+            return (true, GameResult.Win);
         }
         
-        emit SharesSold(gameId, msg.sender, isYes, sharesIn, netTokens, feeAmount);
-    }
-
-    function buyYesWithETH(uint256 gameId) external payable nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(msg.value > 0, "No ETH sent");
-        
-        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
-        uint256 swapAmount = msg.value - feeAmount;
-        
-        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
-        require(success, "Fee transfer failed");
-        
-        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
-        _executeSwapToContract(swapAmount);
-        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
-        
-        uint256 tokensIn = balanceAfter - balanceBefore;
-        pm.volume += tokensIn;
-        
-        uint256 sharesOut = _calculateSharesOut(pm.yesSharesTotal, pm.yesDeposits, tokensIn);
-        
-        pm.yesDeposits += tokensIn;
-        pm.yesSharesTotal += sharesOut;
-        yesShares[gameId][msg.sender] += sharesOut;
-        
-        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyYesETH");
-        emit SharesPurchased(gameId, msg.sender, true, tokensIn, sharesOut, feeAmount);
-    }
-
-    function buyNoWithETH(uint256 gameId) external payable nonReentrant {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        require(pm.marketCreated, "Market not created");
-        require(pm.tradingActive, "Trading not active");
-        require(msg.value > 0, "No ETH sent");
-        
-        uint256 feeAmount = (msg.value * TRADING_FEE_BPS) / 10000;
-        uint256 swapAmount = msg.value - feeAmount;
-        
-        (bool success, ) = payable(protocolOwner).call{value: feeAmount}("");
-        require(success, "Fee transfer failed");
-        
-        uint256 balanceBefore = IERC20Minimal(token1).balanceOf(address(this));
-        _executeSwapToContract(swapAmount);
-        uint256 balanceAfter = IERC20Minimal(token1).balanceOf(address(this));
-        
-        uint256 tokensIn = balanceAfter - balanceBefore;
-        pm.volume += tokensIn;
-        
-        uint256 sharesOut = _calculateSharesOut(pm.noSharesTotal, pm.noDeposits, tokensIn);
-        
-        pm.noDeposits += tokensIn;
-        pm.noSharesTotal += sharesOut;
-        noShares[gameId][msg.sender] += sharesOut;
-        
-        emit TradingFeeCollected(gameId, msg.sender, feeAmount, "buyNoETH");
-        emit SharesPurchased(gameId, msg.sender, false, tokensIn, sharesOut, feeAmount);
-    }
-
-    function claimWinnings(uint256 gameId) external nonReentrant {
-        uint256 payout = _calculateClaimable(gameId, msg.sender);
-        require(payout > 0, "Nothing to claim");
-        
-        uint256 feeAmount = (payout * TRADING_FEE_BPS) / 10000;
-        uint256 netPayout = payout - feeAmount;
-        
-        yesShares[gameId][msg.sender] = 0;
-        noShares[gameId][msg.sender] = 0;
-        
-        require(IERC20Minimal(token1).transfer(msg.sender, netPayout), "Transfer failed");
-        
-        if (feeAmount > 0 && address(appleStaking) != address(0)) {
-            require(IERC20Minimal(token1).approve(address(appleStaking), feeAmount), "Approve failed");
-            appleStaking.addRewards(feeAmount);
-            emit TradingFeeCollected(gameId, msg.sender, feeAmount, "claimWinnings");
-        }
-        
-        emit WinningsClaimed(gameId, msg.sender, netPayout, feeAmount);
-    }
-
-    /* ─────────── Internal Market Functions ─────────── */
-
-    function _calculateClaimable(uint256 gameId, address user) internal view returns (uint256) {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        if (!pm.resolved) return 0;
-        
-        uint256 payout = 0;
-        
-        if (pm.result == GameResult.Push) {
-            uint256 userYesSharesAmount = yesShares[gameId][user];
-            uint256 userNoSharesAmount = noShares[gameId][user];
-            
-            if (pm.yesSharesTotal > 0 && userYesSharesAmount > 0) {
-                payout += (userYesSharesAmount * pm.yesDeposits) / pm.yesSharesTotal;
+        if (_isDealerHandFinal(dealerValue)) {
+            if (playerValue > dealerValue) {
+                return (true, GameResult.Win);
             }
-            if (pm.noSharesTotal > 0 && userNoSharesAmount > 0) {
-                payout += (userNoSharesAmount * pm.noDeposits) / pm.noSharesTotal;
+            if (playerValue == dealerValue) {
+                return (true, GameResult.Push);
             }
-        } else if (pm.result == GameResult.Win) {
-            uint256 userYesSharesAmount = yesShares[gameId][user];
-            if (userYesSharesAmount > 0 && pm.yesSharesTotal > 0) {
-                uint256 totalPot = pm.yesDeposits + pm.noDeposits;
-                payout = (userYesSharesAmount * totalPot) / pm.yesSharesTotal;
+        }
+        
+        return (false, GameResult.Pending);
+    }
+
+    /**
+     * @dev Refund tokens with 5% rake when no market is created
+     * Used for blackjack and guaranteed outcomes
+     */
+    function _refundWithRake(Game storage g, string memory reason) internal {
+        uint256 totalTokens = g.tokensHeld;
+        g.tokensHeld = 0;
+        
+        if (totalTokens == 0) return;
+        
+        uint256 rake = (totalTokens * NO_MARKET_RAKE_BPS) / 10000;
+        uint256 refund = totalTokens - rake;
+        
+        // Send rake to protocol owner
+        if (rake > 0) {
+            require(IERC20Minimal(token1).transfer(protocolOwner, rake), "Rake transfer failed");
+        }
+        
+        // Refund rest to player
+        if (refund > 0) {
+            require(IERC20Minimal(token1).transfer(g.player, refund), "Refund failed");
+        }
+        
+        emit NoMarketRefund(g.player, g.gameId, refund, rake, reason);
+    }
+
+    /**
+     * @dev Resolve game immediately with guaranteed outcome, refund tokens with rake
+     */
+    function _resolveGuaranteedOutcome(
+        Game storage g, 
+        uint8 playerValue, 
+        uint8 dealerValue, 
+        GameResult result,
+        string memory reason
+    ) internal {
+        PlayerStats storage stats = playerStats[g.player];
+        stats.gamesPlayed++;
+        
+        if (result == GameResult.Win) {
+            stats.wins++;
+        } else if (result == GameResult.Lose) {
+            stats.losses++;
+            if (playerValue > 21) {
+                stats.busts++;
             }
         } else {
-            uint256 userNoSharesAmount = noShares[gameId][user];
-            if (userNoSharesAmount > 0 && pm.noSharesTotal > 0) {
-                uint256 totalPot = pm.yesDeposits + pm.noDeposits;
-                payout = (userNoSharesAmount * totalPot) / pm.noSharesTotal;
-            }
+            stats.pushes++;
         }
         
-        return payout;
+        // Refund with 5% rake - no market created
+        _refundWithRake(g, reason);
+        
+        g.state = HandState.Finished;
+        _moveToInactiveGames(g.gameId);
+        
+        emit GameResolved(g.player, g.gameId, reason, playerValue, dealerValue, result);
     }
 
-    function _calculateSharesOut(uint256 currentShares, uint256 currentDeposits, uint256 tokensIn) internal pure returns (uint256) {
-        if (currentShares == 0 || currentDeposits == 0) {
-            return tokensIn;
+    /**
+     * @dev Close market and resolve with guaranteed outcome (market already exists)
+     */
+    function _closeMarketWithGuaranteedOutcome(
+        Game storage g,
+        uint8 playerValue,
+        uint8 dealerValue,
+        GameResult result,
+        string memory reason
+    ) internal {
+        PlayerStats storage stats = playerStats[g.player];
+        stats.gamesPlayed++;
+        
+        if (result == GameResult.Win) {
+            stats.wins++;
+        } else if (result == GameResult.Lose) {
+            stats.losses++;
+            if (playerValue > 21) {
+                stats.busts++;
+            }
+        } else {
+            stats.pushes++;
         }
-        return (tokensIn * currentShares) / currentDeposits;
+        
+        g.state = HandState.Finished;
+        
+        if (g.marketCreated) {
+            marketHub.resolveMarket(g.gameId, IPredictionMarketHub.GameResult(uint8(result)));
+        }
+        
+        _moveToInactiveGames(g.gameId);
+        
+        emit GameResolved(g.player, g.gameId, reason, playerValue, dealerValue, result);
     }
 
-    function _calculateTokensOut(uint256 currentShares, uint256 currentDeposits, uint256 sharesIn) internal pure returns (uint256) {
-        require(currentShares > 0, "No shares");
-        return (sharesIn * currentDeposits) / currentShares;
-    }
-
-    /* ─────────── Game Tracking Internal Functions ─────────── */
+    /* ─────────── Game Tracking ─────────── */
 
     function _addToActiveGames(uint256 gameId) internal {
         if (activeGameIndex[gameId] == 0) {
@@ -709,6 +615,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     }
 
     function _handleInitialDeal(Game storage g, uint256 randomness) internal {
+        // Deal 4 cards: player, dealer, player, dealer
         for (uint8 i = 0; i < 4; i++) {
             uint8 card = _drawUniqueCard(g, randomness);
             randomness = uint256(keccak256(abi.encodePacked(randomness, i)));
@@ -726,61 +633,70 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         bool playerBlackjack = (playerValue == 21 && g.playerHand.length == 2);
         bool dealerBlackjack = (dealerValue == 21 && g.dealerHand.length == 2);
         
+        // Case 1: Blackjack scenarios - refund with 5% rake, no market
         if (playerBlackjack || dealerBlackjack) {
             PlayerStats storage stats = playerStats[g.player];
             stats.gamesPlayed++;
             
-            uint256 refundAmount = g.tokensHeld;
-            g.tokensHeld = 0;
-            
-            require(IERC20Minimal(token1).transfer(g.player, refundAmount), "Refund failed");
+            string memory reason;
+            GameResult result;
             
             if (playerBlackjack && dealerBlackjack) {
-                g.state = HandState.Finished;
                 stats.pushes++;
-                emit InstantWinRefund(g.player, g.gameId, refundAmount);
-                emit GameResolved(g.player, g.gameId, "Push - Both Blackjack (No Market)", 21, 21, GameResult.Push);
+                reason = "Push - Both Blackjack";
+                result = GameResult.Push;
             } else if (playerBlackjack) {
-                g.state = HandState.Finished;
                 stats.wins++;
-                emit InstantWinRefund(g.player, g.gameId, refundAmount);
-                emit GameResolved(g.player, g.gameId, "Blackjack! (No Market)", 21, dealerValue, GameResult.Win);
+                reason = "Blackjack!";
+                result = GameResult.Win;
             } else {
-                g.state = HandState.Finished;
                 stats.losses++;
-                emit DealerBlackjack(g.player, g.gameId, refundAmount);
-                emit GameResolved(g.player, g.gameId, "Dealer Blackjack (No Market)", playerValue, 21, GameResult.Lose);
+                reason = "Dealer Blackjack";
+                result = GameResult.Lose;
             }
             
+            _refundWithRake(g, reason);
+            
+            g.state = HandState.Finished;
             _moveToInactiveGames(g.gameId);
-        } else {
-            uint256 halfTokens = g.tokensHeld / 2;
-            g.tokensHeld = 0;
+            g.lastActionAt = block.timestamp;
             
-            PredictionMarket storage pm = predictionMarkets[g.gameId];
-            pm.gameId = g.gameId;
-            pm.yesSharesTotal = halfTokens;
-            pm.noSharesTotal = halfTokens;
-            pm.yesDeposits = halfTokens;
-            pm.noDeposits = halfTokens;
-            pm.tradingActive = true;
-            pm.resolved = false;
-            pm.result = GameResult.Pending;
-            pm.initialLiquidity = halfTokens;
-            pm.marketCreated = true;
-            pm.volume = halfTokens * 2;
-            
-            yesShares[g.gameId][g.player] = halfTokens;
-            noShares[g.gameId][g.player] = halfTokens;
-            
-            g.state = HandState.Active;
-            g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
-            
-            emit MarketCreated(g.gameId, g.player, halfTokens, halfTokens);
-            emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
+            emit GameResolved(g.player, g.gameId, reason, playerValue, dealerValue, result);
+            return;
         }
         
+        // Case 2: Guaranteed outcomes (dealer stands on 17+) - refund with 5% rake
+        (bool isGuaranteed, GameResult guaranteedResult) = _checkGuaranteedOutcome(playerValue, dealerValue);
+        
+        if (isGuaranteed) {
+            string memory reason;
+            if (guaranteedResult == GameResult.Win) {
+                reason = "Guaranteed Win";
+            } else if (guaranteedResult == GameResult.Push) {
+                reason = "Guaranteed Push";
+            } else {
+                reason = "Guaranteed Loss";
+            }
+            
+            _resolveGuaranteedOutcome(g, playerValue, dealerValue, guaranteedResult, reason);
+            g.lastActionAt = block.timestamp;
+            return;
+        }
+        
+        // Case 3: Normal game - create market via hub
+        uint256 halfTokens = g.tokensHeld / 2;
+        g.tokensHeld = 0;
+        
+        IERC20Minimal(token1).approve(address(marketHub), halfTokens * 2);
+        marketHub.createMarket(g.gameId, g.player, halfTokens);
+        g.marketCreated = true;
+        
+        g.state = HandState.Active;
+        g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
         g.lastActionAt = block.timestamp;
+        
+        emit MarketCreated(g.gameId, g.player, halfTokens, halfTokens);
+        emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
 
     function _handleHit(Game storage g, uint256 randomness) internal {
@@ -791,27 +707,32 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit PlayerHit(g.player, g.gameId, card, rank, suit);
 
         uint8 playerValue = _calculateHandValue(g.playerHand);
+        uint8 dealerValue = _calculateHandValue(g.dealerHand);
         
-        if (playerValue > 21) {
-            g.state = HandState.Busted;
-            playerStats[g.player].gamesPlayed++;
-            playerStats[g.player].busts++;
-            playerStats[g.player].losses++;
+        (bool isGuaranteed, GameResult guaranteedResult) = _checkGuaranteedOutcome(playerValue, dealerValue);
+        
+        if (isGuaranteed) {
+            string memory reason;
+            if (playerValue > 21) {
+                reason = "Bust";
+                emit PlayerBusted(g.player, g.gameId, playerValue);
+            } else if (guaranteedResult == GameResult.Win) {
+                reason = "Win - Guaranteed";
+            } else if (guaranteedResult == GameResult.Push) {
+                reason = "Push - Guaranteed";
+            } else {
+                reason = "Lose - Guaranteed";
+            }
             
-            PredictionMarket storage pm = predictionMarkets[g.gameId];
-            pm.tradingActive = false;
-            pm.resolved = true;
-            pm.result = GameResult.Lose;
-            
-            _moveToInactiveGames(g.gameId);
-            
-            emit PlayerBusted(g.player, g.gameId, playerValue);
-            emit GameResolved(g.player, g.gameId, "Bust", playerValue, _calculateHandValue(g.dealerHand), GameResult.Lose);
-        } else {
-            g.state = HandState.Active;
-            g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
-            emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
+            _closeMarketWithGuaranteedOutcome(g, playerValue, dealerValue, guaranteedResult, reason);
+            return;
         }
+        
+        g.state = HandState.Active;
+        g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
+        g.lastActionAt = block.timestamp;
+        
+        emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
 
     function _handleStand(Game storage g, uint256 randomness) internal {
@@ -835,7 +756,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             stats.busts++;
             marketResult = GameResult.Lose;
         } else if (dealerValue > 21 || playerValue > dealerValue) {
-            result = playerValue > dealerValue ? "Win" : "Win - Dealer Bust";
+            result = dealerValue > 21 ? "Win - Dealer Bust" : "Win";
             stats.wins++;
             marketResult = GameResult.Win;
         } else if (playerValue == dealerValue) {
@@ -850,9 +771,9 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
 
         g.state = HandState.Finished;
         
-        PredictionMarket storage pm = predictionMarkets[g.gameId];
-        pm.resolved = true;
-        pm.result = marketResult;
+        if (g.marketCreated) {
+            marketHub.resolveMarket(g.gameId, IPredictionMarketHub.GameResult(uint8(marketResult)));
+        }
         
         _moveToInactiveGames(g.gameId);
         
@@ -989,66 +910,28 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         );
     }
 
-    /* ─────────── Paginated View Functions ─────────── */
+    /* ─────────── View Functions ─────────── */
 
-    function getActiveGames(uint256 startIndex, uint256 count) 
-        external 
-        view 
-        returns (
-            uint256[] memory gameIds,
-            uint256 totalActive,
-            bool hasMore
-        ) 
-    {
+    function getActiveGames(uint256 startIndex, uint256 count) external view returns (uint256[] memory gameIds, uint256 totalActive, bool hasMore) {
         require(count > 0 && count <= 100, "Count must be 1-100");
-        
         totalActive = activeGameIds.length;
-        
-        if (startIndex >= totalActive) {
-            return (new uint256[](0), totalActive, false);
-        }
-        
+        if (startIndex >= totalActive) return (new uint256[](0), totalActive, false);
         uint256 remaining = totalActive - startIndex;
         uint256 returnCount = remaining < count ? remaining : count;
-        
         gameIds = new uint256[](returnCount);
-        for (uint256 i = 0; i < returnCount; i++) {
-            gameIds[i] = activeGameIds[startIndex + i];
-        }
-        
+        for (uint256 i = 0; i < returnCount; i++) gameIds[i] = activeGameIds[startIndex + i];
         hasMore = startIndex + returnCount < totalActive;
-        
-        return (gameIds, totalActive, hasMore);
     }
 
-    function getInactiveGames(uint256 startIndex, uint256 count) 
-        external 
-        view 
-        returns (
-            uint256[] memory gameIds,
-            uint256 totalInactive,
-            bool hasMore
-        ) 
-    {
+    function getInactiveGames(uint256 startIndex, uint256 count) external view returns (uint256[] memory gameIds, uint256 totalInactive, bool hasMore) {
         require(count > 0 && count <= 100, "Count must be 1-100");
-        
         totalInactive = inactiveGameIds.length;
-        
-        if (startIndex >= totalInactive) {
-            return (new uint256[](0), totalInactive, false);
-        }
-        
+        if (startIndex >= totalInactive) return (new uint256[](0), totalInactive, false);
         uint256 remaining = totalInactive - startIndex;
         uint256 returnCount = remaining < count ? remaining : count;
-        
         gameIds = new uint256[](returnCount);
-        for (uint256 i = 0; i < returnCount; i++) {
-            gameIds[i] = inactiveGameIds[startIndex + i];
-        }
-        
+        for (uint256 i = 0; i < returnCount; i++) gameIds[i] = inactiveGameIds[startIndex + i];
         hasMore = startIndex + returnCount < totalInactive;
-        
-        return (gameIds, totalInactive, hasMore);
     }
 
     function getGameCounts() external view returns (uint256 activeCount, uint256 inactiveCount) {
@@ -1058,10 +941,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     function getGameInfo(uint256 gameId) public view returns (GameInfo memory) {
         address player = gameIdToPlayer[gameId];
         require(player != address(0), "Game does not exist");
-        
         Game storage g = games[player];
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        
         return GameInfo({
             gameId: gameId,
             player: player,
@@ -1070,23 +950,21 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             lastActionAt: g.lastActionAt,
             playerTotal: _calculateHandValue(g.playerHand),
             dealerTotal: _calculateHandValue(g.dealerHand),
-            marketCreated: pm.marketCreated
+            marketCreated: g.marketCreated
         });
     }
 
     function getGameDisplay(address player) external view returns (GameDisplay memory) {
         Game storage g = games[player];
-        
         GameDisplay memory display;
         display.gameId = g.gameId;
+        display.marketCreated = g.marketCreated;
         
         if (g.state == HandState.Inactive) display.status = "No active game";
         else if (g.state == HandState.PendingInitialDeal) display.status = "Dealing cards...";
-        else if (g.state == HandState.Active && block.timestamp < g.tradingPeriodEnds) {
-            display.status = "Trading period - Cannot act yet";
-        } else if (g.state == HandState.Active) {
-            display.status = "Your turn";
-        } else if (g.state == HandState.PendingHit) display.status = "Drawing card...";
+        else if (g.state == HandState.Active && block.timestamp < g.tradingPeriodEnds) display.status = "Trading period - Cannot act yet";
+        else if (g.state == HandState.Active) display.status = "Your turn";
+        else if (g.state == HandState.PendingHit) display.status = "Drawing card...";
         else if (g.state == HandState.PendingStand) display.status = "Dealer playing...";
         else if (g.state == HandState.Busted) display.status = "Busted!";
         else display.status = "Game finished";
@@ -1095,22 +973,14 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         for (uint256 i = 0; i < g.playerHand.length; i++) {
             uint8 cardId = g.playerHand[i];
             (string memory rank, string memory suit) = _getCardDisplay(cardId);
-            display.playerCards[i] = CardDisplay({
-                rank: rank,
-                suit: suit,
-                value: _cardValue(cardId)
-            });
+            display.playerCards[i] = CardDisplay({ rank: rank, suit: suit, value: _cardValue(cardId) });
         }
         
         display.dealerCards = new CardDisplay[](g.dealerHand.length);
         for (uint256 i = 0; i < g.dealerHand.length; i++) {
             uint8 cardId = g.dealerHand[i];
             (string memory rank, string memory suit) = _getCardDisplay(cardId);
-            display.dealerCards[i] = CardDisplay({
-                rank: rank,
-                suit: suit,
-                value: _cardValue(cardId)
-            });
+            display.dealerCards[i] = CardDisplay({ rank: rank, suit: suit, value: _cardValue(cardId) });
         }
         
         display.playerTotal = _calculateHandValue(g.playerHand);
@@ -1123,64 +993,16 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         
         display.canHit = g.state == HandState.Active && tradingPeriodOver && cooledDown && hasCards && notAt21;
         display.canStand = g.state == HandState.Active && tradingPeriodOver && hasCards;
-        display.canStartNew = g.state == HandState.Inactive || 
-                             g.state == HandState.Busted || 
-                             g.state == HandState.Finished;
-        display.canCancelStuck = (g.state == HandState.PendingInitialDeal || 
-                                  g.state == HandState.PendingHit || 
-                                  g.state == HandState.PendingStand) &&
-                                 block.timestamp >= g.vrfRequestTime + bjConfig.vrfTimeout;
-        display.canAdminResolve = (g.state == HandState.Active || 
-                                   g.state == HandState.PendingHit || 
-                                   g.state == HandState.PendingStand) &&
-                                  block.timestamp >= g.lastActionAt + bjConfig.gameAbandonmentPeriod;
+        display.canStartNew = g.state == HandState.Inactive || g.state == HandState.Busted || g.state == HandState.Finished;
+        display.canCancelStuck = (g.state == HandState.PendingInitialDeal || g.state == HandState.PendingHit || g.state == HandState.PendingStand) && block.timestamp >= g.vrfRequestTime + bjConfig.vrfTimeout;
+        display.canAdminResolve = (g.state == HandState.Active || g.state == HandState.PendingHit || g.state == HandState.PendingStand) && block.timestamp >= g.lastActionAt + bjConfig.gameAbandonmentPeriod;
         
         display.startedAt = g.startedAt;
         display.lastActionAt = g.lastActionAt;
         display.tradingPeriodEnds = g.tradingPeriodEnds;
-        
-        if (g.state == HandState.Active && block.timestamp < g.tradingPeriodEnds) {
-            display.secondsUntilCanAct = g.tradingPeriodEnds - block.timestamp;
-        } else {
-            display.secondsUntilCanAct = 0;
-        }
+        display.secondsUntilCanAct = (g.state == HandState.Active && block.timestamp < g.tradingPeriodEnds) ? g.tradingPeriodEnds - block.timestamp : 0;
         
         return display;
-    }
-
-    function getMarketDisplay(uint256 gameId, address user) external view returns (MarketDisplay memory) {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        
-        MarketDisplay memory display;
-        display.gameId = gameId;
-        display.yesSharesTotal = pm.yesSharesTotal;
-        display.noSharesTotal = pm.noSharesTotal;
-        display.yesDeposits = pm.yesDeposits;
-        display.noDeposits = pm.noDeposits;
-        display.totalDeposits = pm.yesDeposits + pm.noDeposits;
-        
-        if (display.totalDeposits > 0) {
-            display.yesPrice = (pm.yesDeposits * 10000) / display.totalDeposits;
-            display.noPrice = (pm.noDeposits * 10000) / display.totalDeposits;
-        } else {
-            display.yesPrice = 5000;
-            display.noPrice = 5000;
-        }
-        
-        display.tradingActive = pm.tradingActive;
-        display.resolved = pm.resolved;
-        display.result = pm.result;
-        display.userYesShares = yesShares[gameId][user];
-        display.userNoShares = noShares[gameId][user];
-        display.marketCreated = pm.marketCreated;
-        display.userClaimable = _calculateClaimable(gameId, user);
-        display.volume = pm.volume;
-        
-        return display;
-    }
-
-    function getClaimableAmount(uint256 gameId, address user) external view returns (uint256) {
-        return _calculateClaimable(gameId, user);
     }
 
     function getPlayerGameIds(address player) external view returns (uint256[] memory gameIds) {
@@ -1191,61 +1013,33 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         } else {
             gameIds = new uint256[](0);
         }
-        return gameIds;
     }
 
-    function getUnclaimedTokensInMarket(uint256 gameId) external view returns (uint256) {
-        PredictionMarket storage pm = predictionMarkets[gameId];
-        if (!pm.resolved) return 0;
-        
-        return pm.yesDeposits + pm.noDeposits;
-    }
-
-    function getStats(address player) external view returns (
-        uint256 gamesPlayed,
-        uint256 wins,
-        uint256 losses,
-        uint256 pushes,
-        uint256 busts,
-        uint256 winRate
-    ) {
+    function getStats(address player) external view returns (uint256 gamesPlayed, uint256 wins, uint256 losses, uint256 pushes, uint256 busts, uint256 winRate) {
         PlayerStats storage stats = playerStats[player];
-        
-        uint256 rate = 0;
-        if (stats.gamesPlayed > 0) {
-            rate = (stats.wins * 100) / stats.gamesPlayed;
-        }
-        
-        return (
-            stats.gamesPlayed,
-            stats.wins,
-            stats.losses,
-            stats.pushes,
-            stats.busts,
-            rate
-        );
+        uint256 rate = stats.gamesPlayed > 0 ? (stats.wins * 100) / stats.gamesPlayed : 0;
+        return (stats.gamesPlayed, stats.wins, stats.losses, stats.pushes, stats.busts, rate);
     }
+
+    function getPlayerHand(address player) external view returns (uint8[] memory) { return games[player].playerHand; }
+    function getDealerHand(address player) external view returns (uint8[] memory) { return games[player].dealerHand; }
 
     /* ─────────── Admin Functions ─────────── */
 
-    function setVrfConfig(
-        uint256 subscriptionId,
-        uint32 callbackGasLimit,
-        uint16 requestConfirmations
-    ) external {
+    function setMarketHub(address _marketHub) external {
+        require(isAdmin[msg.sender], "Not admin");
+        require(_marketHub != address(0), "zero address");
+        marketHub = IPredictionMarketHub(_marketHub);
+    }
+
+    function setVrfConfig(uint256 subscriptionId, uint32 callbackGasLimit, uint16 requestConfirmations) external {
         require(isAdmin[msg.sender], "Not admin");
         vrfConfig.subscriptionId = subscriptionId;
         vrfConfig.callbackGasLimit = callbackGasLimit;
         vrfConfig.requestConfirmations = requestConfirmations;
     }
 
-    function setBjConfig(
-        uint256 gameExpiryDelay,
-        uint256 minActionDelay,
-        uint256 vrfTimeout,
-        uint256 tradingDelay,
-        uint256 gameAbandonmentPeriod
-    ) external {
+    function setBjConfig(uint256 gameExpiryDelay, uint256 minActionDelay, uint256 vrfTimeout, uint256 tradingDelay, uint256 gameAbandonmentPeriod) external {
         require(isAdmin[msg.sender], "Not admin");
         bjConfig.gameExpiryDelay = gameExpiryDelay;
         bjConfig.minActionDelay = minActionDelay;
@@ -1274,6 +1068,25 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     function setAdmin(address admin, bool status) external {
         require(isAdmin[msg.sender], "Not admin");
         isAdmin[admin] = status;
+    }
+
+    function setProtocolOwner(address _protocolOwner) external {
+        require(isAdmin[msg.sender], "Not admin");
+        require(_protocolOwner != address(0), "zero address");
+        protocolOwner = _protocolOwner;
+    }
+
+    /* ─────────── Emergency Recovery ─────────── */
+    
+    function emergencyWithdrawTokens(address token, uint256 amount) external {
+        require(isAdmin[msg.sender], "Not admin");
+        require(IERC20Minimal(token).transfer(protocolOwner, amount), "Transfer failed");
+    }
+
+    function emergencyWithdrawETH(uint256 amount) external {
+        require(isAdmin[msg.sender], "Not admin");
+        (bool success, ) = payable(protocolOwner).call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
     receive() external payable {}

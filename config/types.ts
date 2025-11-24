@@ -13,7 +13,9 @@ export interface ChainContracts {
   token: ContractConfig;
   wrapper: ContractConfig;
   staking: ContractConfig;
-  prediction: ContractConfig;
+  prediction: ContractConfig; // Legacy combined contract
+  blackjack: ContractConfig; // New game-only contract
+  predictionHub: ContractConfig; // New market hub contract
 }
 
 export interface AppContracts {

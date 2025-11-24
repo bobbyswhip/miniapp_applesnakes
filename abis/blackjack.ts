@@ -1,17 +1,15 @@
 /**
- * Prediction Jack Contract ABI
+ * Blackjack Contract ABI
  *
- * Contract Address: 0x6c52a18E604Ba6292B1b2f3A06447B9ae99cD070
+ * Contract Address: 0xECa714C994fA917883f78f7e3af0cB5B9EEabdf7
  *
  * Features:
  * - Blackjack game with VRF randomness
- * - Prediction market for game outcomes
- * - Start game with ETH or tokens directly
- * - Buy/Sell YES/NO shares with ETH or tokens
- * - 1% trading fees to staking contract
- * - Claim winnings after game resolution
+ * - Game state management (hit, stand, cancel)
+ * - Start game with ETH or tokens
+ * - Integrates with PredictionMarketHub for market creation
  */
-export const PREDICTION_ABI = [
+export const BLACKJACK_ABI = [
   // Game Functions
   {
     inputs: [],
@@ -51,57 +49,6 @@ export const PREDICTION_ABI = [
   {
     inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
     name: 'forceResolvePush',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Prediction Market - Buy Functions (Combined)
-  {
-    inputs: [
-      { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { internalType: 'uint256', name: 'tokensIn', type: 'uint256' },
-      { internalType: 'bool', name: 'isYes', type: 'bool' },
-    ],
-    name: 'buyShares',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Prediction Market - Sell Functions (Combined)
-  {
-    inputs: [
-      { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { internalType: 'uint256', name: 'sharesIn', type: 'uint256' },
-      { internalType: 'bool', name: 'isYes', type: 'bool' },
-    ],
-    name: 'sellShares',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-
-  // Prediction Market - Buy Functions (ETH Payment)
-  {
-    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
-    name: 'buyYesWithETH',
-    outputs: [],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
-    name: 'buyNoWithETH',
-    outputs: [],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-
-  // Claim Winnings
-  {
-    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
-    name: 'claimWinnings',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -149,46 +96,6 @@ export const PREDICTION_ABI = [
           { internalType: 'uint256', name: 'gameId', type: 'uint256' },
         ],
         internalType: 'struct PredictionJack.GameDisplay',
-        name: '',
-        type: 'tuple',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-
-  // View Functions - Market Display
-  {
-    inputs: [
-      { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { internalType: 'address', name: 'user', type: 'address' },
-    ],
-    name: 'getMarketDisplay',
-    outputs: [
-      {
-        components: [
-          { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-          { internalType: 'uint256', name: 'yesSharesTotal', type: 'uint256' },
-          { internalType: 'uint256', name: 'noSharesTotal', type: 'uint256' },
-          { internalType: 'uint256', name: 'yesDeposits', type: 'uint256' },
-          { internalType: 'uint256', name: 'noDeposits', type: 'uint256' },
-          { internalType: 'uint256', name: 'totalDeposits', type: 'uint256' },
-          { internalType: 'uint256', name: 'yesPrice', type: 'uint256' },
-          { internalType: 'uint256', name: 'noPrice', type: 'uint256' },
-          { internalType: 'bool', name: 'tradingActive', type: 'bool' },
-          { internalType: 'bool', name: 'resolved', type: 'bool' },
-          {
-            internalType: 'enum PredictionJack.GameResult',
-            name: 'result',
-            type: 'uint8',
-          },
-          { internalType: 'uint256', name: 'userYesShares', type: 'uint256' },
-          { internalType: 'uint256', name: 'userNoShares', type: 'uint256' },
-          { internalType: 'uint256', name: 'userClaimable', type: 'uint256' },
-          { internalType: 'bool', name: 'marketCreated', type: 'bool' },
-          { internalType: 'uint256', name: 'volume', type: 'uint256' },
-        ],
-        internalType: 'struct PredictionJack.MarketDisplay',
         name: '',
         type: 'tuple',
       },
@@ -268,28 +175,9 @@ export const PREDICTION_ABI = [
   },
 
   {
-    inputs: [
-      { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { internalType: 'address', name: 'user', type: 'address' },
-    ],
-    name: 'getClaimableAmount',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-
-  {
     inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
     name: 'getPlayerGameIds',
     outputs: [{ internalType: 'uint256[]', name: 'gameIds', type: 'uint256[]' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-
-  {
-    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
-    name: 'getUnclaimedTokensInMarket',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -305,6 +193,22 @@ export const PREDICTION_ABI = [
       { internalType: 'uint256', name: 'busts', type: 'uint256' },
       { internalType: 'uint256', name: 'winRate', type: 'uint256' },
     ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
+  {
+    inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
+    name: 'getPlayerHand',
+    outputs: [{ internalType: 'uint8[]', name: '', type: 'uint8[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
+  {
+    inputs: [{ internalType: 'address', name: 'player', type: 'address' }],
+    name: 'getDealerHand',
+    outputs: [{ internalType: 'uint8[]', name: '', type: 'uint8[]' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -327,13 +231,6 @@ export const PREDICTION_ABI = [
   {
     inputs: [],
     name: 'protocolOwner',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'appleStaking',
     outputs: [{ internalType: 'address', name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
@@ -371,46 +268,8 @@ export const PREDICTION_ABI = [
       { internalType: 'uint256', name: 'tradingPeriodEnds', type: 'uint256' },
       { internalType: 'uint256', name: 'tokensHeld', type: 'uint256' },
       { internalType: 'enum PredictionJack.HandState', name: 'state', type: 'uint8' },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    name: 'predictionMarkets',
-    outputs: [
-      { internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { internalType: 'uint256', name: 'yesSharesTotal', type: 'uint256' },
-      { internalType: 'uint256', name: 'noSharesTotal', type: 'uint256' },
-      { internalType: 'uint256', name: 'yesDeposits', type: 'uint256' },
-      { internalType: 'uint256', name: 'noDeposits', type: 'uint256' },
-      { internalType: 'bool', name: 'tradingActive', type: 'bool' },
-      { internalType: 'bool', name: 'resolved', type: 'bool' },
-      { internalType: 'enum PredictionJack.GameResult', name: 'result', type: 'uint8' },
-      { internalType: 'uint256', name: 'initialLiquidity', type: 'uint256' },
       { internalType: 'bool', name: 'marketCreated', type: 'bool' },
-      { internalType: 'uint256', name: 'volume', type: 'uint256' },
     ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { internalType: 'uint256', name: '', type: 'uint256' },
-      { internalType: 'address', name: '', type: 'address' },
-    ],
-    name: 'yesShares',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { internalType: 'uint256', name: '', type: 'uint256' },
-      { internalType: 'address', name: '', type: 'address' },
-    ],
-    name: 'noShares',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -424,13 +283,6 @@ export const PREDICTION_ABI = [
       { internalType: 'uint256', name: 'pushes', type: 'uint256' },
       { internalType: 'uint256', name: 'busts', type: 'uint256' },
     ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    name: 'gameIdToPlayer',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
   },
@@ -554,8 +406,7 @@ export const PREDICTION_ABI = [
     inputs: [
       { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
       { indexed: true, internalType: 'address', name: 'player', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'initialLiquidityYes', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'initialLiquidityNo', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'initialLiquidity', type: 'uint256' },
     ],
     name: 'MarketCreated',
     type: 'event',
@@ -638,54 +489,6 @@ export const PREDICTION_ABI = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { indexed: true, internalType: 'address', name: 'buyer', type: 'address' },
-      { indexed: false, internalType: 'bool', name: 'isYes', type: 'bool' },
-      { indexed: false, internalType: 'uint256', name: 'tokensIn', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'sharesOut', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'feeAmount', type: 'uint256' },
-    ],
-    name: 'SharesPurchased',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { indexed: true, internalType: 'address', name: 'seller', type: 'address' },
-      { indexed: false, internalType: 'bool', name: 'isYes', type: 'bool' },
-      { indexed: false, internalType: 'uint256', name: 'sharesIn', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'tokensOut', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'feeAmount', type: 'uint256' },
-    ],
-    name: 'SharesSold',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { indexed: true, internalType: 'address', name: 'claimer', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-      { indexed: false, internalType: 'uint256', name: 'feeAmount', type: 'uint256' },
-    ],
-    name: 'WinningsClaimed',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
-      { indexed: true, internalType: 'address', name: 'from', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-      { indexed: false, internalType: 'string', name: 'feeType', type: 'string' },
-    ],
-    name: 'TradingFeeCollected',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
       { indexed: true, internalType: 'address', name: 'player', type: 'address' },
       { indexed: true, internalType: 'uint256', name: 'gameId', type: 'uint256' },
       { indexed: false, internalType: 'uint256', name: 'tokensRefunded', type: 'uint256' },
@@ -742,8 +545,8 @@ export const PREDICTION_ABI = [
   },
   {
     inputs: [],
-    name: 'TRADING_FEE_BPS',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'MARKET_HUB',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
     stateMutability: 'view',
     type: 'function',
   },

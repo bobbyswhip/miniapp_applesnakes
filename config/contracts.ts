@@ -4,7 +4,9 @@ import { NFT_ABI } from '@/abis/nft'; // Full ABI with poolIdRaw and hook functi
 import { WRAPPER_ABI } from '@/abis/wrapper';
 import { QUOTER_ABI } from '@/abis/quoter';
 import { STAKING_ABI } from '@/abis/staking';
-import { PREDICTION_ABI } from '@/abis/prediction';
+import { PREDICTION_ABI } from '@/abis/predictionLegacy'; // Legacy combined contract
+import { BLACKJACK_ABI } from '@/abis/blackjack'; // New game contract
+import { PREDICTION_HUB_ABI } from '@/abis/predictionHub'; // New market hub
 import type { ChainContracts } from './types';
 
 // Uniswap V4 Quoter address on Base
@@ -52,9 +54,19 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     name: 'Apple Staking',
   },
   prediction: {
-    address: '0x3f41da980296F543c57FA394cD44A614995629e8',
+    address: '0x6c52a18E604Ba6292B1b2f3A06447B9ae99cD070',
     abi: PREDICTION_ABI,
-    name: 'Prediction Jack',
+    name: 'Prediction Jack (Legacy)',
+  },
+  blackjack: {
+    address: '0x97d81EF2ED892F7DE8950d9B3ae1C3E15947DA90',
+    abi: BLACKJACK_ABI,
+    name: 'Blackjack Game',
+  },
+  predictionHub: {
+    address: '0xaA7959D6396eAFfF60F12AE33136202bbDEeB723',
+    abi: PREDICTION_HUB_ABI,
+    name: 'Prediction Market Hub',
   },
 };
 
@@ -85,7 +97,17 @@ export const BASE_SEPOLIA_CONTRACTS: ChainContracts = {
   prediction: {
     address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
     abi: PREDICTION_ABI,
-    name: 'Prediction Jack (Testnet)',
+    name: 'Prediction Jack (Legacy - Testnet)',
+  },
+  blackjack: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: BLACKJACK_ABI,
+    name: 'Blackjack Game (Testnet)',
+  },
+  predictionHub: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: PREDICTION_HUB_ABI,
+    name: 'Prediction Market Hub (Testnet)',
   },
 };
 
@@ -127,6 +149,16 @@ export const TOKEN_ADDRESS = (chainId: number) => getContracts(chainId).token.ad
 export const STAKING_ADDRESS = (chainId: number) => getContracts(chainId).staking.address;
 
 /**
- * Helper to get Prediction contract address for current chain
+ * Helper to get Prediction contract address for current chain (Legacy)
  */
 export const PREDICTION_ADDRESS = (chainId: number) => getContracts(chainId).prediction.address;
+
+/**
+ * Helper to get Blackjack contract address for current chain
+ */
+export const BLACKJACK_ADDRESS = (chainId: number) => getContracts(chainId).blackjack.address;
+
+/**
+ * Helper to get PredictionHub contract address for current chain
+ */
+export const PREDICTION_HUB_ADDRESS = (chainId: number) => getContracts(chainId).predictionHub.address;

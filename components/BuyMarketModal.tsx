@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { getContracts, PREDICTION_ADDRESS, TOKEN_ADDRESS } from '@/config';
+import { getContracts, BLACKJACK_ADDRESS, PREDICTION_HUB_ADDRESS, TOKEN_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
 import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
 import { useTokenBalance } from '@/hooks/useTokenBalance';
@@ -29,8 +29,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
 
   // Fetch game info
   const { data: gameInfoData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getGameInfo',
     args: [gameId],
     chainId: base.id,
@@ -40,8 +40,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
 
   // Fetch market display
   const { data: marketDisplayData, refetch: refetchMarket } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
     functionName: 'getMarketDisplay',
     args: address ? [gameId, address] : undefined,
     chainId: base.id,
@@ -58,7 +58,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
     address: TOKEN_ADDRESS(base.id),
     abi: contracts.token.abi,
     functionName: 'allowance',
-    args: address ? [address, PREDICTION_ADDRESS(base.id)] : undefined,
+    args: address ? [address, PREDICTION_HUB_ADDRESS(base.id)] : undefined,
     chainId: base.id,
     query: {
       enabled: !!address && paymentMethod === 'token',
@@ -136,7 +136,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
         address: TOKEN_ADDRESS(base.id),
         abi: contracts.token.abi,
         functionName: 'approve',
-        args: [PREDICTION_ADDRESS(base.id), amountInWei],
+        args: [PREDICTION_HUB_ADDRESS(base.id), amountInWei],
       });
     } catch (error: any) {
       setErrorMessage(error.message || 'Approval failed');
@@ -155,8 +155,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
           const functionName = position === 'yes' ? 'buyYesWithETH' : 'buyNoWithETH';
 
           writeTx({
-            address: PREDICTION_ADDRESS(base.id),
-            abi: contracts.prediction.abi,
+            address: PREDICTION_HUB_ADDRESS(base.id),
+            abi: contracts.predictionHub.abi,
             functionName,
             args: [gameId],
             value: amountInWei,
@@ -168,8 +168,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
           const isYes = position === 'yes';
 
           writeTx({
-            address: PREDICTION_ADDRESS(base.id),
-            abi: contracts.prediction.abi,
+            address: PREDICTION_HUB_ADDRESS(base.id),
+            abi: contracts.predictionHub.abi,
             functionName: 'buyShares',
             args: [gameId, amountInWei, isYes],
           });
@@ -181,8 +181,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
         const isYes = position === 'yes';
 
         writeTx({
-          address: PREDICTION_ADDRESS(base.id),
-          abi: contracts.prediction.abi,
+          address: PREDICTION_HUB_ADDRESS(base.id),
+          abi: contracts.predictionHub.abi,
           functionName: 'sellShares',
           args: [gameId, sharesIn, isYes],
         });

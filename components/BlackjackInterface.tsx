@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { getContracts, PREDICTION_ADDRESS } from '@/config';
+import { getContracts, BLACKJACK_ADDRESS, PREDICTION_HUB_ADDRESS, TOKEN_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
 import { formatEther, parseEther } from 'viem';
 import Image from 'next/image';
@@ -56,8 +56,8 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
 
   // Fetch game info
   const { data: gameInfoData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getGameInfo',
     args: [gameId],
     chainId: base.id,
@@ -156,8 +156,8 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
 
   // Fetch game info
   const { data: gameInfoData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getGameInfo',
     args: [gameIdBigInt],
     chainId: base.id,
@@ -165,8 +165,8 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
 
   // Fetch market display for user-specific data
   const { data: marketDisplayData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
     functionName: 'getMarketDisplay',
     args: [gameIdBigInt, userAddress],
     chainId: base.id,
@@ -189,8 +189,12 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
   const userNoShares = BigInt(marketDisplay.userNoShares || 0);
   const hasShares = userYesShares > 0n || userNoShares > 0n;
 
-  // Only show if user has claimable winnings
-  if (!hasShares || claimableAmount === 0n) {
+  // Check if this is the user's own game (they were the player)
+  const isOwnGame = gameInfo.player && gameInfo.player.toLowerCase() === userAddress.toLowerCase();
+
+  // Only show if user has claimable winnings OR if this is their own game
+  // For own games, show even if no market shares (instant wins get auto-paid)
+  if (!hasShares && claimableAmount === 0n && !isOwnGame) {
     return null;
   }
 
@@ -246,19 +250,33 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
             <span className="text-white">{formatEther(userNoShares)}</span>
           </div>
         )}
-        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
-          <span className="text-purple-300">Claimable:</span>
-          <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
-        </div>
+        {claimableAmount > 0n ? (
+          <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
+            <span className="text-purple-300">Claimable:</span>
+            <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
+          </div>
+        ) : isOwnGame && (
+          <div className="text-xs text-gray-400 pt-2 border-t border-gray-700">
+            {resultLabel === 'Win' && '💰 Winnings already paid out'}
+            {resultLabel === 'Push' && '💰 Buy-in already refunded'}
+            {resultLabel === 'Lose' && 'No winnings to claim'}
+          </div>
+        )}
       </div>
 
-      <button
-        onClick={() => onClaim(gameIdBigInt)}
-        disabled={isClaimPending}
-        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-      >
-        {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
-      </button>
+      {claimableAmount > 0n ? (
+        <button
+          onClick={() => onClaim(gameIdBigInt)}
+          disabled={isClaimPending}
+          className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+        >
+          {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
+        </button>
+      ) : isOwnGame && (
+        <div className="w-full py-2 px-4 bg-gray-700 text-gray-300 font-semibold rounded-lg text-center text-sm">
+          Game Complete - Already Settled
+        </div>
+      )}
     </div>
   );
 }
@@ -274,17 +292,58 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   // Fetch start game fee
   const { data: startGameFeeData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'startGameFee',
     chainId: base.id,
   });
   const startGameFee = startGameFeeData ? formatEther(startGameFeeData as bigint) : '0.00069';
+  const startGameFeeInTokens = startGameFeeData ? (startGameFeeData as bigint) : parseEther('0.00069');
+
+  // Check token allowance for blackjack contract
+  const { data: tokenAllowanceData, refetch: refetchAllowance } = useReadContract({
+    address: TOKEN_ADDRESS(base.id),
+    abi: contracts.token.abi,
+    functionName: 'allowance',
+    args: address ? [address, BLACKJACK_ADDRESS(base.id)] : undefined,
+    chainId: base.id,
+    query: {
+      enabled: !!address,
+    },
+  });
+  const tokenAllowance = (tokenAllowanceData as bigint) || 0n;
+  const isTokenApproved = tokenAllowance >= startGameFeeInTokens;
+
+  // Token approval transaction
+  const {
+    data: approveHash,
+    writeContract: writeApprove,
+    isPending: isApprovePending,
+    error: approveError
+  } = useWriteContract();
+
+  const {
+    isLoading: isApproveConfirming,
+    isSuccess: isApproveConfirmed
+  } = useWaitForTransactionReceipt({ hash: approveHash });
+
+  // Start game with tokens transaction
+  const {
+    data: startGameWithTokensHash,
+    writeContract: writeStartGameWithTokens,
+    isPending: isStartGameWithTokensPending,
+    error: startGameWithTokensError
+  } = useWriteContract();
+
+  const {
+    isLoading: isStartGameWithTokensConfirming,
+    isSuccess: isStartGameWithTokensConfirmed
+  } = useWaitForTransactionReceipt({ hash: startGameWithTokensHash });
 
   // Fetch current game display
   const { data: gameDisplayData, refetch: refetchGame } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getGameDisplay',
     args: address ? [address] : undefined,
     chainId: base.id,
@@ -296,11 +355,11 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   const gameDisplay = gameDisplayData as GameDisplay | undefined;
 
-  // Fetch claimable winnings for current user
+  // Fetch claimable winnings for current user from market hub
   // Check if user has claimable winnings from their last game
   const { data: claimableData, refetch: refetchClaimable } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
     functionName: 'getClaimableAmount',
     args: gameDisplay?.gameId && gameDisplay.gameId > 0n && address ? [gameDisplay.gameId, address] : undefined,
     chainId: base.id,
@@ -314,8 +373,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   // Fetch player stats
   const { data: statsData } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getStats',
     args: address ? [address] : undefined,
     chainId: base.id,
@@ -334,8 +393,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   // Fetch active games for Live Games tab
   const { data: activeGamesData, refetch: refetchActiveGames } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getActiveGames',
     args: [0n, 20n], // Start at 0, fetch 20 games
     chainId: base.id,
@@ -350,8 +409,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   // Fetch inactive games for Closed Games tab
   const { data: inactiveGamesData, refetch: refetchInactiveGames } = useReadContract({
-    address: PREDICTION_ADDRESS(base.id),
-    abi: contracts.prediction.abi,
+    address: BLACKJACK_ADDRESS(base.id),
+    abi: contracts.blackjack.abi,
     functionName: 'getInactiveGames',
     args: [0n, 50n], // Start at 0, fetch 50 games
     chainId: base.id,
@@ -419,18 +478,29 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
   // Refetch game after successful transactions
   useEffect(() => {
-    if (isStartGameConfirmed || isHitConfirmed || isStandConfirmed || isClaimConfirmed) {
+    if (isStartGameConfirmed || isStartGameWithTokensConfirmed || isHitConfirmed || isStandConfirmed || isClaimConfirmed) {
       refetchGame();
       refetchClaimable();
       refetchInactiveGames();
       setClaimingGameId(null);
     }
-  }, [isStartGameConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchInactiveGames]);
+  }, [isStartGameConfirmed, isStartGameWithTokensConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchInactiveGames]);
+
+  // Refetch allowance after approval
+  useEffect(() => {
+    if (isApproveConfirmed) {
+      refetchAllowance();
+    }
+  }, [isApproveConfirmed, refetchAllowance]);
 
   // Handle errors
   useEffect(() => {
     if (startGameError) {
       setErrorMessage(startGameError.message);
+    } else if (startGameWithTokensError) {
+      setErrorMessage(startGameWithTokensError.message);
+    } else if (approveError) {
+      setErrorMessage(approveError.message);
     } else if (hitError) {
       setErrorMessage(hitError.message);
     } else if (standError) {
@@ -438,18 +508,45 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     } else if (claimError) {
       setErrorMessage(claimError.message);
     }
-  }, [startGameError, hitError, standError, claimError]);
+  }, [startGameError, startGameWithTokensError, approveError, hitError, standError, claimError]);
 
   const handleStartGame = () => {
     if (!address) return;
     setErrorMessage('');
 
     writeStartGame({
-      address: PREDICTION_ADDRESS(base.id),
-      abi: contracts.prediction.abi,
+      address: BLACKJACK_ADDRESS(base.id),
+      abi: contracts.blackjack.abi,
       functionName: 'startGame',
       args: [],
       value: parseEther(startGameFee),
+    });
+  };
+
+  const handleApproveTokens = () => {
+    if (!address) return;
+    setErrorMessage('');
+
+    // Approve a large amount (3000 tokens) so user doesn't need to approve again
+    const approvalAmount = parseEther('3000');
+
+    writeApprove({
+      address: TOKEN_ADDRESS(base.id),
+      abi: contracts.token.abi,
+      functionName: 'approve',
+      args: [BLACKJACK_ADDRESS(base.id), approvalAmount],
+    });
+  };
+
+  const handleStartGameWithTokens = () => {
+    if (!address) return;
+    setErrorMessage('');
+
+    writeStartGameWithTokens({
+      address: BLACKJACK_ADDRESS(base.id),
+      abi: contracts.blackjack.abi,
+      functionName: 'startGameWithTokens',
+      args: [startGameFeeInTokens],
     });
   };
 
@@ -458,8 +555,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     setErrorMessage('');
 
     writeHit({
-      address: PREDICTION_ADDRESS(base.id),
-      abi: contracts.prediction.abi,
+      address: BLACKJACK_ADDRESS(base.id),
+      abi: contracts.blackjack.abi,
       functionName: 'hit',
       args: [],
     });
@@ -470,8 +567,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     setErrorMessage('');
 
     writeStand({
-      address: PREDICTION_ADDRESS(base.id),
-      abi: contracts.prediction.abi,
+      address: BLACKJACK_ADDRESS(base.id),
+      abi: contracts.blackjack.abi,
       functionName: 'stand',
       args: [],
     });
@@ -531,8 +628,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     setClaimingGameId(gameIdBigInt);
 
     writeClaim({
-      address: PREDICTION_ADDRESS(base.id),
-      abi: contracts.prediction.abi,
+      address: PREDICTION_HUB_ADDRESS(base.id),
+      abi: contracts.predictionHub.abi,
       functionName: 'claimWinnings',
       args: [gameIdBigInt],
     });
@@ -805,37 +902,61 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           )}
 
           {/* Action buttons */}
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-3">
             {gameDisplay?.canStartNew && (
-              <button
-                onClick={handleStartGame}
-                disabled={isStartGamePending || isStartGameConfirming || !!(claimableAmount && claimableAmount > 0n)}
-                className="flex-1 py-3 px-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-                title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : ''}
-              >
-                {isStartGamePending || isStartGameConfirming ? 'Starting...' : `Start Game (${startGameFee} ETH)`}
-              </button>
+              <>
+                <button
+                  onClick={handleStartGame}
+                  disabled={isStartGamePending || isStartGameConfirming || !!(claimableAmount && claimableAmount > 0n)}
+                  className="w-full py-3 px-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                  title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : ''}
+                >
+                  {isStartGamePending || isStartGameConfirming ? 'Starting...' : `Start Game (${startGameFee} ETH)`}
+                </button>
+
+                {!isTokenApproved ? (
+                  <button
+                    onClick={handleApproveTokens}
+                    disabled={isApprovePending || isApproveConfirming || !!(claimableAmount && claimableAmount > 0n)}
+                    className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                    title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : 'Approve tokens to start game'}
+                  >
+                    {isApprovePending || isApproveConfirming ? 'Approving...' : 'Approve Tokens (One-Time)'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStartGameWithTokens}
+                    disabled={isStartGameWithTokensPending || isStartGameWithTokensConfirming || !!(claimableAmount && claimableAmount > 0n)}
+                    className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                    title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : ''}
+                  >
+                    {isStartGameWithTokensPending || isStartGameWithTokensConfirming ? 'Starting...' : `Start with Tokens (${startGameFee} tokens)`}
+                  </button>
+                )}
+              </>
             )}
 
-            {gameDisplay?.canHit && (
-              <button
-                onClick={handleHit}
-                disabled={isHitPending || isHitConfirming}
-                className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-              >
-                {isHitPending || isHitConfirming ? 'Hitting...' : 'Hit'}
-              </button>
-            )}
+            <div className="flex gap-4">
+              {gameDisplay?.canHit && (
+                <button
+                  onClick={handleHit}
+                  disabled={isHitPending || isHitConfirming}
+                  className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                >
+                  {isHitPending || isHitConfirming ? 'Hitting...' : 'Hit'}
+                </button>
+              )}
 
-            {gameDisplay?.canStand && (
-              <button
-                onClick={handleStand}
-                disabled={isStandPending || isStandConfirming}
-                className="flex-1 py-3 px-6 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-              >
-                {isStandPending || isStandConfirming ? 'Standing...' : 'Stand'}
-              </button>
-            )}
+              {gameDisplay?.canStand && (
+                <button
+                  onClick={handleStand}
+                  disabled={isStandPending || isStandConfirming}
+                  className="flex-1 py-3 px-6 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                >
+                  {isStandPending || isStandConfirming ? 'Standing...' : 'Stand'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Game info with market button */}
