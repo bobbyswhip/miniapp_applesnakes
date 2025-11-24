@@ -187,14 +187,9 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
   const claimableAmount = BigInt(marketDisplay.userClaimable || 0);
   const userYesShares = BigInt(marketDisplay.userYesShares || 0);
   const userNoShares = BigInt(marketDisplay.userNoShares || 0);
-  const hasShares = userYesShares > 0n || userNoShares > 0n;
 
-  // Check if this is the user's own game (they were the player)
-  const isOwnGame = gameInfo.player && gameInfo.player.toLowerCase() === userAddress.toLowerCase();
-
-  // Only show if user has claimable winnings OR if this is their own game
-  // For own games, show even if no market shares (instant wins get auto-paid)
-  if (!hasShares && claimableAmount === 0n && !isOwnGame) {
+  // Only show if user has claimable winnings
+  if (claimableAmount === 0n) {
     return null;
   }
 
@@ -250,33 +245,19 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
             <span className="text-white">{formatEther(userNoShares)}</span>
           </div>
         )}
-        {claimableAmount > 0n ? (
-          <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
-            <span className="text-purple-300">Claimable:</span>
-            <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
-          </div>
-        ) : isOwnGame && (
-          <div className="text-xs text-gray-400 pt-2 border-t border-gray-700">
-            {resultLabel === 'Win' && '💰 Winnings already paid out'}
-            {resultLabel === 'Push' && '💰 Buy-in already refunded'}
-            {resultLabel === 'Lose' && 'No winnings to claim'}
-          </div>
-        )}
+        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
+          <span className="text-purple-300">Claimable:</span>
+          <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
+        </div>
       </div>
 
-      {claimableAmount > 0n ? (
-        <button
-          onClick={() => onClaim(gameIdBigInt)}
-          disabled={isClaimPending}
-          className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-        >
-          {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
-        </button>
-      ) : isOwnGame && (
-        <div className="w-full py-2 px-4 bg-gray-700 text-gray-300 font-semibold rounded-lg text-center text-sm">
-          Game Complete - Already Settled
-        </div>
-      )}
+      <button
+        onClick={() => onClaim(gameIdBigInt)}
+        disabled={isClaimPending}
+        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+      >
+        {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
+      </button>
     </div>
   );
 }
@@ -289,6 +270,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [selectedMarketGameId, setSelectedMarketGameId] = useState<bigint | null>(null);
   const [claimingGameId, setClaimingGameId] = useState<bigint | null>(null);
+  const [clientSecondsUntilCanAct, setClientSecondsUntilCanAct] = useState<number>(0);
 
   // Fetch start game fee
   const { data: startGameFeeData } = useReadContract({
@@ -407,11 +389,11 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const activeGameIds = activeGamesResult?.[0] || [];
   const totalActiveGames = activeGamesResult?.[1] || 0n;
 
-  // Fetch inactive games for Closed Games tab
-  const { data: inactiveGamesData, refetch: refetchInactiveGames } = useReadContract({
-    address: BLACKJACK_ADDRESS(base.id),
-    abi: contracts.blackjack.abi,
-    functionName: 'getInactiveGames',
+  // Fetch resolved markets for Closed Games tab (games with claimable funds)
+  const { data: resolvedGamesData, refetch: refetchResolvedGames } = useReadContract({
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
+    functionName: 'getResolvedMarkets',
     args: [0n, 50n], // Start at 0, fetch 50 games
     chainId: base.id,
     query: {
@@ -420,9 +402,9 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     },
   });
 
-  const inactiveGamesResult = inactiveGamesData as [bigint[], bigint, boolean] | undefined;
-  const inactiveGameIds = inactiveGamesResult?.[0] || [];
-  const totalInactiveGames = inactiveGamesResult?.[1] || 0n;
+  const resolvedGamesResult = resolvedGamesData as [bigint[], bigint, boolean] | undefined;
+  const resolvedGameIds = resolvedGamesResult?.[0] || [];
+  const totalResolvedGames = resolvedGamesResult?.[1] || 0n;
 
   // Start game transaction
   const {
@@ -481,10 +463,10 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     if (isStartGameConfirmed || isStartGameWithTokensConfirmed || isHitConfirmed || isStandConfirmed || isClaimConfirmed) {
       refetchGame();
       refetchClaimable();
-      refetchInactiveGames();
+      refetchResolvedGames();
       setClaimingGameId(null);
     }
-  }, [isStartGameConfirmed, isStartGameWithTokensConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchInactiveGames]);
+  }, [isStartGameConfirmed, isStartGameWithTokensConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchResolvedGames]);
 
   // Refetch allowance after approval
   useEffect(() => {
@@ -509,6 +491,30 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       setErrorMessage(claimError.message);
     }
   }, [startGameError, startGameWithTokensError, approveError, hitError, standError, claimError]);
+
+  // Client-side countdown timer for trading period
+  useEffect(() => {
+    // Sync client timer with contract data when it changes
+    if (gameDisplay?.secondsUntilCanAct) {
+      setClientSecondsUntilCanAct(Number(gameDisplay.secondsUntilCanAct));
+    }
+  }, [gameDisplay?.secondsUntilCanAct]);
+
+  // Decrement client timer every second
+  useEffect(() => {
+    if (clientSecondsUntilCanAct <= 0) return;
+
+    const intervalId = setInterval(() => {
+      setClientSecondsUntilCanAct((prev) => {
+        if (prev <= 1) {
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [clientSecondsUntilCanAct]);
 
   const handleStartGame = () => {
     if (!address) return;
@@ -696,8 +702,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             </div>
           </div>
 
-          {/* Left side suit image */}
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8">
+          {/* Center suit image */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8">
             <Image
               src={suitImage}
               alt={card.suit}
@@ -894,10 +900,10 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           </div>
 
           {/* Trading period timer */}
-          {gameDisplay && gameDisplay.secondsUntilCanAct > 0n && (
+          {gameDisplay && clientSecondsUntilCanAct > 0 && (
             <div className="bg-blue-900/50 border border-blue-500 p-3 rounded-lg text-center">
               <div className="text-blue-200 text-sm">Trading period active</div>
-              <div className="text-white font-bold">{gameDisplay.secondsUntilCanAct.toString()}s until you can act</div>
+              <div className="text-white font-bold">{clientSecondsUntilCanAct}s until you can act</div>
             </div>
           )}
 
@@ -1013,13 +1019,13 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       {/* Closed Games Tab */}
       {activeTab === 'closed' && (
         <div className="space-y-4">
-          {/* Closed games count */}
+          {/* Resolved games count */}
           <div className="bg-gray-800/50 p-3 rounded-lg text-center">
             <div className="text-purple-300 font-semibold">
-              {totalInactiveGames.toString()} Closed Game{totalInactiveGames !== 1n ? 's' : ''}
+              {totalResolvedGames.toString()} Game{totalResolvedGames !== 1n ? 's' : ''} with Claimable Winnings
             </div>
             <div className="text-xs text-gray-400 mt-1">
-              Showing games with claimable winnings
+              Resolved markets where you can claim funds
             </div>
           </div>
 
@@ -1033,21 +1039,17 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           )}
 
           {/* Games list */}
-          {address && inactiveGameIds.length === 0 ? (
+          {address && resolvedGameIds.length === 0 ? (
             <div className="bg-gray-800/50 p-6 rounded-lg text-center">
-              <div className="text-gray-400 mb-2">No closed games found</div>
+              <div className="text-gray-400 mb-2">No games with claimable winnings</div>
               <div className="text-sm text-gray-500">
                 When games finish, they will appear here if you have winnings to collect
               </div>
             </div>
           ) : address ? (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {inactiveGameIds.map((gameId, index) => {
-                // Log the gameId to see what we're getting
-                if (index === 0) {
-                  console.log('First inactive gameId type:', typeof gameId, 'value:', gameId);
-                }
-
+              {[...resolvedGameIds].reverse().map((gameId, index) => {
+                // Reverse to show newest games first
                 // Pass the gameId directly - let ClosedGameCard handle the conversion
                 return (
                   <ClosedGameCard
