@@ -94,6 +94,7 @@ export const BLACKJACK_ABI = [
           { internalType: 'uint256', name: 'tradingPeriodEnds', type: 'uint256' },
           { internalType: 'uint256', name: 'secondsUntilCanAct', type: 'uint256' },
           { internalType: 'uint256', name: 'gameId', type: 'uint256' },
+          { internalType: 'bool', name: 'marketCreated', type: 'bool' },
         ],
         internalType: 'struct PredictionJack.GameDisplay',
         name: '',

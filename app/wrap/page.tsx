@@ -7,6 +7,7 @@ import { base } from 'wagmi/chains';
 import { getContracts } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
+import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
 
 export default function WrapPage() {
   const { isConnected, address } = useAccount();
@@ -15,11 +16,24 @@ export default function WrapPage() {
   const { addTransaction, updateTransaction } = useTransactions();
 
   const [selectedNFTs, setSelectedNFTs] = useState<Set<number>>(new Set());
-  const [mode, setMode] = useState<'wrap' | 'unwrap'>('wrap');
+  const [mode, setMode] = useState<'wrap' | 'unwrap' | 'swap'>('wrap');
+
+  // Swap mode state
+  const [selectedUserNFT, setSelectedUserNFT] = useState<number | null>(null);
+  const [selectedWTokenNFT, setSelectedWTokenNFT] = useState<number | null>(null);
+
+  // Fetch wTokens NFTs (secondary data, loads after user NFTs)
+  const {
+    nfts: wTokensNFTs,
+    isLoading: wTokensLoading,
+    error: _wTokensError,
+    refetch: refetchWTokensNFTs,
+    totalHeld: wTokensTotalHeld
+  } = useWTokensNFTs(true, isLoading);
   const [unwrapCount, setUnwrapCount] = useState(1);
-  const [currentOperation, setCurrentOperation] = useState<'approve' | 'wrap' | 'unwrap' | null>(null);
+  const [currentOperation, setCurrentOperation] = useState<'approve' | 'wrap' | 'unwrap' | 'swap' | null>(null);
   const [wrappedNFTs, setWrappedNFTs] = useState<Set<number>>(new Set()); // Track wrapped NFTs for instant UI update
-  const [operationByHash, setOperationByHash] = useState<Record<string, 'approve' | 'wrap' | 'unwrap'>>({});
+  const [operationByHash, setOperationByHash] = useState<Record<string, 'approve' | 'wrap' | 'unwrap' | 'swap'>>({});
   const [pendingWrapNFTs, setPendingWrapNFTs] = useState<Set<number>>(new Set()); // Track NFTs being wrapped (for error recovery)
 
   const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
@@ -51,6 +65,14 @@ export default function WrapPage() {
     chainId: base.id,
   });
 
+  // Read swap fee
+  const { data: swapFee } = useReadContract({
+    address: contracts.wrapper.address,
+    abi: contracts.wrapper.abi,
+    functionName: 'getSwapFee',
+    chainId: base.id,
+  });
+
   // Toggle NFT selection
   const toggleNFT = (tokenId: number) => {
     const newSelected = new Set(selectedNFTs);
@@ -79,6 +101,7 @@ export default function WrapPage() {
         approve: 'Approving NFT wrapper',
         wrap: `Wrapping ${selectedNFTs.size} NFT${selectedNFTs.size > 1 ? 's' : ''}`,
         unwrap: `Unwrapping ${unwrapCount} NFT${unwrapCount > 1 ? 's' : ''}`,
+        swap: `Swapping NFT #${selectedUserNFT} for #${selectedWTokenNFT}`,
       };
 
       // Store operation type by hash for success handler
@@ -118,6 +141,15 @@ export default function WrapPage() {
           refetchNFTs();
           refetchWTokenBalance();
           setWrappedNFTs(new Set()); // Clear wrapped NFTs tracking
+          setCurrentOperation(null);
+        }
+
+        // On swap: refetch both user NFTs and wTokens NFTs
+        if (operation === 'swap') {
+          refetchNFTs();
+          refetchWTokensNFTs();
+          setSelectedUserNFT(null);
+          setSelectedWTokenNFT(null);
           setCurrentOperation(null);
         }
 
@@ -211,6 +243,22 @@ export default function WrapPage() {
     });
   };
 
+  // Handle swap
+  const handleSwap = () => {
+    if (selectedUserNFT === null || selectedWTokenNFT === null) return;
+
+    setCurrentOperation('swap');
+    const totalFee = swapFee ? BigInt(swapFee as bigint) : 0n;
+
+    writeContract({
+      address: contracts.wrapper.address,
+      abi: contracts.wrapper.abi,
+      functionName: 'swapNFT',
+      args: [contracts.nft.address, BigInt(selectedUserNFT), BigInt(selectedWTokenNFT)],
+      value: totalFee,
+    });
+  };
+
   // Filter out wrapped NFTs for instant UI feedback
   const displayedNFTs = nfts.filter(nft => !wrappedNFTs.has(nft.tokenId));
 
@@ -261,30 +309,218 @@ export default function WrapPage() {
             {/* Main Wrapper Card */}
             <div className="glass rounded-3xl p-8 shadow-2xl border border-gray-800">
               {/* Mode Tabs */}
-              <div className="flex gap-4 mb-8">
+              <div className="grid grid-cols-3 gap-4 mb-8">
                 <button
                   onClick={() => setMode('wrap')}
-                  className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                  className={`py-3 px-4 rounded-xl font-semibold transition-all ${
                     mode === 'wrap'
                       ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
-                  🪙 Wrap NFTs
+                  🪙 Wrap
                 </button>
                 <button
                   onClick={() => setMode('unwrap')}
-                  className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
+                  className={`py-3 px-4 rounded-xl font-semibold transition-all ${
                     mode === 'unwrap'
                       ? 'bg-green-500 text-white shadow-lg shadow-green-500/50'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
-                  🎁 Unwrap NFTs
+                  🎁 Unwrap
+                </button>
+                <button
+                  onClick={() => setMode('swap')}
+                  className={`py-3 px-4 rounded-xl font-semibold transition-all ${
+                    mode === 'swap'
+                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/50'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  🔄 Swap
                 </button>
               </div>
 
-              {mode === 'wrap' ? (
+              {mode === 'swap' ? (
+                /* SWAP MODE */
+                <div className="space-y-6">
+                  <div className="text-center space-y-2">
+                    <p className="text-gray-400">
+                      Swap your NFT for a specific NFT from the pool
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Available NFTs in pool: {wTokensTotalHeld}
+                    </p>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* Your NFTs */}
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-white border-b border-gray-700 pb-2">
+                        Your NFTs
+                      </h3>
+                      {isLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500"></div>
+                        </div>
+                      ) : displayedNFTs.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-400">No NFTs available</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2">
+                          {displayedNFTs.map((nft) => {
+                            const isSelected = selectedUserNFT === nft.tokenId;
+                            return (
+                              <button
+                                key={nft.tokenId}
+                                onClick={() => setSelectedUserNFT(isSelected ? null : nft.tokenId)}
+                                className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
+                                  isSelected
+                                    ? 'border-purple-500 shadow-lg shadow-purple-500/50 scale-95'
+                                    : 'border-gray-700 hover:border-purple-400'
+                                }`}
+                              >
+                                {/* Selection Indicator */}
+                                <div className="absolute top-2 left-2 z-10">
+                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                    isSelected ? 'bg-purple-500 border-purple-500' : 'bg-gray-800/80 border-gray-600'
+                                  }`}>
+                                    {isSelected && <span className="text-white text-xs">✓</span>}
+                                  </div>
+                                </div>
+
+                                {/* NFT Image */}
+                                <div className="aspect-square relative">
+                                  <img
+                                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                    alt={nft.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+
+                                {/* NFT Info */}
+                                <div className="p-2 bg-gray-900/90">
+                                  <p className="text-white text-xs font-semibold truncate">{nft.name}</p>
+                                  <p className="text-gray-400 text-xs">#{nft.tokenId}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Pool NFTs */}
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-bold text-white border-b border-gray-700 pb-2">
+                        Pool NFTs ({wTokensTotalHeld})
+                      </h3>
+                      {wTokensLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500"></div>
+                        </div>
+                      ) : wTokensNFTs.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-gray-400">No NFTs in pool</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2">
+                          {wTokensNFTs.map((nft) => {
+                            const isSelected = selectedWTokenNFT === nft.tokenId;
+                            return (
+                              <button
+                                key={nft.tokenId}
+                                onClick={() => setSelectedWTokenNFT(isSelected ? null : nft.tokenId)}
+                                className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
+                                  isSelected
+                                    ? 'border-purple-500 shadow-lg shadow-purple-500/50 scale-95'
+                                    : 'border-gray-700 hover:border-purple-400'
+                                }`}
+                              >
+                                {/* Selection Indicator */}
+                                <div className="absolute top-2 left-2 z-10">
+                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                                    isSelected ? 'bg-purple-500 border-purple-500' : 'bg-gray-800/80 border-gray-600'
+                                  }`}>
+                                    {isSelected && <span className="text-white text-xs">✓</span>}
+                                  </div>
+                                </div>
+
+                                {/* NFT Image */}
+                                <div className="aspect-square relative">
+                                  <img
+                                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                    alt={nft.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+
+                                {/* NFT Info */}
+                                <div className="p-2 bg-gray-900/90">
+                                  <p className="text-white text-xs font-semibold truncate">{nft.name}</p>
+                                  <p className="text-gray-400 text-xs">#{nft.tokenId}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Swap Preview */}
+                  {(selectedUserNFT !== null || selectedWTokenNFT !== null) && (
+                    <div className="border-t border-gray-700 pt-6">
+                      <div className="bg-gray-800/50 rounded-xl p-4 mb-4">
+                        <div className="flex items-center justify-center gap-4">
+                          <div className="text-center">
+                            <p className="text-gray-400 text-sm mb-1">You give</p>
+                            <p className="text-white font-bold">
+                              {selectedUserNFT !== null ? `#${selectedUserNFT}` : '—'}
+                            </p>
+                          </div>
+                          <div className="text-2xl">↔️</div>
+                          <div className="text-center">
+                            <p className="text-gray-400 text-sm mb-1">You get</p>
+                            <p className="text-white font-bold">
+                              {selectedWTokenNFT !== null ? `#${selectedWTokenNFT}` : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-center text-gray-500 text-sm mt-3">
+                          Fee: {swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH
+                        </p>
+                      </div>
+
+                      {/* Approval/Swap Button */}
+                      {!isApproved ? (
+                        <button
+                          onClick={handleApprove}
+                          disabled={isPending || isConfirming}
+                          className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isPending || isConfirming ? 'Approving...' : '✅ Approve Wrapper Contract'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSwap}
+                          disabled={selectedUserNFT === null || selectedWTokenNFT === null || isPending || isConfirming}
+                          className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                        >
+                          <span>🔄</span>
+                          <span>
+                            {isPending || isConfirming
+                              ? 'Swapping...'
+                              : `Swap NFTs for ${swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH`}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : mode === 'wrap' ? (
                 /* WRAP MODE */
                 <div className="space-y-6">
                   {/* Selection Controls */}

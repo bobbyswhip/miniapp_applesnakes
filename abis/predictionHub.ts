@@ -292,6 +292,91 @@ export const PREDICTION_HUB_ABI = [
     type: 'function',
   },
 
+  // NEW: Frontend Helper Functions
+  {
+    inputs: [
+      { internalType: 'address', name: 'user', type: 'address' },
+      { internalType: 'uint256', name: 'maxResults', type: 'uint256' },
+    ],
+    name: 'getUserClaimableMarkets',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'gameId', type: 'uint256' },
+          { internalType: 'uint256', name: 'claimableAmount', type: 'uint256' },
+          { internalType: 'uint256', name: 'userYesShares', type: 'uint256' },
+          { internalType: 'uint256', name: 'userNoShares', type: 'uint256' },
+          { internalType: 'enum PredictionMarketHub.GameResult', name: 'result', type: 'uint8' },
+          { internalType: 'uint256', name: 'yesPrice', type: 'uint256' },
+          { internalType: 'uint256', name: 'noPrice', type: 'uint256' },
+        ],
+        internalType: 'struct PredictionMarketHub.ClaimableMarket[]',
+        name: 'claimable',
+        type: 'tuple[]',
+      },
+      { internalType: 'uint256', name: 'totalClaimable', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
+    name: 'userHasClaimable',
+    outputs: [
+      { internalType: 'bool', name: 'hasClaimable', type: 'bool' },
+      { internalType: 'uint256', name: 'firstClaimableGameId', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'user', type: 'address' },
+      { internalType: 'uint256', name: 'maxResults', type: 'uint256' },
+    ],
+    name: 'getUserPositions',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'gameId', type: 'uint256' },
+          { internalType: 'uint256', name: 'yesShares', type: 'uint256' },
+          { internalType: 'uint256', name: 'noShares', type: 'uint256' },
+          { internalType: 'uint256', name: 'currentValue', type: 'uint256' },
+          { internalType: 'enum PredictionMarketHub.MarketStatus', name: 'status', type: 'uint8' },
+          { internalType: 'bool', name: 'resolved', type: 'bool' },
+          { internalType: 'enum PredictionMarketHub.GameResult', name: 'result', type: 'uint8' },
+        ],
+        internalType: 'struct PredictionMarketHub.UserPosition[]',
+        name: 'positions',
+        type: 'tuple[]',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
+    name: 'getUserPortfolioSummary',
+    outputs: [
+      { internalType: 'uint256', name: 'activePositions', type: 'uint256' },
+      { internalType: 'uint256', name: 'resolvedPositions', type: 'uint256' },
+      { internalType: 'uint256', name: 'totalClaimable', type: 'uint256' },
+      { internalType: 'uint256', name: 'totalActiveValue', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'uint256[]', name: 'gameIds', type: 'uint256[]' },
+      { internalType: 'address', name: 'user', type: 'address' },
+    ],
+    name: 'batchGetClaimable',
+    outputs: [{ internalType: 'uint256[]', name: 'claimableAmounts', type: 'uint256[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
   // Public State Variables (auto-generated getters)
   {
     inputs: [],
@@ -380,6 +465,13 @@ export const PREDICTION_HUB_ABI = [
     inputs: [{ internalType: 'address', name: '', type: 'address' }],
     name: 'whitelistedGameContracts',
     outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'uncollectedFees',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
   },

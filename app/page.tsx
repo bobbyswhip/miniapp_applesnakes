@@ -7,11 +7,12 @@ import { base } from 'wagmi/chains';
 import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory } from '@/contexts/InventoryContext';
+import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { JailInterface } from '@/components/JailInterface';
 import { StakingInterface } from '@/components/StakingInterface';
-import { BlackjackInterface } from '@/components/BlackjackInterface';
+import { PredictionJackApp } from '@/components/PredictionJackApp';
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
@@ -128,7 +129,7 @@ function HomeContent() {
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
   // UI coordination from InventoryContext
-  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, openSwapMint, openChat, openHatch, openBreed, openInventory } = useInventory();
+  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack } = useInventory();
 
   // Track if we've already triggered refresh for current mint (prevent duplicate refreshes)
   const hasRefreshedRef = useRef(false);
@@ -163,10 +164,22 @@ function HomeContent() {
 
   // Wrap state management
   const [selectedNFTs, setSelectedNFTs] = useState<Set<number>>(new Set());
-  const [wrapMode, setWrapMode] = useState<'wrap' | 'unwrap'>('wrap');
+  const [wrapMode, setWrapMode] = useState<'wrap' | 'unwrap' | 'swap'>('wrap');
+
+  // Swap state
+  const [selectedUserNFT, setSelectedUserNFT] = useState<number | null>(null);
+  const [selectedWTokenNFT, setSelectedWTokenNFT] = useState<number | null>(null);
+
+  // Fetch wTokens NFTs (secondary data, loads after user NFTs)
+  const {
+    nfts: wTokensNFTs,
+    isLoading: wTokensLoading,
+    refetch: refetchWTokensNFTs,
+    totalHeld: wTokensTotalHeld
+  } = useWTokensNFTs(true, isLoading);
   const [unwrapCount, setUnwrapCount] = useState(1);
   const [unwrapError, setUnwrapError] = useState<string>('');
-  const [currentOperationType, setCurrentOperationType] = useState<'mint' | 'hatch' | 'breed' | 'wrap' | 'unwrap' | null>(null);
+  const [currentOperationType, setCurrentOperationType] = useState<'mint' | 'hatch' | 'breed' | 'wrap' | 'unwrap' | 'swap' | null>(null);
 
   // Hatch state management
   const [selectedEggs, setSelectedEggs] = useState<Set<number>>(new Set());
@@ -183,15 +196,14 @@ function HomeContent() {
   // Staking state management
   const [selectedSnakesForStaking, setSelectedSnakesForStaking] = useState<Set<number>>(new Set());
   const [selectedStakedSnakes, setSelectedStakedSnakes] = useState<Set<number>>(new Set());
-  const [stakedNFTs, setStakedNFTs] = useState<number[]>([]);
-  const [pendingRewards, setPendingRewards] = useState<string>('0');
-  const [isLoadingStaked, setIsLoadingStaked] = useState(false);
+  const [_stakedNFTs, _setStakedNFTs] = useState<number[]>([]);
+  const [_pendingRewards, _setPendingRewards] = useState<string>('0');
+  const [_isLoadingStaked, _setIsLoadingStaked] = useState(false);
 
   // Jail state management
   const [showJail, setShowJail] = useState(false);
 
-  // Blackjack state management
-  const [showBlackjack, setShowBlackjack] = useState(false);
+  // Note: PredictionJack state now managed via InventoryContext (showPredictionJack, openPredictionJack)
 
   // Wagmi hooks for wallet and contract interaction
   const { address } = useAccount();
@@ -261,6 +273,14 @@ function HomeContent() {
     address: contracts.wrapper.address,
     abi: contracts.wrapper.abi,
     functionName: 'getWrapFee',
+    chainId: base.id,
+  });
+
+  // Fetch swap fee from wrapper contract
+  const { data: swapFee } = useReadContract({
+    address: contracts.wrapper.address,
+    abi: contracts.wrapper.abi,
+    functionName: 'getSwapFee',
     chainId: base.id,
   });
 
@@ -697,6 +717,35 @@ function HomeContent() {
     }
   };
 
+  const handleSwap = async () => {
+    if (!isWalletConnected) {
+      console.log('⚠️ Please connect your wallet first');
+      return;
+    }
+
+    if (selectedUserNFT === null || selectedWTokenNFT === null) {
+      console.log('⚠️ Please select both NFTs to swap');
+      return;
+    }
+
+    try {
+      const totalFee = swapFee ? BigInt(swapFee as bigint) : 0n;
+
+      setCurrentOperationType('swap'); // Track operation type
+
+      writeContract({
+        address: contracts.wrapper.address as `0x${string}`,
+        abi: contracts.wrapper.abi,
+        functionName: 'swapNFT',
+        args: [contracts.nft.address, BigInt(selectedUserNFT), BigInt(selectedWTokenNFT)],
+        value: totalFee,
+      });
+    } catch (error) {
+      console.error('Swap error:', error);
+      setCurrentOperationType(null); // Clear on error
+    }
+  };
+
   // Toggle NFT selection for wrapping
   const toggleNFTForWrap = (tokenId: number) => {
     const newSelected = new Set(selectedNFTs);
@@ -734,6 +783,20 @@ function HomeContent() {
       if (currentOperationType === 'wrap') {
         console.log('⏭️ Skipping NFT refetch for wrap operation (using optimistic update)');
         setCurrentOperationType(null);
+        return;
+      }
+
+      // Handle successful swap - refetch both user and pool NFTs
+      if (currentOperationType === 'swap') {
+        console.log('🔄 Swap successful! Refreshing user and pool NFTs...');
+        setTimeout(() => {
+          refetchNFTs();
+          refetchWTokensNFTs();
+          setSelectedUserNFT(null);
+          setSelectedWTokenNFT(null);
+          setCurrentOperationType(null);
+          console.log('✅ Swap complete, NFT inventories refreshed');
+        }, 3000);
         return;
       }
 
@@ -1214,15 +1277,15 @@ function HomeContent() {
           }, 50);
         }
 
-        // Open blackjack UI after screen fades
+        // Open PredictionJack UI after screen fades
         setTimeout(() => {
-          setShowBlackjack(true);
+          openPredictionJack();
           setIsTransitioning(false);
           console.log('✨ Fast travel complete - prediction market opened');
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router]);
+  }, [searchParams, audioElement, currentLocation, masterVolume, router, openPredictionJack]);
 
   // Handle opening shop with wrap tab from inventory
   useEffect(() => {
@@ -2127,11 +2190,11 @@ function HomeContent() {
         />
       )}
 
-      {/* Mountain Weather Effects - Snow and Strong Hazy Gradient */}
-      {currentLocation === 'mountain' && (
+      {/* Mountain Weather Effects - Snow and Strong Hazy Gradient - Hidden when UI overlays are active */}
+      {currentLocation === 'mountain' && !showPredictionJack && (
         <>
-          {/* Falling snow particles - above everything including transitions */}
-          <div className="absolute inset-0 z-[110] pointer-events-none overflow-hidden">
+          {/* Falling snow particles - z-30 to stay below UI overlays */}
+          <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
             {snowParticles.map((particle) => (
               <div
                 key={`snow-${particle.key}`}
@@ -2156,11 +2219,11 @@ function HomeContent() {
         </>
       )}
 
-      {/* Meteor Location Weather Effects - Snow and Strong Hazy Gradient (same as mountain) */}
-      {currentLocation === 'meteor' && (
+      {/* Meteor Location Weather Effects - Snow and Strong Hazy Gradient - Hidden when UI overlays are active */}
+      {currentLocation === 'meteor' && !showPredictionJack && (
         <>
-          {/* Falling snow particles - above everything including transitions */}
-          <div className="absolute inset-0 z-[110] pointer-events-none overflow-hidden">
+          {/* Falling snow particles - z-30 to stay below UI overlays */}
+          <div className="absolute inset-0 z-30 pointer-events-none overflow-hidden">
             {snowParticles.map((particle) => (
               <div
                 key={`meteor-snow-${particle.key}`}
@@ -2185,12 +2248,12 @@ function HomeContent() {
         </>
       )}
 
-      {/* Cave Ambiance - Dark dim atmosphere with shifting spooky effects */}
-      {currentLocation === 'cave' && (
+      {/* Cave Ambiance - Dark dim atmosphere with shifting spooky effects - Hidden when UI overlays are active */}
+      {currentLocation === 'cave' && !showPredictionJack && (
         <>
           {/* Dark cave base ambiance with shifting effect - replaces sun/moon lighting */}
           <div
-            className="absolute inset-0 z-40 pointer-events-none animate-cave-shift"
+            className="absolute inset-0 z-30 pointer-events-none animate-cave-shift"
             style={{
               background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.75) 0%, rgba(0, 0, 0, 0.85) 25%, rgba(31, 41, 55, 0.7) 50%, rgba(0, 0, 0, 0.8) 75%, rgba(17, 24, 39, 0.78) 100%)'
             }}
@@ -2199,7 +2262,7 @@ function HomeContent() {
           {/* Occasional spooky flickering darkness effect */}
           {isSpooky && (
             <div
-              className="absolute inset-0 z-45 pointer-events-none animate-spooky-flicker"
+              className="absolute inset-0 z-35 pointer-events-none animate-spooky-flicker"
               style={{
                 background: 'radial-gradient(circle, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.5) 100%)'
               }}
@@ -2314,8 +2377,8 @@ function HomeContent() {
         </div>
       )}
 
-      {/* Back button - show when not on main location */}
-      {currentLocation !== 'main' && (
+      {/* Back button - show when not on main location and prediction market is not open */}
+      {currentLocation !== 'main' && !showPredictionJack && (
         <button
           onClick={() => {
             if (currentLocation === 'meteor' || currentLocation === 'mountainhut') {
@@ -2442,8 +2505,8 @@ function HomeContent() {
         />
       )}
 
-      {/* Lighting overlay - 60% transparent (40% opacity) gradients as topmost layer - NOT shown in indoor locations */}
-      {currentLocation !== 'cave' && currentLocation !== 'jailhouse' && currentLocation !== 'store' && currentLocation !== 'wizardhouse' && (
+      {/* Lighting overlay - 60% transparent (40% opacity) gradients as topmost layer - NOT shown in indoor locations or when PredictionJack is open */}
+      {currentLocation !== 'cave' && currentLocation !== 'jailhouse' && currentLocation !== 'store' && currentLocation !== 'wizardhouse' && !showPredictionJack && (
         <>
           {/* Day lighting */}
           <div
@@ -2529,8 +2592,8 @@ function HomeContent() {
         />
       )}
 
-      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse, mountainhut) - topmost atmospheric layer */}
-      {(currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse' || currentLocation === 'mountainhut') && (
+      {/* Warm candle-like lighting for indoor locations (jailhouse, store, wizardhouse, mountainhut) - topmost atmospheric layer - hidden when PredictionJack is open */}
+      {(currentLocation === 'jailhouse' || currentLocation === 'store' || currentLocation === 'wizardhouse' || currentLocation === 'mountainhut') && !showPredictionJack && (
         <div
           className="absolute inset-0 z-50 pointer-events-none"
           style={{
@@ -2668,7 +2731,7 @@ function HomeContent() {
                 } else if (currentCharacter === 'Wilfred') {
                   openBreed();
                 } else if (currentCharacter === 'MountainMan') {
-                  setShowBlackjack(true);
+                  openPredictionJack();
                 } else {
                   openSwapMint();
                 }
@@ -2853,7 +2916,7 @@ function HomeContent() {
                 boxShadow: shopTab === 'wrap' ? '0 0 15px rgba(6, 182, 212, 0.4)' : 'none',
               }}
             >
-              🪙 Wrap NFTs
+              🪙 Manage NFTs
             </button>
           </div>
 
@@ -3517,7 +3580,9 @@ function HomeContent() {
                         marginTop: 'clamp(8px, 1.5vw, 10px)',
                         paddingTop: 'clamp(8px, 1.5vw, 10px)',
                         borderTop: 'clamp(1px, 0.2vw, 1px) solid rgba(75, 85, 99, 0.3)',
-                        textAlign: 'center'
+                        display: 'flex',
+                        gap: 'clamp(12px, 2.5vw, 16px)',
+                        justifyContent: 'center'
                       }}>
                         <button
                           onClick={() => setWrapMode('unwrap')}
@@ -3533,6 +3598,22 @@ function HomeContent() {
                           }}
                         >
                           Unwrap NFTs →
+                        </button>
+                        <span style={{ color: 'rgba(75, 85, 99, 0.6)' }}>|</span>
+                        <button
+                          onClick={() => setWrapMode('swap')}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(168, 85, 247, 1)',
+                            fontSize: 'clamp(10px, 2vw, 12px)',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0,
+                          }}
+                        >
+                          Swap NFTs →
                         </button>
                       </div>
                     </div>
@@ -3589,7 +3670,7 @@ function HomeContent() {
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : wrapMode === 'unwrap' ? (
                 /* UNWRAP MODE */
                 <div>
                   {/* Unwrap Summary - Single Consolidated Box */}
@@ -3733,6 +3814,294 @@ function HomeContent() {
                     <p style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(239, 68, 68, 1)', textAlign: 'center', marginTop: 'clamp(8px, 1.6vw, 10px)' }}>
                       Insufficient balance. You have {wTokenBalance ? (Number(wTokenBalance) / 1e18).toFixed(2) : '0.00'} wNFTs.
                     </p>
+                  )}
+                </div>
+              ) : (
+                /* SWAP MODE - Sequential Selection Flow */
+                <div>
+                  {/* Step indicator */}
+                  <p style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 'clamp(10px, 2vw, 12px)', textAlign: 'center' }}>
+                    {selectedWTokenNFT === null
+                      ? 'Step 1: Select NFT you want from the pool'
+                      : selectedUserNFT === null
+                        ? 'Step 2: Select NFT to trade from your collection'
+                        : 'Ready to swap!'}
+                  </p>
+
+                  {/* Step 1: Pool NFTs Selection (What you want to get) */}
+                  {selectedWTokenNFT === null ? (
+                    <div>
+                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.3)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
+                        Pick a NFT you want ({wTokensTotalHeld})
+                      </h3>
+                      {wTokensLoading ? (
+                        <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
+                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                        </div>
+                      ) : wTokensNFTs.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 'clamp(12px, 2.5vw, 16px)' }}>
+                          <p style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>No NFTs in pool</p>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 'clamp(4px, 0.8vw, 6px)',
+                          maxHeight: 'clamp(300px, 40vh, 400px)',
+                          overflowY: 'auto',
+                          marginBottom: 'clamp(12px, 2.5vw, 16px)',
+                        }}>
+                          {wTokensNFTs.map((nft) => (
+                            <button
+                              key={nft.tokenId}
+                              onClick={() => setSelectedWTokenNFT(nft.tokenId)}
+                              style={{
+                                position: 'relative',
+                                borderRadius: 'clamp(6px, 1.2vw, 8px)',
+                                overflow: 'hidden',
+                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.4)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                transform: 'scale(1)',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 0 12px rgba(168, 85, 247, 0.6)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ aspectRatio: '1/1' }}>
+                                <img
+                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  alt={nft.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
+                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(17, 24, 39, 0.9)' }}>
+                                <p style={{ fontSize: 'clamp(8px, 1.6vw, 10px)', color: '#FFFFFF', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{nft.tokenId}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : selectedUserNFT === null ? (
+                    /* Step 2: Your NFTs Selection (What you'll give up) */
+                    <div>
+                      {/* Show selected pool NFT */}
+                      <div style={{
+                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                        padding: 'clamp(10px, 2vw, 12px)',
+                        marginBottom: 'clamp(12px, 2.5vw, 16px)',
+                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(168, 85, 247, 0.5)',
+                      }}>
+                        <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 'clamp(4px, 0.8vw, 6px)', textAlign: 'center' }}>
+                          You will receive: <span style={{ fontWeight: 700, color: '#FFFFFF' }}>#{selectedWTokenNFT}</span>
+                        </p>
+                        <button
+                          onClick={() => setSelectedWTokenNFT(null)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(239, 68, 68, 1)',
+                            fontSize: 'clamp(9px, 1.8vw, 11px)',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0,
+                            display: 'block',
+                            margin: '0 auto',
+                          }}
+                        >
+                          ✕ Change selection
+                        </button>
+                      </div>
+
+                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.3)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
+                        Pick your NFT to trade ({nfts.length})
+                      </h3>
+                      {isLoading ? (
+                        <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
+                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                        </div>
+                      ) : nfts.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 'clamp(12px, 2.5vw, 16px)' }}>
+                          <p style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>No NFTs</p>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 'clamp(4px, 0.8vw, 6px)',
+                          maxHeight: 'clamp(300px, 40vh, 400px)',
+                          overflowY: 'auto',
+                          marginBottom: 'clamp(12px, 2.5vw, 16px)',
+                        }}>
+                          {nfts.map((nft) => (
+                            <button
+                              key={nft.tokenId}
+                              onClick={() => setSelectedUserNFT(nft.tokenId)}
+                              style={{
+                                position: 'relative',
+                                borderRadius: 'clamp(6px, 1.2vw, 8px)',
+                                overflow: 'hidden',
+                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.4)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                transform: 'scale(1)',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 0 12px rgba(168, 85, 247, 0.6)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            >
+                              <div style={{ aspectRatio: '1/1' }}>
+                                <img
+                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  alt={nft.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
+                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(17, 24, 39, 0.9)' }}>
+                                <p style={{ fontSize: 'clamp(8px, 1.6vw, 10px)', color: '#FFFFFF', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{nft.tokenId}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Step 3: Swap Confirmation */
+                    <div>
+                      {/* Swap Preview */}
+                      <div style={{
+                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                        padding: 'clamp(10px, 2vw, 12px)',
+                        marginBottom: 'clamp(12px, 2.5vw, 16px)',
+                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(168, 85, 247, 0.5)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(8px, 1.5vw, 10px)', marginBottom: 'clamp(8px, 1.5vw, 10px)' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 'clamp(2px, 0.4vw, 3px)' }}>You give</p>
+                            <p style={{ fontSize: 'clamp(14px, 3vw, 16px)', fontWeight: 700, color: '#FFFFFF' }}>#{selectedUserNFT}</p>
+                          </div>
+                          <div style={{ fontSize: 'clamp(18px, 4vw, 22px)' }}>↔️</div>
+                          <div style={{ textAlign: 'center' }}>
+                            <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 'clamp(2px, 0.4vw, 3px)' }}>You get</p>
+                            <p style={{ fontSize: 'clamp(14px, 3vw, 16px)', fontWeight: 700, color: '#FFFFFF' }}>#{selectedWTokenNFT}</p>
+                          </div>
+                        </div>
+                        <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', marginBottom: 'clamp(6px, 1.2vw, 8px)' }}>
+                          Fee: {swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH
+                        </p>
+                        <button
+                          onClick={() => {
+                            setSelectedUserNFT(null);
+                            setSelectedWTokenNFT(null);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(239, 68, 68, 1)',
+                            fontSize: 'clamp(9px, 1.8vw, 11px)',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                            padding: 0,
+                            display: 'block',
+                            margin: '0 auto',
+                          }}
+                        >
+                          ✕ Cancel and start over
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mode Switcher */}
+                  <div style={{
+                    marginBottom: 'clamp(10px, 2vw, 12px)',
+                    paddingBottom: 'clamp(8px, 1.5vw, 10px)',
+                    borderBottom: 'clamp(1px, 0.2vw, 1px) solid rgba(75, 85, 99, 0.3)',
+                    textAlign: 'center'
+                  }}>
+                    <button
+                      onClick={() => {
+                        setWrapMode('wrap');
+                        setSelectedUserNFT(null);
+                        setSelectedWTokenNFT(null);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(59, 130, 246, 1)',
+                        fontSize: 'clamp(10px, 2vw, 12px)',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        padding: 0,
+                      }}
+                    >
+                      ← Back to Wrap
+                    </button>
+                  </div>
+
+                  {/* Swap Button - Only show when both NFTs selected */}
+                  {selectedUserNFT !== null && selectedWTokenNFT !== null && (
+                    !isWrapperApproved ? (
+                      <button
+                        onClick={handleWrapperApprove}
+                        disabled={isTransactionPending || isConfirming}
+                        style={{
+                          width: '100%',
+                          padding: 'clamp(12px, 2.5vw, 16px)',
+                          borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                          fontWeight: 700,
+                          fontSize: 'clamp(14px, 3vw, 16px)',
+                          border: 'none',
+                          background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
+                          color: '#FFFFFF',
+                          cursor: (isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
+                          opacity: (isTransactionPending || isConfirming) ? 0.7 : 1,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {isTransactionPending || isConfirming ? 'Approving...' : 'Approve Wrapper Contract'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleSwap}
+                        disabled={isTransactionPending || isConfirming}
+                        style={{
+                          width: '100%',
+                          padding: 'clamp(12px, 2.5vw, 16px)',
+                          borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                          fontWeight: 700,
+                          fontSize: 'clamp(14px, 3vw, 16px)',
+                          border: 'none',
+                          background: (isTransactionPending || isConfirming)
+                            ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                            : 'linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(139, 92, 246, 0.95))',
+                          color: '#FFFFFF',
+                          cursor: (isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
+                          opacity: (isTransactionPending || isConfirming) ? 0.7 : 1,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {isTransactionPending || isConfirming
+                          ? 'Swapping...'
+                          : `Swap NFTs for ${swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH`}
+                      </button>
+                    )
                   )}
                 </div>
               )}
@@ -4717,7 +5086,7 @@ function HomeContent() {
                   color: 'rgba(6, 182, 212, 1)',
                 }}
               >
-                Wilfred's Fee:
+                Wilfred&apos;s Fee:
               </span>
               <span
                 style={{
@@ -4885,8 +5254,8 @@ function HomeContent() {
       {/* Jail Interface */}
       {showJail && <JailInterface onClose={() => setShowJail(false)} />}
 
-      {/* Blackjack Interface */}
-      {showBlackjack && <BlackjackInterface onClose={() => setShowBlackjack(false)} />}
+      {/* PredictionJack Full-Screen App */}
+      {showPredictionJack && <PredictionJackApp onClose={() => setShowPredictionJack(false)} />}
 
       {/* CSS animations */}
       <style jsx>{`

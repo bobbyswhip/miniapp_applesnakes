@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { getContracts, BLACKJACK_ADDRESS, PREDICTION_HUB_ADDRESS, TOKEN_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
-import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
+import { parseEther, formatUnits, parseUnits } from 'viem';
 import { useTokenBalance } from '@/hooks/useTokenBalance';
 
 interface BuyMarketModalProps {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { getContracts, STAKING_ADDRESS } from '@/config/contracts';
+import { getContracts } from '@/config/contracts';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { formatUnits } from 'viem';
@@ -24,7 +24,7 @@ export function StakingInterface({
 }: StakingInterfaceProps) {
   const { address } = useAccount();
   const { nfts, refetch: refetchNFTs } = useNFTContext();
-  const { addTransaction, updateTransaction } = useTransactions();
+  const { addTransaction } = useTransactions();
   const publicClient = usePublicClient({ chainId: base.id });
   const stakingConfig = getContracts(base.id).staking;
   const nftConfig = getContracts(base.id).nft;

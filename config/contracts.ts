@@ -59,12 +59,12 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     name: 'Prediction Jack (Legacy)',
   },
   blackjack: {
-    address: '0x97d81EF2ED892F7DE8950d9B3ae1C3E15947DA90',
+    address: '0x466FBE3e5f7A89A05F69070A9b016A68E758c14A',
     abi: BLACKJACK_ABI,
     name: 'Blackjack Game',
   },
   predictionHub: {
-    address: '0xaA7959D6396eAFfF60F12AE33136202bbDEeB723',
+    address: '0xcEFE23c5DEA2f5E39B6E5240DE92F99558C3Fa70',
     abi: PREDICTION_HUB_ABI,
     name: 'Prediction Market Hub',
   },

@@ -39,6 +39,46 @@ export const WRAPPER_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'getSwapFee',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'nftContract', type: 'address' },
+      { internalType: 'uint256', name: 'startIndex', type: 'uint256' },
+      { internalType: 'uint256', name: 'limit', type: 'uint256' },
+    ],
+    name: 'getHeldNFTs',
+    outputs: [
+      {
+        internalType: 'struct wTokens.NFTPage',
+        name: 'page',
+        type: 'tuple',
+        components: [
+          { internalType: 'uint256[]', name: 'tokenIds', type: 'uint256[]' },
+          { internalType: 'uint256', name: 'totalHeld', type: 'uint256' },
+          { internalType: 'uint256', name: 'returned', type: 'uint256' },
+          { internalType: 'bool', name: 'hasMore', type: 'bool' },
+        ],
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'nftContract', type: 'address' },
+      { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+    ],
+    name: 'isTokenIdHeld',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 
   // Write Functions
   {
@@ -68,6 +108,17 @@ export const WRAPPER_ABI = [
     stateMutability: 'payable',
     type: 'function',
   },
+  {
+    inputs: [
+      { internalType: 'address', name: 'nftContract', type: 'address' },
+      { internalType: 'uint256', name: 'tokenIdToDeposit', type: 'uint256' },
+      { internalType: 'uint256', name: 'tokenIdToReceive', type: 'uint256' },
+    ],
+    name: 'swapNFT',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
 
   // Events
   {
@@ -88,6 +139,17 @@ export const WRAPPER_ABI = [
       { indexed: true, internalType: 'address', name: 'owner', type: 'address' },
     ],
     name: 'NFTUnwrapped',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'address', name: 'nftContract', type: 'address' },
+      { indexed: true, internalType: 'uint256', name: 'tokenIdIn', type: 'uint256' },
+      { indexed: true, internalType: 'uint256', name: 'tokenIdOut', type: 'uint256' },
+      { indexed: false, internalType: 'address', name: 'owner', type: 'address' },
+    ],
+    name: 'NFTSwapped',
     type: 'event',
   },
 ] as const;

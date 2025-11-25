@@ -12,7 +12,7 @@ import { NFTOptionsModal } from './NFTOptionsModal';
 
 export function InventorySack() {
   const [selectedNFT, setSelectedNFT] = useState<UserNFT | null>(null);
-  const { isOpen, setIsOpen, openInventory } = useInventory();
+  const { isOpen, setIsOpen, openInventory, showPredictionJack } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading } = useNFTContext();
   const contracts = getContracts(base.id);
@@ -166,8 +166,8 @@ export function InventorySack() {
 
   return (
     <>
-      {/* Sack Button - Fixed position, only visible when wallet connected */}
-      {isWalletConnected && (
+      {/* Sack Button - Fixed position, only visible when wallet connected and PredictionJack is not open */}
+      {isWalletConnected && !showPredictionJack && (
         <button
           onClick={() => {
             if (!isOpen) {

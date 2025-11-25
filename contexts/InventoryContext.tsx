@@ -15,12 +15,15 @@ interface InventoryContextType {
   setShowHatch: (open: boolean) => void;
   showBreed: boolean;
   setShowBreed: (open: boolean) => void;
+  showPredictionJack: boolean;
+  setShowPredictionJack: (open: boolean) => void;
   // Coordinated open functions that close other UIs
   openInventory: () => void;
   openSwapMint: () => void;
   openChat: () => void;
   openHatch: () => void;
   openBreed: () => void;
+  openPredictionJack: () => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -31,6 +34,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [showChat, setShowChat] = useState(false);
   const [showHatch, setShowHatch] = useState(false);
   const [showBreed, setShowBreed] = useState(false);
+  const [showPredictionJack, setShowPredictionJack] = useState(false);
 
   const toggleInventory = () => setIsOpen(prev => !prev);
 
@@ -41,6 +45,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowBreed(false);
+    setShowPredictionJack(false);
   };
 
   const openSwapMint = () => {
@@ -49,6 +54,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowBreed(false);
+    setShowPredictionJack(false);
   };
 
   const openChat = () => {
@@ -57,6 +63,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowSwapMint(false);
     setShowHatch(false);
     setShowBreed(false);
+    setShowPredictionJack(false);
   };
 
   const openHatch = () => {
@@ -65,6 +72,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowSwapMint(false);
     setShowChat(false);
     setShowBreed(false);
+    setShowPredictionJack(false);
   };
 
   const openBreed = () => {
@@ -73,6 +81,16 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowSwapMint(false);
     setShowChat(false);
     setShowHatch(false);
+    setShowPredictionJack(false);
+  };
+
+  const openPredictionJack = () => {
+    setShowPredictionJack(true);
+    setIsOpen(false);
+    setShowSwapMint(false);
+    setShowChat(false);
+    setShowHatch(false);
+    setShowBreed(false);
   };
 
   return (
@@ -89,11 +107,14 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setShowHatch,
         showBreed,
         setShowBreed,
+        showPredictionJack,
+        setShowPredictionJack,
         openInventory,
         openSwapMint,
         openChat,
         openHatch,
         openBreed,
+        openPredictionJack,
       }}
     >
       {children}

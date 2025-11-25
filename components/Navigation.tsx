@@ -22,9 +22,17 @@ export function Navigation() {
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
 
-  // Token price state
+  // Token price state - exported for use in other components
   const [tokenPrice, setTokenPrice] = useState<string>('0');
   const [ethPrice, setEthPrice] = useState<number>(0);
+
+  // Make token price available globally via window for PredictionJack
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__TOKEN_PRICE_USD__ = parseFloat(tokenPrice) || 0;
+      (window as any).__ETH_PRICE_USD__ = ethPrice || 0;
+    }
+  }, [tokenPrice, ethPrice]);
 
   // Debug logging
   useEffect(() => {
@@ -181,19 +189,20 @@ export function Navigation() {
     };
 
     fetchTokenPrice();
-    // Refresh price every 1 second (same as mint counter)
-    const interval = setInterval(fetchTokenPrice, 1000);
+    // Refresh price every 10 seconds (reduced from 1s to avoid rate limits)
+    // Token prices don't change that frequently in practice
+    const interval = setInterval(fetchTokenPrice, 10000);
     return () => clearInterval(interval);
   }, [publicClient, contracts.nft.address, ethPrice]);
 
-  // Fetch total swap minted count for mint counter (synced with token price fetch)
+  // Fetch total swap minted count for mint counter
   const { data: totalSwapMintedData } = useReadContract({
     address: contracts.nft.address,
     abi: contracts.nft.abi,
     functionName: 'totalSwapMinted',
     chainId: base.id,
     query: {
-      refetchInterval: 1000, // Poll every 1 second (same as token price)
+      refetchInterval: 10000, // Poll every 10 seconds (reduced from 1s to avoid rate limits)
     },
   });
 

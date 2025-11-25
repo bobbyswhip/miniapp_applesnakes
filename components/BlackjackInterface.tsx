@@ -18,8 +18,7 @@ interface LiveGameCardProps {
 }
 
 interface ClosedGameCardProps {
-  gameId: bigint;
-  userAddress: `0x${string}`;
+  market: ClaimableMarket;
   onClaim: (gameId: bigint) => void;
   isClaimPending: boolean;
 }
@@ -48,6 +47,24 @@ interface GameDisplay {
   tradingPeriodEnds: bigint;
   secondsUntilCanAct: bigint;
   gameId: bigint;
+  marketCreated: boolean;
+}
+
+interface ClaimableMarket {
+  gameId: bigint;
+  claimableAmount: bigint;
+  userYesShares: bigint;
+  userNoShares: bigint;
+  result: number;
+  yesPrice: bigint;
+  noPrice: bigint;
+}
+
+interface PortfolioSummary {
+  activePositions: bigint;
+  resolvedPositions: bigint;
+  totalClaimable: bigint;
+  totalActiveValue: bigint;
 }
 
 // Component to display a single live game card
@@ -130,80 +147,24 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
   );
 }
 
-// Component to display a closed game card with claimable winnings
-function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: ClosedGameCardProps) {
-  const contracts = getContracts(base.id);
-
-  // Safely convert gameId to BigInt
-  let gameIdBigInt: bigint;
-  try {
-    if (typeof gameId === 'bigint') {
-      gameIdBigInt = gameId;
-    } else if (typeof gameId === 'number' || typeof gameId === 'string') {
-      gameIdBigInt = BigInt(gameId);
-    } else if (typeof gameId === 'object' && gameId !== null) {
-      // Try to extract from object - use any to bypass type narrowing
-      const stringValue = (gameId as any).toString();
-      gameIdBigInt = BigInt(stringValue);
-    } else {
-      console.error('Invalid gameId type in ClosedGameCard:', gameId);
-      return null;
-    }
-  } catch (error) {
-    console.error('Failed to convert gameId in ClosedGameCard:', gameId, error);
-    return null;
-  }
-
-  // Fetch game info
-  const { data: gameInfoData } = useReadContract({
-    address: BLACKJACK_ADDRESS(base.id),
-    abi: contracts.blackjack.abi,
-    functionName: 'getGameInfo',
-    args: [gameIdBigInt],
-    chainId: base.id,
-  });
-
-  // Fetch market display for user-specific data
-  const { data: marketDisplayData } = useReadContract({
-    address: PREDICTION_HUB_ADDRESS(base.id),
-    abi: contracts.predictionHub.abi,
-    functionName: 'getMarketDisplay',
-    args: [gameIdBigInt, userAddress],
-    chainId: base.id,
-  });
-
-  const gameInfo = gameInfoData as any;
-  const marketDisplay = marketDisplayData as any;
-
-  if (!gameInfo || !marketDisplay) {
-    return (
-      <div className="bg-gray-800/50 p-4 rounded-lg animate-pulse">
-        <div className="h-24 bg-gray-700/50 rounded"></div>
-      </div>
-    );
-  }
-
-  // Safely extract BigInt values
-  const claimableAmount = BigInt(marketDisplay.userClaimable || 0);
-  const userYesShares = BigInt(marketDisplay.userYesShares || 0);
-  const userNoShares = BigInt(marketDisplay.userNoShares || 0);
-
-  // Only show if user has claimable winnings
-  if (claimableAmount === 0n) {
-    return null;
-  }
+// Component to display a closed game card with claimable winnings (uses pre-fetched data)
+function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps) {
+  const { gameId, claimableAmount, userYesShares, userNoShares, result, yesPrice, noPrice } = market;
 
   const resultLabels = ['Pending', 'Win', 'Lose', 'Push'];
-  const resultLabel = resultLabels[Number(marketDisplay.result)] || 'Unknown';
-  const totalDeposits = BigInt(marketDisplay.totalDeposits || 0);
+  const resultLabel = resultLabels[result] || 'Unknown';
+
+  // Format prices (already in basis points from contract)
+  const yesPricePercent = Number(yesPrice) / 100;
+  const noPricePercent = Number(noPrice) / 100;
 
   return (
     <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
       <div className="flex justify-between items-start mb-3">
         <div>
-          <div className="text-white font-semibold">Game #{gameIdBigInt.toString()}</div>
+          <div className="text-white font-semibold">Game #{gameId.toString()}</div>
           <div className="text-xs text-gray-400">
-            Player: {gameInfo.player.slice(0, 6)}...{gameInfo.player.slice(-4)}
+            Final Prices: YES {yesPricePercent.toFixed(1)}% / NO {noPricePercent.toFixed(1)}%
           </div>
         </div>
         <div className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -216,32 +177,17 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
         </div>
       </div>
 
-      <div className="space-y-2 mb-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Player Total:</span>
-          <span className="text-white font-semibold">{gameInfo.playerTotal.toString()}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Dealer Total:</span>
-          <span className="text-white font-semibold">{gameInfo.dealerTotal.toString()}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Market Volume:</span>
-          <span className="text-white font-semibold">{formatEther(totalDeposits)} tokens</span>
-        </div>
-      </div>
-
       {/* User shares info */}
       <div className="bg-gray-900/50 p-3 rounded-lg mb-3 space-y-1">
         {userYesShares > 0n && (
           <div className="flex justify-between text-xs">
-            <span className="text-green-400">YES Shares:</span>
+            <span className="text-green-400">Your YES Shares:</span>
             <span className="text-white">{formatEther(userYesShares)}</span>
           </div>
         )}
         {userNoShares > 0n && (
           <div className="flex justify-between text-xs">
-            <span className="text-red-400">NO Shares:</span>
+            <span className="text-red-400">Your NO Shares:</span>
             <span className="text-white">{formatEther(userNoShares)}</span>
           </div>
         )}
@@ -252,7 +198,7 @@ function ClosedGameCard({ gameId, userAddress, onClaim, isClaimPending }: Closed
       </div>
 
       <button
-        onClick={() => onClaim(gameIdBigInt)}
+        onClick={() => onClaim(gameId)}
         disabled={isClaimPending}
         className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
       >
@@ -368,13 +314,16 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const stats = (statsData as unknown as bigint[]) || [0n, 0n, 0n, 0n, 0n, 0n];
   const gamesPlayed = stats[0] || 0n;
   const wins = stats[1] || 0n;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const losses = stats[2] || 0n;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const pushes = stats[3] || 0n;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const busts = stats[4] || 0n;
   const winRate = stats[5] || 0n;
 
   // Fetch active games for Live Games tab
-  const { data: activeGamesData, refetch: refetchActiveGames } = useReadContract({
+  const { data: activeGamesData, refetch: _refetchActiveGames } = useReadContract({
     address: BLACKJACK_ADDRESS(base.id),
     abi: contracts.blackjack.abi,
     functionName: 'getActiveGames',
@@ -389,22 +338,59 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const activeGameIds = activeGamesResult?.[0] || [];
   const totalActiveGames = activeGamesResult?.[1] || 0n;
 
-  // Fetch resolved markets for Closed Games tab (games with claimable funds)
-  const { data: resolvedGamesData, refetch: refetchResolvedGames } = useReadContract({
+  // Fetch user's claimable markets using the new helper function
+  const { data: claimableMarketsData, refetch: refetchClaimableMarkets } = useReadContract({
     address: PREDICTION_HUB_ADDRESS(base.id),
     abi: contracts.predictionHub.abi,
-    functionName: 'getResolvedMarkets',
-    args: [0n, 50n], // Start at 0, fetch 50 games
+    functionName: 'getUserClaimableMarkets',
+    args: address ? [address, 50n] : undefined, // User address and max 50 results
     chainId: base.id,
     query: {
-      enabled: activeTab === 'closed', // Only fetch when on closed games tab
-      refetchInterval: activeTab === 'closed' ? 10000 : false, // Refetch every 10 seconds when active
+      enabled: !!address && activeTab === 'closed',
+      refetchInterval: activeTab === 'closed' ? 10000 : false,
     },
   });
 
-  const resolvedGamesResult = resolvedGamesData as [bigint[], bigint, boolean] | undefined;
-  const resolvedGameIds = resolvedGamesResult?.[0] || [];
-  const totalResolvedGames = resolvedGamesResult?.[1] || 0n;
+  const claimableMarketsResult = claimableMarketsData as [ClaimableMarket[], bigint] | undefined;
+  const claimableMarkets = claimableMarketsResult?.[0] || [];
+  const totalClaimableFromMarkets = claimableMarketsResult?.[1] || 0n;
+
+  // Fetch user portfolio summary for dashboard
+  const { data: portfolioData, refetch: refetchPortfolio } = useReadContract({
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
+    functionName: 'getUserPortfolioSummary',
+    args: address ? [address] : undefined,
+    chainId: base.id,
+    query: {
+      enabled: !!address,
+      refetchInterval: 15000, // Refetch every 15 seconds
+    },
+  });
+
+  const portfolio = portfolioData as [bigint, bigint, bigint, bigint] | undefined;
+  const portfolioSummary: PortfolioSummary | null = portfolio ? {
+    activePositions: portfolio[0],
+    resolvedPositions: portfolio[1],
+    totalClaimable: portfolio[2],
+    totalActiveValue: portfolio[3],
+  } : null;
+
+  // Quick check if user has any claimable winnings (for notification badge)
+  const { data: hasClaimableData } = useReadContract({
+    address: PREDICTION_HUB_ADDRESS(base.id),
+    abi: contracts.predictionHub.abi,
+    functionName: 'userHasClaimable',
+    args: address ? [address] : undefined,
+    chainId: base.id,
+    query: {
+      enabled: !!address,
+      refetchInterval: 30000, // Check every 30 seconds
+    },
+  });
+
+  const hasClaimableResult = hasClaimableData as [boolean, bigint] | undefined;
+  const hasAnyClaimable = hasClaimableResult?.[0] || false;
 
   // Start game transaction
   const {
@@ -463,10 +449,11 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     if (isStartGameConfirmed || isStartGameWithTokensConfirmed || isHitConfirmed || isStandConfirmed || isClaimConfirmed) {
       refetchGame();
       refetchClaimable();
-      refetchResolvedGames();
+      refetchClaimableMarkets();
+      refetchPortfolio();
       setClaimingGameId(null);
     }
-  }, [isStartGameConfirmed, isStartGameWithTokensConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchResolvedGames]);
+  }, [isStartGameConfirmed, isStartGameWithTokensConfirmed, isHitConfirmed, isStandConfirmed, isClaimConfirmed, refetchGame, refetchClaimable, refetchClaimableMarkets, refetchPortfolio]);
 
   // Refetch allowance after approval
   useEffect(() => {
@@ -815,21 +802,44 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         </button>
         <button
           onClick={() => setActiveTab('closed')}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all relative ${
             activeTab === 'closed'
               ? 'bg-purple-600 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
           Closed Games
+          {hasAnyClaimable && (
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+          )}
         </button>
       </div>
 
-      {/* Claimable winnings alert */}
+      {/* Global claimable winnings notification */}
+      {hasAnyClaimable && portfolioSummary && portfolioSummary.totalClaimable > 0n && activeTab !== 'closed' && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-green-900/50 to-emerald-900/50 border border-green-500 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-green-200 font-semibold">
+              💰 You have winnings to claim!
+            </div>
+            <div className="text-green-400 font-bold">
+              {formatEther(portfolioSummary.totalClaimable)} tokens
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('closed')}
+            className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-all text-sm"
+          >
+            View Claimable Markets →
+          </button>
+        </div>
+      )}
+
+      {/* Current game claimable winnings alert */}
       {claimableAmount && claimableAmount > 0n && (
         <div className="mb-4 p-4 bg-green-900/50 border border-green-500 rounded-lg">
           <div className="text-green-200 font-semibold mb-2">
-            💰 Winnings Available!
+            💰 Winnings Available from Current Game!
           </div>
           <div className="text-green-100 text-sm mb-3">
             You have {formatEther(claimableAmount)} tokens to claim from your previous game.
@@ -969,15 +979,22 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           {gameDisplay && gameDisplay.gameId > 0n && (
             <div className="bg-gray-800/50 p-3 rounded-lg">
               <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-400">
-                  Game ID: #{gameDisplay.gameId.toString()}
+                <div>
+                  <div className="text-sm text-gray-400">
+                    Game ID: #{gameDisplay.gameId.toString()}
+                  </div>
+                  <div className={`text-xs mt-1 ${gameDisplay.marketCreated ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {gameDisplay.marketCreated ? '📊 Market Active' : '⏳ Waiting for market...'}
+                  </div>
                 </div>
-                <button
-                  onClick={() => setSelectedMarketGameId(gameDisplay.gameId)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-all"
-                >
-                  View Market
-                </button>
+                {gameDisplay.marketCreated && (
+                  <button
+                    onClick={() => setSelectedMarketGameId(gameDisplay.gameId)}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-all"
+                  >
+                    Trade Market
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1019,15 +1036,45 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       {/* Closed Games Tab */}
       {activeTab === 'closed' && (
         <div className="space-y-4">
-          {/* Resolved games count */}
+          {/* Claimable summary */}
           <div className="bg-gray-800/50 p-3 rounded-lg text-center">
             <div className="text-purple-300 font-semibold">
-              {totalResolvedGames.toString()} Game{totalResolvedGames !== 1n ? 's' : ''} with Claimable Winnings
+              {claimableMarkets.length} Market{claimableMarkets.length !== 1 ? 's' : ''} with Claimable Winnings
             </div>
+            {totalClaimableFromMarkets > 0n && (
+              <div className="text-green-400 text-lg font-bold mt-1">
+                {formatEther(totalClaimableFromMarkets)} tokens total
+              </div>
+            )}
             <div className="text-xs text-gray-400 mt-1">
               Resolved markets where you can claim funds
             </div>
           </div>
+
+          {/* Portfolio Summary */}
+          {portfolioSummary && (
+            <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 p-4 rounded-lg border border-purple-500/30">
+              <div className="text-xs text-purple-300 mb-2 font-semibold">Your Portfolio</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-gray-400 text-xs">Active Positions</div>
+                  <div className="text-white font-semibold">{portfolioSummary.activePositions.toString()}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400 text-xs">Active Value</div>
+                  <div className="text-white font-semibold">{formatEther(portfolioSummary.totalActiveValue)} tokens</div>
+                </div>
+                <div>
+                  <div className="text-gray-400 text-xs">Resolved Positions</div>
+                  <div className="text-white font-semibold">{portfolioSummary.resolvedPositions.toString()}</div>
+                </div>
+                <div>
+                  <div className="text-gray-400 text-xs">Total Claimable</div>
+                  <div className="text-green-400 font-semibold">{formatEther(portfolioSummary.totalClaimable)} tokens</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Info box */}
           {!address && (
@@ -1039,7 +1086,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           )}
 
           {/* Games list */}
-          {address && resolvedGameIds.length === 0 ? (
+          {address && claimableMarkets.length === 0 ? (
             <div className="bg-gray-800/50 p-6 rounded-lg text-center">
               <div className="text-gray-400 mb-2">No games with claimable winnings</div>
               <div className="text-sm text-gray-500">
@@ -1048,19 +1095,14 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             </div>
           ) : address ? (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {[...resolvedGameIds].reverse().map((gameId, index) => {
-                // Reverse to show newest games first
-                // Pass the gameId directly - let ClosedGameCard handle the conversion
-                return (
-                  <ClosedGameCard
-                    key={index}
-                    gameId={gameId}
-                    userAddress={address}
-                    onClaim={handleClaimWinnings}
-                    isClaimPending={false}
-                  />
-                );
-              })}
+              {[...claimableMarkets].reverse().map((market) => (
+                <ClosedGameCard
+                  key={market.gameId.toString()}
+                  market={market}
+                  onClaim={handleClaimWinnings}
+                  isClaimPending={claimingGameId === market.gameId}
+                />
+              ))}
             </div>
           ) : null}
         </div>
