@@ -41,14 +41,6 @@ interface IPredictionMarketHub {
  
 error SwapReverted(bytes data);
  
-/**
- * @title PredictionJack - OPTIMIZED FOR VRF GAS
- * @notice Gas optimizations:
- * 1. Removed redundant checks in callback
- * 2. Simplified market creation path
- * 3. Reduced storage reads
- * 4. Permanent approval set once
- */
 contract PredictionJack is VRFConsumerBaseV2Plus {
     using BalanceDeltaLibrary for BalanceDelta;
  
@@ -85,14 +77,11 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     address public token1 = 0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6;
     address public protocolOwner;
  
-    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000;
-    uint256 public constant NO_MARKET_RAKE_BPS = 500;
+    uint256 public START_GAME_PROTOCOL_FEE_BPS = 690;
+    uint256 public NO_MARKET_RAKE_BPS = 420;
  
     uint256 public startGameFee = 0.00069 ether;
     uint256 public nextGameId = 1;
-    
-    // NEW: Track if we've approved hub (do once)
-    bool private hubApproved;
  
     enum HandState { 
         Inactive,
@@ -215,10 +204,11 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
  
         poolIdRaw = 0x6a634d3c93c0b9402392bff565c8315f621558a49e2a00973922322ce19d4abb;
  
+        // VRF Config - 800K gas limit (matches working version exactly)
         vrfConfig = VrfConfig({
             subscriptionId: 88998617156719755233131168053267278275887903458817697624281142359274673133163,
-            callbackGasLimit: 2500000, // SET TO MAX
-            requestConfirmations: 3,
+            callbackGasLimit: 2500000, // ← EXACT SAME AS WORKING VERSION
+            requestConfirmations: 1,   // ← FAST UX
             vrfFee: 0
         });
  
@@ -228,9 +218,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         bjConfig.tradingDelay = 1 minutes;
         bjConfig.gameAbandonmentPeriod = 24 hours;
         
-        // OPTIMIZATION: Approve hub once with max amount
-        IERC20Minimal(token1).approve(_marketHub, type(uint256).max);
-        hubApproved = true;
+        // NO PERMANENT APPROVAL - we do it inline like the working version
     }
  
     /* ─────────── Game Start Functions ─────────── */
@@ -613,24 +601,20 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     }
  
     /**
-     * @notice Handle initial deal - GAS OPTIMIZED
-     * @dev CRITICAL OPTIMIZATIONS:
-     * 1. No redundant approve (done in constructor)
-     * 2. Simplified market creation
-     * 3. Reduced storage operations
+     * @notice Handle initial deal - EXACTLY MATCHES WORKING VERSION
      */
     function _handleInitialDeal(Game storage g, uint256 randomness) internal {
-        // Deal 4 cards - OPTIMIZED: fewer storage writes
-        uint8[4] memory cards;
+        // Deal 4 cards: player, dealer, player, dealer
         for (uint8 i = 0; i < 4; i++) {
-            cards[i] = _drawUniqueCard(g, randomness);
+            uint8 card = _drawUniqueCard(g, randomness);
             randomness = uint256(keccak256(abi.encodePacked(randomness, i)));
+ 
+            if (i % 2 == 0) {
+                g.playerHand.push(card);
+            } else {
+                g.dealerHand.push(card);
+            }
         }
-        
-        g.playerHand.push(cards[0]);
-        g.dealerHand.push(cards[1]);
-        g.playerHand.push(cards[2]);
-        g.dealerHand.push(cards[3]);
  
         uint8 playerValue = _calculateHandValue(g.playerHand);
         uint8 dealerValue = _calculateHandValue(g.dealerHand);
@@ -638,66 +622,65 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         bool playerBlackjack = (playerValue == 21 && g.playerHand.length == 2);
         bool dealerBlackjack = (dealerValue == 21 && g.dealerHand.length == 2);
  
-        // Case 1: Blackjack scenarios - LOW GAS PATH
+        // Case 1: Blackjack scenarios - refund with 5% rake, no market
         if (playerBlackjack || dealerBlackjack) {
             PlayerStats storage stats = playerStats[g.player];
             stats.gamesPlayed++;
  
+            string memory reason;
             GameResult result;
+ 
             if (playerBlackjack && dealerBlackjack) {
                 stats.pushes++;
+                reason = "Push - Both Blackjack";
                 result = GameResult.Push;
             } else if (playerBlackjack) {
                 stats.wins++;
+                reason = "Blackjack!";
                 result = GameResult.Win;
             } else {
                 stats.losses++;
+                reason = "Dealer Blackjack";
                 result = GameResult.Lose;
             }
  
-            _refundWithRake(g, playerBlackjack && dealerBlackjack ? "Push - Both Blackjack" : (playerBlackjack ? "Blackjack!" : "Dealer Blackjack"));
+            _refundWithRake(g, reason);
  
             g.state = HandState.Finished;
             g.lastActionAt = block.timestamp;
             _moveToInactiveGames(g.gameId);
  
-            emit GameResolved(g.player, g.gameId, "Blackjack", playerValue, dealerValue, result);
+            emit GameResolved(g.player, g.gameId, reason, playerValue, dealerValue, result);
             return;
         }
  
-        // Case 2: Guaranteed outcomes - LOW GAS PATH
+        // Case 2: Guaranteed outcomes (dealer 17+) - refund with 5% rake
         (bool isGuaranteed, GameResult guaranteedResult) = _checkGuaranteedOutcome(playerValue, dealerValue);
  
         if (isGuaranteed) {
-            _resolveGuaranteedOutcome(
-                g, 
-                playerValue, 
-                dealerValue, 
-                guaranteedResult, 
-                guaranteedResult == GameResult.Win ? "Guaranteed Win" : (guaranteedResult == GameResult.Push ? "Guaranteed Push" : "Guaranteed Loss")
-            );
+            string memory reason;
+            if (guaranteedResult == GameResult.Win) {
+                reason = "Guaranteed Win";
+            } else if (guaranteedResult == GameResult.Push) {
+                reason = "Guaranteed Push";
+            } else {
+                reason = "Guaranteed Loss";
+            }
+ 
+            _resolveGuaranteedOutcome(g, playerValue, dealerValue, guaranteedResult, reason);
             g.lastActionAt = block.timestamp;
             return;
         }
  
-        // Case 3: Normal game - OPTIMIZED MARKET CREATION
+        // Case 3: Normal game - create market via hub
+        // EXACTLY MATCHES WORKING VERSION - inline approve
         uint256 halfTokens = g.tokensHeld / 2;
-        
-        // OPTIMIZATION: No approve needed (already approved in constructor with max)
-        // Just call createMarket directly
-        bool success = marketHub.createMarket(g.gameId, g.player, halfTokens);
-        
-        if (!success) {
-            // Market creation failed - refund with rake
-            _refundWithRake(g, "Market creation failed");
-            g.state = HandState.Finished;
-            _moveToInactiveGames(g.gameId);
-            return;
-        }
-        
-        // ONLY set to 0 after successful market creation
         g.tokensHeld = 0;
+ 
+        IERC20Minimal(token1).approve(address(marketHub), halfTokens * 2);
+        marketHub.createMarket(g.gameId, g.player, halfTokens);
         g.marketCreated = true;
+ 
         g.state = HandState.Active;
         g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
         g.lastActionAt = block.timestamp;
@@ -706,42 +689,56 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
  
+
     function _handleHit(Game storage g, uint256 randomness) internal {
         uint8 card = _drawUniqueCard(g, randomness);
         g.playerHand.push(card);
- 
+
         (string memory rank, string memory suit) = _getCardDisplay(card);
         emit PlayerHit(g.player, g.gameId, card, rank, suit);
- 
+
         uint8 playerValue = _calculateHandValue(g.playerHand);
         uint8 dealerValue = _calculateHandValue(g.dealerHand);
- 
+
+        // Check for guaranteed outcomes first (bust, dealer bust, etc.)
         (bool isGuaranteed, GameResult guaranteedResult) = _checkGuaranteedOutcome(playerValue, dealerValue);
- 
+
         if (isGuaranteed) {
+            string memory reason;
             if (playerValue > 21) {
+                reason = "Bust";
                 emit PlayerBusted(g.player, g.gameId, playerValue);
+            } else if (guaranteedResult == GameResult.Win) {
+                reason = "Win - Guaranteed";
+            } else if (guaranteedResult == GameResult.Push) {
+                reason = "Push - Guaranteed";
+            } else {
+                reason = "Lose - Guaranteed";
             }
-            
-            _closeMarketWithGuaranteedOutcome(
-                g, 
-                playerValue, 
-                dealerValue, 
-                guaranteedResult, 
-                playerValue > 21 ? "Bust" : (guaranteedResult == GameResult.Win ? "Win - Guaranteed" : (guaranteedResult == GameResult.Push ? "Push - Guaranteed" : "Lose - Guaranteed"))
-            );
+
+            _closeMarketWithGuaranteedOutcome(g, playerValue, dealerValue, guaranteedResult, reason);
             return;
         }
- 
+
+        // AUTO-STAND ON 21: No trading period, resolve immediately
+        if (playerValue == 21) {
+            if (g.marketCreated) {
+                marketHub.pauseTrading(g.gameId);
+            }
+            _handleStand(g, randomness);
+            return;
+        }
+
+        // Normal case - back to active with trading period
         g.state = HandState.Active;
         g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
         g.lastActionAt = block.timestamp;
- 
+
         emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
+
  
     function _handleStand(Game storage g, uint256 randomness) internal {
-        // Dealer draws to 17
         while (_calculateHandValue(g.dealerHand) < 17) {
             uint8 card = _drawUniqueCard(g, randomness);
             g.dealerHand.push(card);
@@ -751,22 +748,26 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         uint8 playerValue = _calculateHandValue(g.playerHand);
         uint8 dealerValue = _calculateHandValue(g.dealerHand);
  
-        // Determine result
+        string memory result;
         GameResult marketResult;
         PlayerStats storage stats = playerStats[g.player];
         stats.gamesPlayed++;
  
         if (playerValue > 21) {
+            result = "Bust";
             stats.losses++;
             stats.busts++;
             marketResult = GameResult.Lose;
         } else if (dealerValue > 21 || playerValue > dealerValue) {
+            result = dealerValue > 21 ? "Win - Dealer Bust" : "Win";
             stats.wins++;
             marketResult = GameResult.Win;
         } else if (playerValue == dealerValue) {
+            result = "Push";
             stats.pushes++;
             marketResult = GameResult.Push;
         } else {
+            result = "Lose";
             stats.losses++;
             marketResult = GameResult.Lose;
         }
@@ -779,14 +780,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
  
         _moveToInactiveGames(g.gameId);
  
-        emit GameResolved(
-            g.player, 
-            g.gameId, 
-            marketResult == GameResult.Win ? (dealerValue > 21 ? "Win - Dealer Bust" : "Win") : (marketResult == GameResult.Push ? "Push" : "Lose"),
-            playerValue, 
-            dealerValue, 
-            marketResult
-        );
+        emit GameResolved(g.player, g.gameId, result, playerValue, dealerValue, marketResult);
     }
  
     /* ─────────── Internal Helpers ─────────── */
@@ -919,7 +913,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         );
     }
  
-    /* ─────────── View Functions (keeping existing ones) ─────────── */
+    /* ─────────── View Functions ─────────── */
  
     function getActiveGames(uint256 startIndex, uint256 count) external view returns (uint256[] memory gameIds, uint256 totalActive, bool hasMore) {
         require(count > 0 && count <= 100, "Count must be 1-100");
@@ -1039,9 +1033,6 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         require(isAdmin[msg.sender], "Not admin");
         require(_marketHub != address(0), "zero address");
         marketHub = IPredictionMarketHub(_marketHub);
-        
-        // Re-approve new hub with max
-        IERC20Minimal(token1).approve(_marketHub, type(uint256).max);
     }
  
     function setVrfConfig(uint256 subscriptionId, uint32 callbackGasLimit, uint16 requestConfirmations) external {
@@ -1088,6 +1079,16 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         protocolOwner = _protocolOwner;
     }
  
+    function setFeeBps(uint256 _startGameProtocolFeeBps, uint256 _noMarketRakeBps) external {
+        require(isAdmin[msg.sender], "Not admin");
+        require(_startGameProtocolFeeBps >= 30 && _startGameProtocolFeeBps <= 2000, "Protocol fee must be 30-2000 bps");
+        require(_noMarketRakeBps >= 30 && _noMarketRakeBps <= 2000, "Rake must be 30-2000 bps");
+        
+        START_GAME_PROTOCOL_FEE_BPS = _startGameProtocolFeeBps;
+        NO_MARKET_RAKE_BPS = _noMarketRakeBps;
+
+    }
+
     /* ─────────── Emergency Recovery ─────────── */
  
     function emergencyWithdrawTokens(address token, uint256 amount) external {

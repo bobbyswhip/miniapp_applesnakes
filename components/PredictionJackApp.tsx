@@ -7,24 +7,26 @@ import { base } from 'wagmi/chains';
 import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
 import Image from 'next/image';
 import { Avatar, Name } from '@coinbase/onchainkit/identity';
+import { StakingInterface } from '@/components/StakingInterface';
 
 // Token ticker constant
 const TOKEN_TICKER = '$wASS';
 
-// Pool size thresholds and labels (in ETH equivalent)
+// Pool size thresholds and labels (in USD equivalent)
+// <$10 = thin, $10-50 = medium, $50-100 = good, >$100 = optimal
 const POOL_SIZES = {
-  THIN: { max: 0.01, color: 'text-red-400', bgColor: 'bg-red-900/30', borderColor: 'border-red-500', label: 'Thin Pool', description: 'Low liquidity - may have high slippage' },
-  MEDIUM: { max: 0.03, color: 'text-orange-400', bgColor: 'bg-orange-900/30', borderColor: 'border-orange-500', label: 'Medium Pool', description: 'Moderate liquidity for trading' },
-  DEEP: { max: 0.07, color: 'text-green-400', bgColor: 'bg-green-900/30', borderColor: 'border-green-500', label: 'Deep Pool', description: 'Good liquidity for active trading' },
-  BEST: { max: Infinity, color: 'text-purple-400', bgColor: 'bg-purple-900/30', borderColor: 'border-purple-500', label: 'Best Pool', description: 'Optimal starting ratio for trading volume' },
+  THIN: { maxUSD: 10, color: 'text-red-400', bgColor: 'bg-red-900/30', borderColor: 'border-red-500', label: 'Thin Pool', description: 'Low liquidity - may have high slippage' },
+  MEDIUM: { maxUSD: 50, color: 'text-orange-400', bgColor: 'bg-orange-900/30', borderColor: 'border-orange-500', label: 'Medium Pool', description: 'Moderate liquidity for trading' },
+  GOOD: { maxUSD: 100, color: 'text-green-400', bgColor: 'bg-green-900/30', borderColor: 'border-green-500', label: 'Good Pool', description: 'Good liquidity for active trading' },
+  OPTIMAL: { maxUSD: Infinity, color: 'text-purple-400', bgColor: 'bg-purple-900/30', borderColor: 'border-purple-500', label: 'Optimal Pool', description: 'Best starting ratio for trading volume' },
 };
 
-// Get pool size category based on ETH value
-function getPoolSize(ethValue: number) {
-  if (ethValue <= POOL_SIZES.THIN.max) return POOL_SIZES.THIN;
-  if (ethValue <= POOL_SIZES.MEDIUM.max) return POOL_SIZES.MEDIUM;
-  if (ethValue <= POOL_SIZES.DEEP.max) return POOL_SIZES.DEEP;
-  return POOL_SIZES.BEST;
+// Get pool size category based on USD value
+function getPoolSizeByUSD(usdValue: number) {
+  if (usdValue < POOL_SIZES.THIN.maxUSD) return POOL_SIZES.THIN;
+  if (usdValue <= POOL_SIZES.MEDIUM.maxUSD) return POOL_SIZES.MEDIUM;
+  if (usdValue <= POOL_SIZES.GOOD.maxUSD) return POOL_SIZES.GOOD;
+  return POOL_SIZES.OPTIMAL;
 }
 
 // Helper to get token price from Navigation
@@ -50,6 +52,7 @@ function useTokenPrice() {
 // ===================== TYPES =====================
 interface PredictionJackAppProps {
   onClose: () => void;
+  initialGameId?: bigint | null;
 }
 
 interface CardDisplay {
@@ -127,7 +130,7 @@ interface _PlayerStats {
   winRate: bigint;
 }
 
-type ViewMode = 'live' | 'play' | 'game' | 'closed';
+type ViewMode = 'live' | 'play' | 'game' | 'closed' | 'stake';
 
 // ===================== MINI CARD COMPONENT =====================
 function MiniCard({ card, size = 'sm', faceDown = false }: { card: CardDisplay; size?: 'sm' | 'md' | 'lg' | 'xs'; faceDown?: boolean }) {
@@ -611,13 +614,12 @@ function MarketPanel({
   };
 
   const handleApprove = () => {
-    if (!amount) return;
-    const amountInWei = parseUnits(amount, tokenDecimals);
+    // Approve 3000 tokens for one-time approval
     writeApprove({
       address: TOKEN_ADDRESS(base.id),
       abi: contracts.token.abi,
       functionName: 'approve',
-      args: [PREDICTION_HUB_ADDRESS(base.id), amountInWei],
+      args: [PREDICTION_HUB_ADDRESS(base.id), parseEther('3000')],
     });
   };
 
@@ -685,8 +687,6 @@ function MarketPanel({
 
   return (
     <div className={`bg-gray-800/80 rounded-xl ${compact ? 'p-3' : 'p-4'}`}>
-      {!compact && <h3 className="text-white font-bold mb-3">📊 Trade Market</h3>}
-
       {/* Price Display */}
       <div className="flex gap-2 mb-3">
         <button
@@ -1005,9 +1005,10 @@ function GameScreen({
 }) {
   const { address } = useAccount();
   const contracts = getContracts(base.id);
-  const { tokenPriceUSD } = useTokenPrice();
   const [clientSecondsUntilCanAct, setClientSecondsUntilCanAct] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showLinkCopied, setShowLinkCopied] = useState(false);
+  const [vrfWaitSeconds, setVrfWaitSeconds] = useState(0);
 
   // When viewing another player's game, first get their address from gameId
   const { data: gameInfoData } = useReadContract({
@@ -1077,6 +1078,7 @@ function GameScreen({
   useEffect(() => {
     if (isWaitingForVRF && gameDisplay?.playerCards && gameDisplay.playerCards.length > 0) {
       onVRFComplete?.();
+      setVrfWaitSeconds(0); // Reset timer when VRF completes
     }
   }, [isWaitingForVRF, gameDisplay?.playerCards, onVRFComplete]);
 
@@ -1087,6 +1089,39 @@ function GameScreen({
     gameDisplay.playerCards.length === 0 &&
     gameDisplay.status.toLowerCase().includes('waiting')
   );
+
+  // VRF wait timer - counts up when waiting for VRF
+  useEffect(() => {
+    if (!isGameWaitingForVRF) {
+      setVrfWaitSeconds(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setVrfWaitSeconds(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isGameWaitingForVRF]);
+
+  // Cancel stuck game transaction
+  const { data: cancelHash, writeContract: writeCancelStuckGame, isPending: isCancelPending } = useWriteContract();
+  const { isLoading: isCancelConfirming, isSuccess: isCancelConfirmed } = useWaitForTransactionReceipt({ hash: cancelHash });
+
+  useEffect(() => {
+    if (isCancelConfirmed) {
+      setVrfWaitSeconds(0);
+      refetchGame();
+    }
+  }, [isCancelConfirmed, refetchGame]);
+
+  const handleCancelStuckGame = () => {
+    setErrorMessage('');
+    writeCancelStuckGame({
+      address: BLACKJACK_ADDRESS(base.id),
+      abi: contracts.blackjack.abi,
+      functionName: 'cancelStuckGame',
+      args: [],
+    });
+  };
 
   const handleHit = () => {
     setErrorMessage('');
@@ -1167,41 +1202,83 @@ function GameScreen({
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden">
       {/* Main Game Area */}
-      <div className="flex-1 flex flex-col bg-gradient-to-b from-green-900/30 to-green-950/50 rounded-2xl p-4">
-        {/* Back Button - Only show when viewing other games */}
-        {showBackButton && (
-          <button
-            onClick={onBack}
-            className="self-start mb-3 px-3 py-1.5 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg text-sm flex items-center gap-2"
-          >
-            ← Back to Games
-          </button>
-        )}
-
-        {/* Game Status with Token Price Context */}
-        <div className="text-center mb-3">
-          <div className="text-purple-300 font-semibold text-lg">{gameDisplay.status}</div>
-          {gameDisplay.gameId > 0n && (
-            <div className="text-gray-400 text-sm">Game #{gameDisplay.gameId.toString()}</div>
+      <div className="flex-1 flex flex-col bg-gradient-to-b from-green-900/30 to-green-950/50 rounded-2xl p-4 relative">
+        {/* Top Bar - Back button (left) and Game ID with Share (right) */}
+        <div className="flex justify-between items-start mb-3">
+          {/* Back Button - Only show when viewing other games */}
+          {showBackButton ? (
+            <button
+              onClick={onBack}
+              className="px-3 py-1.5 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg text-sm flex items-center gap-2"
+            >
+              ← Back to Games
+            </button>
+          ) : (
+            <div /> // Empty div for spacing
           )}
-          {/* Token price context for trading decisions */}
-          {tokenPriceUSD > 0 && (
-            <div className="text-purple-400 text-xs mt-1">
-              {TOKEN_TICKER} = ${tokenPriceUSD.toFixed(4)}
+
+          {/* Game ID and Share Button - Upper Right */}
+          {gameDisplay.gameId > 0n && (
+            <div className="flex items-center gap-2">
+              <div className="text-gray-400 text-xs">Game #{gameDisplay.gameId.toString()}</div>
+              <button
+                onClick={() => {
+                  const shareUrl = `${window.location.origin}/blackjack?id=${gameDisplay.gameId.toString()}`;
+                  navigator.clipboard.writeText(shareUrl);
+                  setShowLinkCopied(true);
+                  setTimeout(() => setShowLinkCopied(false), 2000);
+                }}
+                className="p-1.5 bg-purple-600/50 hover:bg-purple-500/50 text-purple-200 rounded-lg text-xs flex items-center gap-1 transition-all"
+                title="Copy link to clipboard"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                Share
+              </button>
+              {/* Link copied feedback with fade animation */}
+              <span
+                className={`text-xs text-white/60 transition-all duration-500 ${
+                  showLinkCopied ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                link copied
+              </span>
             </div>
           )}
         </div>
 
+        {/* Game Status */}
+        <div className="text-center mb-3">
+          <div className="text-purple-300 font-semibold text-lg">{gameDisplay.status}</div>
+        </div>
+
         {/* VRF Waiting Info Box */}
         {isGameWaitingForVRF && (
-          <div className="bg-purple-900/40 border border-purple-500 p-4 rounded-xl mb-4 text-center">
+          <div className={`${vrfWaitSeconds >= 60 ? 'bg-red-900/40 border-red-500' : 'bg-purple-900/40 border-purple-500'} border p-4 rounded-xl mb-4 text-center`}>
             <div className="flex items-center justify-center gap-2 mb-2">
               <div className="animate-spin w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full" />
               <span className="text-purple-200 font-semibold">Waiting for Chainlink VRF</span>
+              <span className="text-gray-400 text-sm">({vrfWaitSeconds}s)</span>
             </div>
-            <p className="text-purple-300 text-sm">
-              Generating secure random cards... This usually takes 2-3 seconds on Base.
-            </p>
+            {vrfWaitSeconds < 60 ? (
+              <p className="text-purple-300 text-sm">
+                Generating secure random cards... This usually takes 2-3 seconds on Base.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-red-300 text-sm">
+                  VRF is taking longer than expected. You can cancel and get your funds back.
+                </p>
+                <button
+                  onClick={handleCancelStuckGame}
+                  disabled={isCancelPending || isCancelConfirming}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold rounded-lg transition-all"
+                >
+                  {isCancelPending || isCancelConfirming ? 'Cancelling...' : 'Cancel Stuck Game'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1278,22 +1355,196 @@ function GameScreen({
           <MarketPanel gameId={activeGameId} showFullStats={true} />
         )}
 
-        {/* Trading Tips Box - Only show when market exists and trading is active */}
-        {activeGameId && activeGameId > 0n && gameDisplay.marketCreated && clientSecondsUntilCanAct > 0 && (
+        {/* Trading Tips Box - Always show when market exists to help users understand the game */}
+        {activeGameId && activeGameId > 0n && gameDisplay.marketCreated && (
           <div className="bg-gray-800/60 rounded-xl p-3 text-xs">
-            <div className="text-purple-300 font-semibold mb-2">💡 Trading Tips</div>
+            <div className="text-purple-300 font-semibold mb-2">💡 Trading Tips & Odds</div>
             <div className="space-y-1.5 text-gray-300">
               <div>• <span className="text-green-400">YES</span> wins if player beats dealer or dealer busts</div>
               <div>• <span className="text-red-400">NO</span> wins if player busts or dealer wins</div>
-              <div>• Current hand: <span className="text-white font-semibold">{gameDisplay.playerTotal}</span> vs Dealer: <span className="text-white font-semibold">{gameDisplay.dealerTotal}</span></div>
-              {gameDisplay.playerTotal >= 17 && gameDisplay.playerTotal <= 21 && (
-                <div className="text-yellow-400">→ Strong hand! Consider standing.</div>
+              <div className="pt-1 border-t border-gray-700 mt-1">
+                <div className="flex justify-between items-center">
+                  <span>Current hand:</span>
+                  <span className="text-white font-semibold">{gameDisplay.playerTotal} vs Dealer: {gameDisplay.dealerTotal}</span>
+                </div>
+              </div>
+              {/* Player Win Odds based on current hand situation */}
+              {gameDisplay.playerTotal > 0 && (
+                <div className="bg-gray-900/50 rounded-lg p-2 mt-2">
+                  <div className="text-gray-400 text-[10px] mb-1">Player Win Probability</div>
+                  {(() => {
+                    // Blackjack odds calculation comparing player vs dealer totals
+                    let winChance = 50;
+                    const playerTotal = Number(gameDisplay.playerTotal);
+                    const dealerTotal = Number(gameDisplay.dealerTotal);
+                    const status = gameDisplay.status.toLowerCase();
+
+                    // Check if game is truly resolved - must have canStartNew=true OR status indicates finished
+                    // canHit/canStand can be false during trading period while game is still active
+                    const isGameResolved = gameDisplay.gameId > 0n && gameDisplay.playerCards.length > 0 && (
+                      gameDisplay.canStartNew || // Can start new game means current is finished
+                      status.includes('win') ||
+                      status.includes('lose') ||
+                      status.includes('bust') ||
+                      status.includes('push') ||
+                      status.includes('finished')
+                    );
+
+                    // If game is resolved, show definitive results
+                    if (isGameResolved) {
+                      // Check for player win conditions
+                      if (dealerTotal > 21 || (playerTotal <= 21 && playerTotal > dealerTotal)) {
+                        winChance = 100; // Player won
+                      } else if (playerTotal > 21 || dealerTotal > playerTotal) {
+                        winChance = 0; // Player lost
+                      } else if (playerTotal === dealerTotal) {
+                        winChance = 50; // Push
+                      }
+                    } else {
+                      // Game in progress - calculate odds
+                      if (playerTotal > 21) {
+                        // Player busted
+                        winChance = 0;
+                      } else if (dealerTotal > 21) {
+                        // Dealer busted
+                        winChance = 100;
+                      } else if (playerTotal === 21) {
+                        // Player has 21
+                        winChance = dealerTotal === 21 ? 50 : 95;
+                      } else if (dealerTotal === 21) {
+                        // Dealer has 21, player doesn't
+                        winChance = 5;
+                      } else if (playerTotal > dealerTotal) {
+                        // Player is ahead
+                        const lead = playerTotal - dealerTotal;
+                        if (lead >= 5) winChance = 85;
+                        else if (lead >= 3) winChance = 75;
+                        else if (lead >= 1) winChance = 65;
+                      } else if (playerTotal === dealerTotal) {
+                        // Currently tied - dealer must hit if under 17
+                        if (dealerTotal >= 17) {
+                          winChance = 50; // Push likely
+                        } else {
+                          // Dealer will hit, ~35% chance dealer busts
+                          winChance = 45;
+                        }
+                      } else {
+                        // Player is behind - must hit to have any chance
+                        const deficit = dealerTotal - playerTotal;
+                        if (deficit >= 5) winChance = 15;
+                        else if (deficit >= 3) winChance = 25;
+                        else if (deficit >= 1) winChance = 35;
+                      }
+                    }
+
+                    const loseChance = 100 - winChance;
+                    const winColor = winChance >= 60 ? 'text-green-400' : winChance >= 45 ? 'text-yellow-400' : 'text-red-400';
+                    const isDefinitive = isGameResolved && (winChance === 100 || winChance === 0 || winChance === 50);
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className={winColor}>
+                            {isDefinitive ? (winChance === 100 ? '🎉 WIN: 100%' : winChance === 0 ? '💀 LOSE: 100%' : '🤝 PUSH') : `WIN: ~${winChance}%`}
+                          </span>
+                          {!isDefinitive && <span className="text-red-400">LOSE: ~{loseChance}%</span>}
+                        </div>
+                        <div className="h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              isGameResolved && winChance === 100 ? 'bg-gradient-to-r from-green-500 to-green-300' :
+                              isGameResolved && winChance === 0 ? 'bg-gradient-to-r from-red-500 to-red-400' :
+                              isGameResolved && winChance === 50 ? 'bg-gradient-to-r from-yellow-500 to-yellow-400' :
+                              'bg-gradient-to-r from-green-500 to-green-400'
+                            }`}
+                            style={{ width: `${winChance}%` }}
+                          />
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
               )}
-              {gameDisplay.playerTotal <= 11 && (
-                <div className="text-blue-400">→ Low risk to hit - can&apos;t bust!</div>
-              )}
-              {gameDisplay.playerTotal >= 12 && gameDisplay.playerTotal <= 16 && (
-                <div className="text-orange-400">→ Risky zone - hit could bust!</div>
+              {/* Situational tips - considers both player AND dealer hands */}
+              {(() => {
+                const playerTotal = Number(gameDisplay.playerTotal);
+                const dealerTotal = Number(gameDisplay.dealerTotal);
+                const status = gameDisplay.status.toLowerCase();
+
+                if (playerTotal <= 0) return null;
+
+                // Check if game is truly resolved - must have canStartNew=true OR status indicates finished
+                const isGameResolved = gameDisplay.gameId > 0n && gameDisplay.playerCards.length > 0 && (
+                  gameDisplay.canStartNew ||
+                  status.includes('win') ||
+                  status.includes('lose') ||
+                  status.includes('bust') ||
+                  status.includes('push') ||
+                  status.includes('finished')
+                );
+
+                // If game is resolved, show final outcome
+                if (isGameResolved) {
+                  if (playerTotal > 21) {
+                    return <div className="text-red-400 mt-1 font-semibold">💀 RESULT: Player busted - Dealer wins!</div>;
+                  } else if (dealerTotal > 21) {
+                    return <div className="text-green-400 mt-1 font-semibold">🎉 RESULT: Dealer busted - Player wins!</div>;
+                  } else if (playerTotal > dealerTotal) {
+                    return <div className="text-green-400 mt-1 font-semibold">🎉 RESULT: Player wins with {playerTotal} vs {dealerTotal}!</div>;
+                  } else if (dealerTotal > playerTotal) {
+                    return <div className="text-red-400 mt-1 font-semibold">💀 RESULT: Dealer wins with {dealerTotal} vs {playerTotal}!</div>;
+                  } else {
+                    return <div className="text-yellow-400 mt-1 font-semibold">🤝 RESULT: Push! Both have {playerTotal}.</div>;
+                  }
+                }
+
+                // Game in progress - show tips
+                // Player busted
+                if (playerTotal > 21) {
+                  return <div className="text-red-400 mt-1">💀 Busted! Game over.</div>;
+                }
+
+                // Dealer busted
+                if (dealerTotal > 21) {
+                  return <div className="text-green-400 mt-1">🎉 Dealer busted! You win!</div>;
+                }
+
+                // Player has 21
+                if (playerTotal === 21) {
+                  return <div className="text-green-400 mt-1">🎰 21! Stand and hope dealer doesn&apos;t match!</div>;
+                }
+
+                // Compare hands for advice
+                if (playerTotal > dealerTotal) {
+                  // Player is winning
+                  if (playerTotal >= 17) {
+                    return <div className="text-green-400 mt-1">✅ You&apos;re ahead ({playerTotal} vs {dealerTotal})! Standing is smart.</div>;
+                  } else {
+                    return <div className="text-yellow-400 mt-1">⚠️ Ahead but low ({playerTotal} vs {dealerTotal}). Hit carefully or stand.</div>;
+                  }
+                } else if (playerTotal === dealerTotal) {
+                  // Tied
+                  if (playerTotal >= 17) {
+                    return <div className="text-yellow-400 mt-1">🤝 Tied at {playerTotal}. Stand for push or risk a hit.</div>;
+                  } else {
+                    return <div className="text-orange-400 mt-1">🤝 Tied at {playerTotal}. Consider hitting - dealer likely will too.</div>;
+                  }
+                } else {
+                  // Player is losing
+                  if (playerTotal <= 11) {
+                    return <div className="text-blue-400 mt-1">📈 Behind ({playerTotal} vs {dealerTotal}) - Hit! Can&apos;t bust.</div>;
+                  } else if (playerTotal >= 17) {
+                    return <div className="text-red-400 mt-1">⚠️ Behind ({playerTotal} vs {dealerTotal}) but hitting risks bust. Tough spot!</div>;
+                  } else {
+                    return <div className="text-orange-400 mt-1">📉 Behind ({playerTotal} vs {dealerTotal}) - Need to hit but risk busting.</div>;
+                  }
+                }
+              })()}
+              {/* Trading window indicator */}
+              {clientSecondsUntilCanAct > 0 && (
+                <div className="text-purple-300 mt-2 pt-2 border-t border-gray-700">
+                  ⏱️ Trading window: <span className="font-bold text-white">{clientSecondsUntilCanAct}s</span> remaining
+                </div>
               )}
             </div>
           </div>
@@ -1314,14 +1565,15 @@ function GameScreen({
 }
 
 // ===================== MAIN APP COMPONENT =====================
-export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
+export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppProps) {
   const { address } = useAccount();
   const contracts = getContracts(base.id);
   const { tokenPriceUSD, ethPriceUSD } = useTokenPrice();
   const [navHeight, setNavHeight] = useState(56); // Default header height
 
-  const [view, setView] = useState<ViewMode>('live');
-  const [selectedGameId, setSelectedGameId] = useState<bigint | null>(null);
+  // Start on game view if initialGameId is provided, otherwise start on live view
+  const [view, setView] = useState<ViewMode>(initialGameId ? 'game' : 'live');
+  const [selectedGameId, setSelectedGameId] = useState<bigint | null>(initialGameId ?? null);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Start game slider state
@@ -1330,11 +1582,73 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
   const [tokenAmount, setTokenAmount] = useState(0.1); // Default to 0.1 token (user requested)
   const [isWaitingForVRF, setIsWaitingForVRF] = useState(false);
 
+  // Slider drag tracking - prevents polling re-renders from interrupting drag
+  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
+  const [localSliderValue, setLocalSliderValue] = useState(0);
+
+  // Staking selection state (for StakingInterface)
+  const [selectedSnakesForStaking, setSelectedSnakesForStaking] = useState<Set<number>>(new Set());
+  const [selectedStakedSnakes, setSelectedStakedSnakes] = useState<Set<number>>(new Set());
+
   // Min/Max values for sliders
   const ETH_MIN = 0.00069;
   const ETH_MAX = 0.1;
+  const ETH_OPTIMAL = 0.07; // BEST pool threshold
   const TOKEN_MIN = 0.03; // Minimum for good pool liquidity
   const TOKEN_MAX = 10;
+
+  // Slider uses 0-100, with 30% = optimal threshold
+  // This makes it easier for users to select amounts in the optimal range
+  const OPTIMAL_SLIDER_POSITION = 30;
+
+  // Convert slider position (0-100) to ETH amount (non-linear: 30% = optimal)
+  const sliderToEth = (sliderValue: number): number => {
+    if (sliderValue <= OPTIMAL_SLIDER_POSITION) {
+      // 0-30% maps to ETH_MIN to ETH_OPTIMAL
+      const ratio = sliderValue / OPTIMAL_SLIDER_POSITION;
+      return ETH_MIN + ratio * (ETH_OPTIMAL - ETH_MIN);
+    } else {
+      // 30-100% maps to ETH_OPTIMAL to ETH_MAX
+      const ratio = (sliderValue - OPTIMAL_SLIDER_POSITION) / (100 - OPTIMAL_SLIDER_POSITION);
+      return ETH_OPTIMAL + ratio * (ETH_MAX - ETH_OPTIMAL);
+    }
+  };
+
+  // Convert ETH amount to slider position (inverse of above)
+  const ethToSlider = (ethValue: number): number => {
+    if (ethValue <= ETH_OPTIMAL) {
+      const ratio = (ethValue - ETH_MIN) / (ETH_OPTIMAL - ETH_MIN);
+      return ratio * OPTIMAL_SLIDER_POSITION;
+    } else {
+      const ratio = (ethValue - ETH_OPTIMAL) / (ETH_MAX - ETH_OPTIMAL);
+      return OPTIMAL_SLIDER_POSITION + ratio * (100 - OPTIMAL_SLIDER_POSITION);
+    }
+  };
+
+  // Token equivalents for optimal threshold (approximated)
+  const TOKEN_OPTIMAL = 3; // ~0.07 ETH equivalent at typical prices
+
+  // Convert slider position (0-100) to token amount
+  const sliderToToken = (sliderValue: number): number => {
+    if (sliderValue <= OPTIMAL_SLIDER_POSITION) {
+      const ratio = sliderValue / OPTIMAL_SLIDER_POSITION;
+      return TOKEN_MIN + ratio * (TOKEN_OPTIMAL - TOKEN_MIN);
+    } else {
+      const ratio = (sliderValue - OPTIMAL_SLIDER_POSITION) / (100 - OPTIMAL_SLIDER_POSITION);
+      return TOKEN_OPTIMAL + ratio * (TOKEN_MAX - TOKEN_OPTIMAL);
+    }
+  };
+
+  // Convert token amount to slider position
+  const tokenToSlider = (tokenValue: number): number => {
+    if (tokenValue <= TOKEN_OPTIMAL) {
+      const ratio = (tokenValue - TOKEN_MIN) / (TOKEN_OPTIMAL - TOKEN_MIN);
+      return ratio * OPTIMAL_SLIDER_POSITION;
+    } else {
+      const ratio = (tokenValue - TOKEN_OPTIMAL) / (TOKEN_MAX - TOKEN_OPTIMAL);
+      return OPTIMAL_SLIDER_POSITION + ratio * (100 - OPTIMAL_SLIDER_POSITION);
+    }
+  };
 
   // Measure navigation height dynamically
   useEffect(() => {
@@ -1489,13 +1803,8 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
   // If user has active game, show game view option
   const userHasActiveGame = gameDisplay && !gameDisplay.canStartNew;
 
-  // Build tabs based on game state - hide Start tab if user has active game
-  const tabs = [
-    { key: 'live', label: 'Live Games', icon: '🎮' },
-    // Only show Start Game if user doesn't have an active game
-    ...(!userHasActiveGame ? [{ key: 'play', label: 'Start Game', icon: '▶️' }] : []),
-    { key: 'closed', label: 'Claims', icon: '💰', badge: claimableMarkets.length > 0 },
-  ];
+  // Tab order: Live Games → Your Game/Start Game → Claim → Stake
+  // Tabs are now rendered directly in the JSX for proper ordering
 
   return (
     <div
@@ -1506,26 +1815,22 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
       <div className="flex-shrink-0 bg-gray-900 px-2 sm:px-4 pt-2">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between">
-            {/* Tab Pills */}
+            {/* Tab Pills - Order: Live Games → Your Game/Start Game → Claim → Stake */}
             <div className="flex gap-1 bg-gray-800/50 p-1 rounded-xl">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setView(tab.key as ViewMode)}
-                  className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
-                    view === tab.key
-                      ? 'bg-purple-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
-                  }`}
-                >
-                  <span className="hidden sm:inline">{tab.icon} </span>{tab.label}
-                  {tab.badge && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  )}
-                </button>
-              ))}
-              {/* Your Game tab - always visible when user has active game */}
-              {userHasActiveGame && (
+              {/* Live Games tab */}
+              <button
+                onClick={() => setView('live')}
+                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  view === 'live'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                }`}
+              >
+                <span className="hidden sm:inline">🎮 </span>Live Games
+              </button>
+
+              {/* Your Game tab (when user has active game) OR Start Game tab (when no active game) */}
+              {userHasActiveGame ? (
                 <button
                   onClick={() => {
                     setSelectedGameId(null);
@@ -1539,7 +1844,45 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                 >
                   <span className="hidden sm:inline">🎯 </span>Your Game
                 </button>
+              ) : (
+                <button
+                  onClick={() => setView('play')}
+                  className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                    view === 'play'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  }`}
+                >
+                  <span className="hidden sm:inline">▶️ </span>Start Game
+                </button>
               )}
+
+              {/* Claim tab */}
+              <button
+                onClick={() => setView('closed')}
+                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  view === 'closed'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                }`}
+              >
+                <span className="hidden sm:inline">💰 </span>Claim
+                {claimableMarkets.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                )}
+              </button>
+
+              {/* Stake tab */}
+              <button
+                onClick={() => setView('stake')}
+                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  view === 'stake'
+                    ? 'bg-purple-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                }`}
+              >
+                <span className="hidden sm:inline">🐍 </span>Stake
+              </button>
             </div>
 
             {/* Right side: Stats + Close */}
@@ -1568,6 +1911,18 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                   )}
                 </button>
               )}
+              {/* Help Button */}
+              <a
+                href="/blackjack/docs"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 hover:bg-purple-900/50 bg-purple-800/30 rounded-lg transition-colors text-purple-400 hover:text-purple-300"
+                aria-label="Help & Documentation"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </a>
               {/* Close Button */}
               <button
                 onClick={onClose}
@@ -1591,9 +1946,6 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-white">Live Games</h2>
-                <span className="text-gray-400 text-sm">
-                  Auto-refreshing every second
-                </span>
               </div>
 
               {activeGameIds.length === 0 ? (
@@ -1707,41 +2059,70 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
 
                   {/* Amount Slider with Pool Size Indicator */}
                   <div className="bg-gray-800/50 rounded-xl p-4 space-y-4">
-                    {/* Amount Display */}
+                    {/* Amount Display - shows live value during drag */}
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-white">
-                        {startPaymentMethod === 'eth'
-                          ? `${ethAmount.toFixed(5)} ETH`
-                          : `${tokenAmount.toFixed(2)} ${TOKEN_TICKER}`
-                        }
-                      </div>
-                      {startPaymentMethod === 'eth' && ethPriceUSD > 0 && (
-                        <div className="text-gray-400 text-sm">
-                          ≈ ${(ethAmount * ethPriceUSD).toFixed(4)} USD
-                        </div>
-                      )}
-                      {startPaymentMethod === 'token' && tokenPriceUSD > 0 && (
-                        <div className="text-gray-400 text-sm">
-                          ≈ ${(tokenAmount * tokenPriceUSD).toFixed(4)} USD
-                        </div>
-                      )}
+                      {(() => {
+                        // Show live value during drag for instant feedback
+                        const displayEth = isDraggingSlider && startPaymentMethod === 'eth'
+                          ? sliderToEth(localSliderValue)
+                          : ethAmount;
+                        const displayToken = isDraggingSlider && startPaymentMethod === 'token'
+                          ? sliderToToken(localSliderValue)
+                          : tokenAmount;
+                        return (
+                          <>
+                            <div className="text-3xl font-bold text-white">
+                              {startPaymentMethod === 'eth'
+                                ? `${displayEth.toFixed(5)} ETH`
+                                : `${displayToken.toFixed(2)} ${TOKEN_TICKER}`
+                              }
+                            </div>
+                            {startPaymentMethod === 'eth' && ethPriceUSD > 0 && (
+                              <div className="text-gray-400 text-sm">
+                                ≈ ${(displayEth * ethPriceUSD).toFixed(4)} USD
+                              </div>
+                            )}
+                            {startPaymentMethod === 'token' && tokenPriceUSD > 0 && (
+                              <div className="text-gray-400 text-sm">
+                                ≈ ${(displayToken * tokenPriceUSD).toFixed(4)} USD
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
-                    {/* Slider */}
+                    {/* Slider - non-linear scale: 30% = optimal threshold */}
                     <div className="space-y-2">
                       {startPaymentMethod === 'eth' ? (
                         <>
                           <input
                             type="range"
-                            min={ETH_MIN}
-                            max={ETH_MAX}
-                            step={0.00001}
-                            value={ethAmount}
-                            onChange={(e) => setEthAmount(parseFloat(e.target.value))}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={isDraggingSlider ? localSliderValue : ethToSlider(ethAmount)}
+                            onPointerDown={(e) => {
+                              setIsDraggingSlider(true);
+                              setLocalSliderValue(ethToSlider(ethAmount));
+                              (e.target as HTMLInputElement).setPointerCapture(e.pointerId);
+                            }}
+                            onPointerUp={(e) => {
+                              setIsDraggingSlider(false);
+                              setEthAmount(sliderToEth(localSliderValue));
+                              (e.target as HTMLInputElement).releasePointerCapture(e.pointerId);
+                            }}
+                            onPointerCancel={() => setIsDraggingSlider(false)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setLocalSliderValue(val);
+                              if (!isDraggingSlider) setEthAmount(sliderToEth(val));
+                            }}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 touch-none"
                           />
                           <div className="flex justify-between text-xs text-gray-500">
                             <span>{ETH_MIN} ETH</span>
+                            <span className="text-purple-400">↑ Optimal ({ETH_OPTIMAL} ETH)</span>
                             <span>{ETH_MAX} ETH</span>
                           </div>
                         </>
@@ -1749,30 +2130,50 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                         <>
                           <input
                             type="range"
-                            min={TOKEN_MIN}
-                            max={TOKEN_MAX}
-                            step={0.01}
-                            value={tokenAmount}
-                            onChange={(e) => setTokenAmount(parseFloat(e.target.value))}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={isDraggingSlider ? localSliderValue : tokenToSlider(tokenAmount)}
+                            onPointerDown={(e) => {
+                              setIsDraggingSlider(true);
+                              setLocalSliderValue(tokenToSlider(tokenAmount));
+                              (e.target as HTMLInputElement).setPointerCapture(e.pointerId);
+                            }}
+                            onPointerUp={(e) => {
+                              setIsDraggingSlider(false);
+                              setTokenAmount(sliderToToken(localSliderValue));
+                              (e.target as HTMLInputElement).releasePointerCapture(e.pointerId);
+                            }}
+                            onPointerCancel={() => setIsDraggingSlider(false)}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setLocalSliderValue(val);
+                              if (!isDraggingSlider) setTokenAmount(sliderToToken(val));
+                            }}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 touch-none"
                           />
                           <div className="flex justify-between text-xs text-gray-500">
                             <span>{TOKEN_MIN} {TOKEN_TICKER}</span>
+                            <span className="text-purple-400">↑ Optimal ({TOKEN_OPTIMAL} {TOKEN_TICKER})</span>
                             <span>{TOKEN_MAX} {TOKEN_TICKER}</span>
                           </div>
                         </>
                       )}
                     </div>
 
-                    {/* Pool Size Indicator */}
+                    {/* Pool Size Indicator - shows live tier during drag */}
                     {(() => {
-                      // Calculate ETH equivalent for pool size
-                      const ethEquivalent = startPaymentMethod === 'eth'
-                        ? ethAmount
-                        : (tokenPriceUSD > 0 && ethPriceUSD > 0)
-                          ? (tokenAmount * tokenPriceUSD) / ethPriceUSD
-                          : tokenAmount * 0.00001; // fallback ratio
-                      const poolSize = getPoolSize(ethEquivalent);
+                      // Use live values during drag for instant tier feedback
+                      const displayEth = isDraggingSlider && startPaymentMethod === 'eth'
+                        ? sliderToEth(localSliderValue)
+                        : ethAmount;
+                      const displayToken = isDraggingSlider && startPaymentMethod === 'token'
+                        ? sliderToToken(localSliderValue)
+                        : tokenAmount;
+                      const usdValue = startPaymentMethod === 'eth'
+                        ? displayEth * ethPriceUSD
+                        : displayToken * tokenPriceUSD;
+                      const poolSize = getPoolSizeByUSD(usdValue);
 
                       return (
                         <div className={`${poolSize.bgColor} border ${poolSize.borderColor} rounded-lg p-3`}>
@@ -1781,19 +2182,23 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                               <div className={`w-3 h-3 rounded-full ${
                                 poolSize === POOL_SIZES.THIN ? 'bg-red-400' :
                                 poolSize === POOL_SIZES.MEDIUM ? 'bg-orange-400' :
-                                poolSize === POOL_SIZES.DEEP ? 'bg-green-400' :
+                                poolSize === POOL_SIZES.GOOD ? 'bg-green-400' :
                                 'bg-purple-400'
                               }`} />
                               <span className={`font-semibold ${poolSize.color}`}>
                                 {poolSize.label}
                               </span>
                             </div>
-                            {poolSize === POOL_SIZES.BEST && (
+                            {poolSize === POOL_SIZES.OPTIMAL && (
                               <span className="text-purple-300 text-xs">🏆 Optimal</span>
                             )}
                           </div>
                           <p className={`text-xs mt-1 ${poolSize.color} opacity-80`}>
                             {poolSize.description}
+                          </p>
+                          {/* Show USD value for context */}
+                          <p className="text-xs mt-1 text-gray-400">
+                            ≈ ${usdValue.toFixed(2)} USD
                           </p>
                         </div>
                       );
@@ -1829,20 +2234,6 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                     )}
                   </div>
 
-                  {!gameDisplay?.canStartNew && (
-                    <div className="bg-yellow-900/30 border border-yellow-600 p-4 rounded-xl text-center">
-                      <div className="text-yellow-300 mb-2">You have an active game</div>
-                      <button
-                        onClick={() => {
-                          setSelectedGameId(null); // Clear any selected game to show user's own game
-                          setView('game');
-                        }}
-                        className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold rounded-lg"
-                      >
-                        Go to Your Game →
-                      </button>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1888,6 +2279,26 @@ export function PredictionJackApp({ onClose }: PredictionJackAppProps) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Stake View - Integrated Staking Interface */}
+          {view === 'stake' && (
+            <div className="space-y-4">
+              <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-4 mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  🐍 Snake Staking
+                </h2>
+                <p className="text-purple-300 text-sm mt-1">
+                  Stake your snakes to earn {TOKEN_TICKER} rewards from prediction market trading fees.
+                </p>
+              </div>
+              <StakingInterface
+                selectedSnakesForStaking={selectedSnakesForStaking}
+                setSelectedSnakesForStaking={setSelectedSnakesForStaking}
+                selectedStakedSnakes={selectedStakedSnakes}
+                setSelectedStakedSnakes={setSelectedStakedSnakes}
+              />
             </div>
           )}
         </div>

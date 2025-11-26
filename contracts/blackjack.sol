@@ -77,8 +77,8 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
     address public token1 = 0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6;
     address public protocolOwner;
  
-    uint256 public constant START_GAME_PROTOCOL_FEE_BPS = 2000;
-    uint256 public constant NO_MARKET_RAKE_BPS = 500;
+    uint256 public START_GAME_PROTOCOL_FEE_BPS = 690;
+    uint256 public NO_MARKET_RAKE_BPS = 420;
  
     uint256 public startGameFee = 0.00069 ether;
     uint256 public nextGameId = 1;
@@ -207,7 +207,7 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         // VRF Config - 800K gas limit (matches working version exactly)
         vrfConfig = VrfConfig({
             subscriptionId: 88998617156719755233131168053267278275887903458817697624281142359274673133163,
-            callbackGasLimit: 800000, // ← EXACT SAME AS WORKING VERSION
+            callbackGasLimit: 2500000, // ← EXACT SAME AS WORKING VERSION
             requestConfirmations: 1,   // ← FAST UX
             vrfFee: 0
         });
@@ -689,18 +689,20 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
  
+
     function _handleHit(Game storage g, uint256 randomness) internal {
         uint8 card = _drawUniqueCard(g, randomness);
         g.playerHand.push(card);
- 
+
         (string memory rank, string memory suit) = _getCardDisplay(card);
         emit PlayerHit(g.player, g.gameId, card, rank, suit);
- 
+
         uint8 playerValue = _calculateHandValue(g.playerHand);
         uint8 dealerValue = _calculateHandValue(g.dealerHand);
- 
+
+        // Check for guaranteed outcomes first (bust, dealer bust, etc.)
         (bool isGuaranteed, GameResult guaranteedResult) = _checkGuaranteedOutcome(playerValue, dealerValue);
- 
+
         if (isGuaranteed) {
             string memory reason;
             if (playerValue > 21) {
@@ -713,17 +715,28 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
             } else {
                 reason = "Lose - Guaranteed";
             }
- 
+
             _closeMarketWithGuaranteedOutcome(g, playerValue, dealerValue, guaranteedResult, reason);
             return;
         }
- 
+
+        // AUTO-STAND ON 21: No trading period, resolve immediately
+        if (playerValue == 21) {
+            if (g.marketCreated) {
+                marketHub.pauseTrading(g.gameId);
+            }
+            _handleStand(g, randomness);
+            return;
+        }
+
+        // Normal case - back to active with trading period
         g.state = HandState.Active;
         g.tradingPeriodEnds = block.timestamp + bjConfig.tradingDelay;
         g.lastActionAt = block.timestamp;
- 
+
         emit TradingPeriodStarted(g.player, g.gameId, g.tradingPeriodEnds);
     }
+
  
     function _handleStand(Game storage g, uint256 randomness) internal {
         while (_calculateHandValue(g.dealerHand) < 17) {
@@ -1066,6 +1079,16 @@ contract PredictionJack is VRFConsumerBaseV2Plus {
         protocolOwner = _protocolOwner;
     }
  
+    function setFeeBps(uint256 _startGameProtocolFeeBps, uint256 _noMarketRakeBps) external {
+        require(isAdmin[msg.sender], "Not admin");
+        require(_startGameProtocolFeeBps >= 30 && _startGameProtocolFeeBps <= 2000, "Protocol fee must be 30-2000 bps");
+        require(_noMarketRakeBps >= 30 && _noMarketRakeBps <= 2000, "Rake must be 30-2000 bps");
+        
+        START_GAME_PROTOCOL_FEE_BPS = _startGameProtocolFeeBps;
+        NO_MARKET_RAKE_BPS = _noMarketRakeBps;
+
+    }
+
     /* ─────────── Emergency Recovery ─────────── */
  
     function emergencyWithdrawTokens(address token, uint256 amount) external {

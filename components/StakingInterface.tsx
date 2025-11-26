@@ -33,6 +33,7 @@ export function StakingInterface({
   const [stakedNFTs, setStakedNFTs] = useState<UserNFT[]>([]);
   const [isLoadingStaked, setIsLoadingStaked] = useState(false);
   const [activeView, setActiveView] = useState<'stake' | 'unstake'>('stake');
+  const [currentOperation, setCurrentOperation] = useState<'approve' | 'stake' | 'unstake' | 'claim' | null>(null);
 
   // Check if staking contract is approved to transfer NFTs
   const { data: isApproved, refetch: refetchApproval } = useReadContract({
@@ -243,11 +244,13 @@ export function StakingInterface({
       refetchApproval();
       setSelectedSnakesForStaking(new Set());
       setSelectedStakedSnakes(new Set());
+      setCurrentOperation(null);
     }
   }, [isConfirmed, refetchStaked, refetchNFTs, refetchApproval, setSelectedSnakesForStaking, setSelectedStakedSnakes]);
 
   const handleApprove = async () => {
     if (!address) return;
+    setCurrentOperation('approve');
 
     try {
       const hash = await writeContractAsync({
@@ -260,11 +263,13 @@ export function StakingInterface({
       addTransaction(hash, 'Approving staking contract');
     } catch (error) {
       console.error('Approve error:', error);
+      setCurrentOperation(null);
     }
   };
 
   const handleStake = async () => {
     if (selectedSnakesForStaking.size === 0 || !address) return;
+    setCurrentOperation('stake');
 
     try {
       const tokenIds = Array.from(selectedSnakesForStaking);
@@ -278,11 +283,13 @@ export function StakingInterface({
       addTransaction(hash, `Staking ${tokenIds.length} snake${tokenIds.length > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Stake error:', error);
+      setCurrentOperation(null);
     }
   };
 
   const handleUnstake = async () => {
     if (selectedStakedSnakes.size === 0 || !address) return;
+    setCurrentOperation('unstake');
 
     try {
       const tokenIds = Array.from(selectedStakedSnakes);
@@ -296,11 +303,13 @@ export function StakingInterface({
       addTransaction(hash, `Unstaking ${tokenIds.length} snake${tokenIds.length > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Unstake error:', error);
+      setCurrentOperation(null);
     }
   };
 
   const handleClaimRewards = async () => {
     if (!address) return;
+    setCurrentOperation('claim');
 
     try {
       const hash = await writeContractAsync({
@@ -313,6 +322,7 @@ export function StakingInterface({
       addTransaction(hash, 'Claiming staking rewards');
     } catch (error) {
       console.error('Claim rewards error:', error);
+      setCurrentOperation(null);
     }
   };
 
@@ -387,7 +397,7 @@ export function StakingInterface({
               transition: 'all 0.2s ease',
             }}
           >
-            {isConfirming ? 'Claiming...' : 'Claim Rewards'}
+            {isConfirming && currentOperation === 'claim' ? 'Claiming...' : 'Claim Rewards'}
           </button>
         )}
       </div>
@@ -666,7 +676,7 @@ export function StakingInterface({
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isConfirming ? 'Approving...' : 'Approve Staking Contract'}
+                {isConfirming && currentOperation === 'approve' ? 'Approving...' : 'Approve Staking Contract'}
               </button>
             ) : (
               <button
@@ -687,7 +697,7 @@ export function StakingInterface({
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isConfirming ? 'Staking...' : `Stake ${selectedSnakesForStaking.size} Snake${selectedSnakesForStaking.size > 1 ? 's' : ''}`}
+                {isConfirming && currentOperation === 'stake' ? 'Staking...' : `Stake ${selectedSnakesForStaking.size} Snake${selectedSnakesForStaking.size > 1 ? 's' : ''}`}
               </button>
             )}
           </>
@@ -712,7 +722,7 @@ export function StakingInterface({
               transition: 'all 0.2s ease',
             }}
           >
-            {isConfirming ? 'Unstaking...' : `Unstake ${selectedStakedSnakes.size} Snake${selectedStakedSnakes.size > 1 ? 's' : ''}`}
+            {isConfirming && currentOperation === 'unstake' ? 'Unstaking...' : `Unstake ${selectedStakedSnakes.size} Snake${selectedStakedSnakes.size > 1 ? 's' : ''}`}
           </button>
         )}
       </div>

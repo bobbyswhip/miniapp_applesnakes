@@ -558,6 +558,51 @@ export const BLACKJACK_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'NO_MARKET_RAKE_BPS',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
+  // Global Stats
+  {
+    inputs: [],
+    name: 'getGlobalStats',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'totalGamesStarted', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalGamesCompleted', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalVolume', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalMarketsCreated', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalBlackjacks', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalBusts', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalWins', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalLosses', type: 'uint256' },
+          { internalType: 'uint256', name: 'totalPushes', type: 'uint256' },
+        ],
+        internalType: 'struct PredictionJack.GlobalStats',
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
+  // Admin: Set Fee BPS
+  {
+    inputs: [
+      { internalType: 'uint256', name: '_startGameProtocolFeeBps', type: 'uint256' },
+      { internalType: 'uint256', name: '_noMarketRakeBps', type: 'uint256' },
+    ],
+    name: 'setFeeBps',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 
   // Receive and Fallback
   {

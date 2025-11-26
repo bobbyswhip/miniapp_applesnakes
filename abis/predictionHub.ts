@@ -169,6 +169,8 @@ export const PREDICTION_HUB_ABI = [
           { internalType: 'uint256', name: 'userClaimable', type: 'uint256' },
           { internalType: 'uint256', name: 'volume', type: 'uint256' },
           { internalType: 'enum PredictionMarketHub.MarketStatus', name: 'status', type: 'uint8' },
+          { internalType: 'uint256', name: 'creatorTokenFeesEarned', type: 'uint256' },
+          { internalType: 'uint256', name: 'creatorETHFeesEarned', type: 'uint256' },
         ],
         internalType: 'struct PredictionMarketHub.MarketDisplay',
         name: '',
@@ -472,6 +474,33 @@ export const PREDICTION_HUB_ABI = [
     inputs: [],
     name: 'uncollectedFees',
     outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'creatorTokenFeesForMarket',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'creatorETHFeesForMarket',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+
+  // View Function - Market Creator Fees
+  {
+    inputs: [{ internalType: 'uint256', name: 'gameId', type: 'uint256' }],
+    name: 'getMarketCreatorFees',
+    outputs: [
+      { internalType: 'address', name: 'creator', type: 'address' },
+      { internalType: 'uint256', name: 'tokenFeesEarned', type: 'uint256' },
+      { internalType: 'uint256', name: 'ethFeesEarned', type: 'uint256' },
+    ],
     stateMutability: 'view',
     type: 'function',
   },

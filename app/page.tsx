@@ -204,6 +204,8 @@ function HomeContent() {
   const [showJail, setShowJail] = useState(false);
 
   // Note: PredictionJack state now managed via InventoryContext (showPredictionJack, openPredictionJack)
+  // Shared game ID from URL for direct navigation to a specific game
+  const [sharedGameId, setSharedGameId] = useState<bigint | null>(null);
 
   // Wagmi hooks for wallet and contract interaction
   const { address } = useAccount();
@@ -1225,12 +1227,21 @@ function HomeContent() {
     }
   }, [searchParams, audioElement, currentLocation, masterVolume, router]);
 
-  // Fast travel to mountain hut and open prediction market (triggered by /ethglobal page)
+  // Fast travel to mountain hut and open prediction market (triggered by /ethglobal or /blackjack page)
   useEffect(() => {
     const shouldFastTravel = searchParams.get('fastTravelPrediction') === 'true';
+    const gameIdParam = searchParams.get('gameId');
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to mountain hut (prediction market) triggered!');
+
+      // Set shared game ID if provided (for direct navigation to specific game)
+      if (gameIdParam) {
+        setSharedGameId(BigInt(gameIdParam));
+        console.log(`🎮 Opening specific game: #${gameIdParam}`);
+      } else {
+        setSharedGameId(null);
+      }
 
       // Clear the query param
       router.replace('/');
@@ -5255,7 +5266,15 @@ function HomeContent() {
       {showJail && <JailInterface onClose={() => setShowJail(false)} />}
 
       {/* PredictionJack Full-Screen App */}
-      {showPredictionJack && <PredictionJackApp onClose={() => setShowPredictionJack(false)} />}
+      {showPredictionJack && (
+        <PredictionJackApp
+          onClose={() => {
+            setShowPredictionJack(false);
+            setSharedGameId(null); // Clear shared game ID when closing
+          }}
+          initialGameId={sharedGameId}
+        />
+      )}
 
       {/* CSS animations */}
       <style jsx>{`
