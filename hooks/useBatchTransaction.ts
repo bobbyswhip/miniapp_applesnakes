@@ -9,6 +9,11 @@ import type { Abi, Address } from 'viem';
 // Smart wallets use this to get gas fees paid by the app
 const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL;
 
+// Debug: Log paymaster configuration on module load
+if (typeof window !== 'undefined') {
+  console.log('💳 Paymaster configured:', PAYMASTER_URL ? '✅ URL set' : '❌ No URL');
+}
+
 export interface ContractCall {
   address: Address;
   abi: Abi;
@@ -180,25 +185,25 @@ export function useBatchTransaction(): BatchTransactionResult {
 
           if (usePaymaster) {
             console.log('⛽ Using sponsored gas (paymaster) for', calls.length, 'transactions');
+            console.log('📋 Contract addresses:', calls.map(c => `${c.functionName}@${c.address}`));
+            console.log('🔗 Paymaster URL:', PAYMASTER_URL);
             setIsSponsored(true);
           } else {
             console.log('🔄 Using atomic batch for', calls.length, 'transactions');
+            if (!supportsPaymaster) console.log('⚠️ Wallet does not support paymaster');
+            if (!PAYMASTER_URL) console.log('⚠️ No paymaster URL configured');
           }
 
           // Build capabilities object with optional paymaster
-          const capabilities: Record<number, Record<string, unknown>> = {
-            [base.id]: {
-              atomicBatch: {
-                supported: true,
-              },
-              // Add paymaster service if available for sponsored gas
-              ...(usePaymaster && {
+          // Note: wagmi's writeContracts expects flat capabilities, not nested by chain ID
+          // The paymaster URL is passed directly, not wrapped in chain-specific object
+          const capabilities = usePaymaster
+            ? {
                 paymasterService: {
                   url: PAYMASTER_URL,
                 },
-              }),
-            },
-          };
+              }
+            : undefined;
 
           writeContracts({
             contracts: calls.map((call) => ({
@@ -208,7 +213,7 @@ export function useBatchTransaction(): BatchTransactionResult {
               args: call.args as unknown[],
               value: call.value,
             })),
-            capabilities,
+            ...(capabilities && { capabilities }),
           });
 
           setIsConfirming(true);

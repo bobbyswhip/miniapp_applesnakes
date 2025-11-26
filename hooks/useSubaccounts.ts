@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useCapabilities } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { useSmartWallet } from './useSmartWallet';
 import { numberToHex } from 'viem';
@@ -43,9 +43,16 @@ export interface SubaccountsResult {
  * @see https://docs.base.org/base-account/improve-ux/sub-accounts
  */
 export function useSubaccounts(): SubaccountsResult {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const { data: walletClient } = useWalletClient();
-  const { isSmartWallet, capabilities } = useSmartWallet();
+  const { isSmartWallet, capabilities: smartWalletCapabilities } = useSmartWallet();
+
+  // Also fetch raw capabilities to check for addSubAccount
+  const { data: rawCapabilities } = useCapabilities({
+    query: {
+      enabled: isConnected && !!address,
+    },
+  });
 
   const [subaccounts, setSubaccounts] = useState<SubAccount[]>([]);
   const [activeAccount, setActiveAccount] = useState<`0x${string}` | undefined>(address);
@@ -53,13 +60,47 @@ export function useSubaccounts(): SubaccountsResult {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if wallet supports subaccounts
+  // Check if wallet supports subaccounts - check both chain-specific and raw capabilities
   // The addSubAccount capability indicates subaccount support
-  const supportsSubaccounts = !!(
-    isSmartWallet &&
-    capabilities &&
-    (capabilities as Record<string, { supported?: boolean }>)?.addSubAccount?.supported
-  );
+  const supportsSubaccounts = (() => {
+    // First check the chain-specific capabilities from useSmartWallet
+    const chainCaps = smartWalletCapabilities as Record<string, { supported?: boolean }> | undefined;
+    if (chainCaps?.addSubAccount?.supported) {
+      return true;
+    }
+
+    // Also check raw capabilities for Base chain
+    const baseCaps = rawCapabilities?.[base.id] as Record<string, { supported?: boolean }> | undefined;
+    if (baseCaps?.addSubAccount?.supported) {
+      return true;
+    }
+
+    // Check if this is a Coinbase Smart Wallet (by connector name) and it's a smart wallet
+    // Coinbase Smart Wallet should support subaccounts even if capability isn't explicitly returned
+    const isCoinbaseConnector = connector?.name?.toLowerCase().includes('coinbase') ||
+                                connector?.id?.toLowerCase().includes('coinbase');
+
+    if (isSmartWallet && isCoinbaseConnector) {
+      console.log('🔑 Coinbase Smart Wallet detected - enabling subaccounts');
+      return true;
+    }
+
+    return false;
+  })();
+
+  // Debug logging for capability detection
+  useEffect(() => {
+    if (isConnected && address) {
+      console.log('🔍 Subaccounts capability check:', {
+        isSmartWallet,
+        connectorName: connector?.name,
+        connectorId: connector?.id,
+        smartWalletCapabilities,
+        rawCapabilities: rawCapabilities?.[base.id],
+        supportsSubaccounts,
+      });
+    }
+  }, [isConnected, address, isSmartWallet, connector, smartWalletCapabilities, rawCapabilities, supportsSubaccounts]);
 
   /**
    * Fetch existing subaccounts from the wallet
