@@ -8,12 +8,24 @@ import { getContracts } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
+import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { useBatchTransaction } from '@/hooks/useBatchTransaction';
 
 export default function WrapPage() {
   const { isConnected, address } = useAccount();
   const { nfts, isLoading, error: _error, refetch: refetchNFTs } = useNFTContext();
   const contracts = getContracts(base.id);
   const { addTransaction, updateTransaction } = useTransactions();
+
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch,
+    isPending: isBatchPending,
+    isConfirming: isBatchConfirming,
+    isSuccess: isBatchSuccess,
+    reset: resetBatch,
+  } = useBatchTransaction();
 
   const [selectedNFTs, setSelectedNFTs] = useState<Set<number>>(new Set());
   const [mode, setMode] = useState<'wrap' | 'unwrap' | 'swap'>('wrap');
@@ -193,6 +205,19 @@ export default function WrapPage() {
     }
   }, [writeError, currentOperation, pendingWrapNFTs]);
 
+  // Handle batch transaction success
+  useEffect(() => {
+    if (isBatchSuccess) {
+      refetchNFTs();
+      refetchWTokensNFTs();
+      setCurrentOperation(null);
+      setSelectedNFTs(new Set());
+      setSelectedUserNFT(null);
+      setSelectedWTokenNFT(null);
+      resetBatch();
+    }
+  }, [isBatchSuccess, refetchNFTs, refetchWTokensNFTs, resetBatch]);
+
   // Handle approval
   const handleApprove = () => {
     setCurrentOperation('approve');
@@ -257,6 +282,78 @@ export default function WrapPage() {
       args: [contracts.nft.address, BigInt(selectedUserNFT), BigInt(selectedWTokenNFT)],
       value: totalFee,
     });
+  };
+
+  // Smart wallet: batch approve + wrap in single transaction
+  const handleApproveAndWrap = async () => {
+    if (selectedNFTs.size === 0) return;
+
+    setCurrentOperation('wrap');
+    const tokenIds = Array.from(selectedNFTs);
+    const totalFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(tokenIds.length) : 0n;
+
+    // Store which NFTs we're wrapping for error recovery
+    const wrappingNFTs = new Set(selectedNFTs);
+    setPendingWrapNFTs(wrappingNFTs);
+
+    // Immediately update UI for instant feedback
+    setWrappedNFTs(new Set([...wrappedNFTs, ...wrappingNFTs]));
+    setSelectedNFTs(new Set());
+
+    try {
+      await executeBatch([
+        {
+          address: contracts.nft.address,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        },
+        {
+          address: contracts.wrapper.address,
+          abi: contracts.wrapper.abi,
+          functionName: 'wrapNFTs',
+          args: [contracts.nft.address, tokenIds],
+          value: totalFee,
+        },
+      ]);
+    } catch {
+      // Revert UI on error
+      setWrappedNFTs(prev => {
+        const newSet = new Set(prev);
+        wrappingNFTs.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      setPendingWrapNFTs(new Set());
+      setCurrentOperation(null);
+    }
+  };
+
+  // Smart wallet: batch approve + swap in single transaction
+  const handleApproveAndSwap = async () => {
+    if (selectedUserNFT === null || selectedWTokenNFT === null) return;
+
+    setCurrentOperation('swap');
+    const totalFee = swapFee ? BigInt(swapFee as bigint) : 0n;
+
+    try {
+      await executeBatch([
+        {
+          address: contracts.nft.address,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        },
+        {
+          address: contracts.wrapper.address,
+          abi: contracts.wrapper.abi,
+          functionName: 'swapNFT',
+          args: [contracts.nft.address, BigInt(selectedUserNFT), BigInt(selectedWTokenNFT)],
+          value: totalFee,
+        },
+      ]);
+    } catch {
+      setCurrentOperation(null);
+    }
   };
 
   // Filter out wrapped NFTs for instant UI feedback
@@ -497,11 +594,17 @@ export default function WrapPage() {
                       {/* Approval/Swap Button */}
                       {!isApproved ? (
                         <button
-                          onClick={handleApprove}
-                          disabled={isPending || isConfirming}
+                          onClick={supportsAtomicBatch ? handleApproveAndSwap : handleApprove}
+                          disabled={isPending || isConfirming || isBatchPending || isBatchConfirming || (supportsAtomicBatch && (selectedUserNFT === null || selectedWTokenNFT === null))}
                           className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isPending || isConfirming ? 'Approving...' : '✅ Approve Wrapper Contract'}
+                          {isBatchPending || isBatchConfirming
+                            ? '⚡ Processing...'
+                            : isPending || isConfirming
+                              ? 'Approving...'
+                              : supportsAtomicBatch
+                                ? `⚡ Approve & Swap for ${swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH`
+                                : '✅ Approve Wrapper Contract'}
                         </button>
                       ) : (
                         <button
@@ -610,11 +713,17 @@ export default function WrapPage() {
                     <div className="border-t border-gray-700 pt-6">
                       {!isApproved ? (
                         <button
-                          onClick={handleApprove}
-                          disabled={isPending || isConfirming}
+                          onClick={supportsAtomicBatch ? handleApproveAndWrap : handleApprove}
+                          disabled={isPending || isConfirming || isBatchPending || isBatchConfirming || (supportsAtomicBatch && selectedCount === 0)}
                           className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isPending || isConfirming ? 'Approving...' : '✅ Approve Wrapper Contract'}
+                          {isBatchPending || isBatchConfirming
+                            ? '⚡ Processing...'
+                            : isPending || isConfirming
+                              ? 'Approving...'
+                              : supportsAtomicBatch
+                                ? `⚡ Approve & Wrap ${selectedCount} NFT${selectedCount !== 1 ? 's' : ''}`
+                                : '✅ Approve Wrapper Contract'}
                         </button>
                       ) : (
                         <button

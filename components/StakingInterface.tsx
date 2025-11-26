@@ -6,6 +6,8 @@ import { base } from 'wagmi/chains';
 import { getContracts } from '@/config/contracts';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
+import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { useBatchTransaction } from '@/hooks/useBatchTransaction';
 import { formatUnits } from 'viem';
 import type { UserNFT, NFTType } from '@/hooks/useUserNFTs';
 
@@ -28,6 +30,16 @@ export function StakingInterface({
   const publicClient = usePublicClient({ chainId: base.id });
   const stakingConfig = getContracts(base.id).staking;
   const nftConfig = getContracts(base.id).nft;
+
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch,
+    isPending: isBatchPending,
+    isConfirming: isBatchConfirming,
+    isSuccess: isBatchSuccess,
+    reset: resetBatch,
+  } = useBatchTransaction();
 
   const [stakedTokenIds, setStakedTokenIds] = useState<number[]>([]);
   const [stakedNFTs, setStakedNFTs] = useState<UserNFT[]>([]);
@@ -248,6 +260,19 @@ export function StakingInterface({
     }
   }, [isConfirmed, refetchStaked, refetchNFTs, refetchApproval, setSelectedSnakesForStaking, setSelectedStakedSnakes]);
 
+  // Handle batch transaction success (smart wallet approve + stake)
+  useEffect(() => {
+    if (isBatchSuccess) {
+      refetchStaked();
+      refetchNFTs();
+      refetchApproval();
+      setSelectedSnakesForStaking(new Set());
+      setSelectedStakedSnakes(new Set());
+      setCurrentOperation(null);
+      resetBatch();
+    }
+  }, [isBatchSuccess, refetchStaked, refetchNFTs, refetchApproval, setSelectedSnakesForStaking, setSelectedStakedSnakes, resetBatch]);
+
   const handleApprove = async () => {
     if (!address) return;
     setCurrentOperation('approve');
@@ -283,6 +308,38 @@ export function StakingInterface({
       addTransaction(hash, `Staking ${tokenIds.length} snake${tokenIds.length > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Stake error:', error);
+      setCurrentOperation(null);
+    }
+  };
+
+  // Combined approve + stake for smart wallets (single transaction)
+  const handleApproveAndStake = async () => {
+    if (selectedSnakesForStaking.size === 0 || !address) return;
+    setCurrentOperation('stake');
+
+    const tokenIds = Array.from(selectedSnakesForStaking);
+
+    try {
+      await executeBatch([
+        // First: approve the staking contract
+        {
+          address: nftConfig.address,
+          abi: nftConfig.abi,
+          functionName: 'setApprovalForAll',
+          args: [stakingConfig.address, true],
+        },
+        // Second: stake the tokens
+        {
+          address: stakingConfig.address,
+          abi: stakingConfig.abi,
+          functionName: 'stake',
+          args: [tokenIds.map(id => BigInt(id))],
+        },
+      ]);
+
+      addTransaction('0x' as `0x${string}`, `Approving & Staking ${tokenIds.length} snake${tokenIds.length > 1 ? 's' : ''} (batched)`);
+    } catch (error) {
+      console.error('Approve and stake error:', error);
       setCurrentOperation(null);
     }
   };
@@ -658,26 +715,51 @@ export function StakingInterface({
         {selectedSnakesForStaking.size > 0 && (
           <>
             {!isApproved ? (
-              <button
-                onClick={handleApprove}
-                disabled={isWritePending || isConfirming}
-                style={{
-                  flex: 1,
-                  padding: 'clamp(10px, 2vw, 14px)',
-                  borderRadius: 'clamp(8px, 1.5vw, 12px)',
-                  fontWeight: 700,
-                  fontSize: 'clamp(12px, 2.5vw, 16px)',
-                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(249, 115, 22, 0.6)',
-                  background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(234, 88, 12, 0.3))',
-                  color: 'rgba(249, 115, 22, 1)',
-                  cursor: isWritePending || isConfirming ? 'not-allowed' : 'pointer',
-                  opacity: isWritePending || isConfirming ? 0.5 : 1,
-                  boxShadow: '0 0 20px rgba(249, 115, 22, 0.3)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                {isConfirming && currentOperation === 'approve' ? 'Approving...' : 'Approve Staking Contract'}
-              </button>
+              // Smart wallet: combined approve + stake button
+              supportsAtomicBatch ? (
+                <button
+                  onClick={handleApproveAndStake}
+                  disabled={isWritePending || isConfirming || isBatchPending || isBatchConfirming}
+                  style={{
+                    flex: 1,
+                    padding: 'clamp(10px, 2vw, 14px)',
+                    borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                    fontWeight: 700,
+                    fontSize: 'clamp(12px, 2.5vw, 16px)',
+                    border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)',
+                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))',
+                    color: 'rgba(6, 182, 212, 1)',
+                    cursor: isWritePending || isConfirming || isBatchPending || isBatchConfirming ? 'not-allowed' : 'pointer',
+                    opacity: isWritePending || isConfirming || isBatchPending || isBatchConfirming ? 0.5 : 1,
+                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {isBatchPending || isBatchConfirming ? '⚡ Processing...' : `⚡ Approve & Stake ${selectedSnakesForStaking.size} Snake${selectedSnakesForStaking.size > 1 ? 's' : ''}`}
+                </button>
+              ) : (
+                // EOA wallet: separate approve button
+                <button
+                  onClick={handleApprove}
+                  disabled={isWritePending || isConfirming}
+                  style={{
+                    flex: 1,
+                    padding: 'clamp(10px, 2vw, 14px)',
+                    borderRadius: 'clamp(8px, 1.5vw, 12px)',
+                    fontWeight: 700,
+                    fontSize: 'clamp(12px, 2.5vw, 16px)',
+                    border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(249, 115, 22, 0.6)',
+                    background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(234, 88, 12, 0.3))',
+                    color: 'rgba(249, 115, 22, 1)',
+                    cursor: isWritePending || isConfirming ? 'not-allowed' : 'pointer',
+                    opacity: isWritePending || isConfirming ? 0.5 : 1,
+                    boxShadow: '0 0 20px rgba(249, 115, 22, 0.3)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {isConfirming && currentOperation === 'approve' ? 'Approving...' : 'Approve Staking Contract'}
+                </button>
+              )
             ) : (
               <button
                 onClick={handleStake}

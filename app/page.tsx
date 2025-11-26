@@ -13,6 +13,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { JailInterface } from '@/components/JailInterface';
 import { StakingInterface } from '@/components/StakingInterface';
 import { PredictionJackApp } from '@/components/PredictionJackApp';
+import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { useBatchTransaction } from '@/hooks/useBatchTransaction';
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
@@ -211,6 +213,16 @@ function HomeContent() {
   const { address } = useAccount();
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
+
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch: mainPageSupportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch: mainPageExecuteBatch,
+    isPending: isMainPageBatchPending,
+    isConfirming: isMainPageBatchConfirming,
+    isSuccess: isMainPageBatchSuccess,
+    reset: resetMainPageBatch,
+  } = useBatchTransaction();
 
   // Use address presence as connection indicator (more reliable than isConnected)
   const isWalletConnected = !!address;
@@ -748,6 +760,83 @@ function HomeContent() {
     }
   };
 
+  // Smart wallet: batch approve + wrap in single transaction
+  const handleApproveAndWrap = async () => {
+    if (!isWalletConnected) {
+      console.log('⚠️ Please connect your wallet first');
+      return;
+    }
+
+    if (selectedNFTs.size === 0) {
+      console.log('⚠️ Please select at least one NFT to wrap');
+      return;
+    }
+
+    try {
+      const tokenIds = Array.from(selectedNFTs);
+      const totalFee = wrapFee ? BigInt(wrapFee as bigint) * BigInt(tokenIds.length) : 0n;
+
+      setCurrentOperationType('wrap');
+
+      await mainPageExecuteBatch([
+        {
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        },
+        {
+          address: contracts.wrapper.address as `0x${string}`,
+          abi: contracts.wrapper.abi,
+          functionName: 'wrapNFTs',
+          args: [contracts.nft.address, tokenIds],
+          value: totalFee,
+        },
+      ]);
+    } catch (error) {
+      console.error('Approve and wrap error:', error);
+      setCurrentOperationType(null);
+    }
+  };
+
+  // Smart wallet: batch approve + swap in single transaction
+  const handleApproveAndSwap = async () => {
+    if (!isWalletConnected) {
+      console.log('⚠️ Please connect your wallet first');
+      return;
+    }
+
+    if (selectedUserNFT === null || selectedWTokenNFT === null) {
+      console.log('⚠️ Please select both NFTs to swap');
+      return;
+    }
+
+    try {
+      const totalFee = swapFee ? BigInt(swapFee as bigint) : 0n;
+
+      setCurrentOperationType('swap');
+
+      await mainPageExecuteBatch([
+        {
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        },
+        {
+          address: contracts.wrapper.address as `0x${string}`,
+          abi: contracts.wrapper.abi,
+          functionName: 'swapNFT',
+          args: [contracts.nft.address, BigInt(selectedUserNFT), BigInt(selectedWTokenNFT)],
+          value: totalFee,
+        },
+      ]);
+    } catch (error) {
+      console.error('Approve and swap error:', error);
+      setCurrentOperationType(null);
+    }
+  };
+
   // Toggle NFT selection for wrapping
   const toggleNFTForWrap = (tokenId: number) => {
     const newSelected = new Set(selectedNFTs);
@@ -766,6 +855,22 @@ function HomeContent() {
       // UI automatically resets when user tries again since isPending/isConfirming are managed by hooks
     }
   }, [transactionError]);
+
+  // Handle batch transaction success for main page
+  useEffect(() => {
+    if (isMainPageBatchSuccess) {
+      console.log('✅ Batch transaction successful! Refreshing NFTs...');
+      setTimeout(() => {
+        refetchNFTs();
+        refetchWTokensNFTs();
+        setSelectedNFTs(new Set());
+        setSelectedUserNFT(null);
+        setSelectedWTokenNFT(null);
+        resetMainPageBatch();
+        console.log('✅ Batch transaction complete');
+      }, 3000);
+    }
+  }, [isMainPageBatchSuccess, refetchNFTs, refetchWTokensNFTs, resetMainPageBatch]);
 
   // Reset refresh flag when starting a new transaction
   useEffect(() => {
@@ -1227,7 +1332,7 @@ function HomeContent() {
     }
   }, [searchParams, audioElement, currentLocation, masterVolume, router]);
 
-  // Fast travel to mountain hut and open prediction market (triggered by /ethglobal or /blackjack page)
+  // Fast travel to mountain hut and open prediction market (triggered by /blackjack page)
   useEffect(() => {
     const shouldFastTravel = searchParams.get('fastTravelPrediction') === 'true';
     const gameIdParam = searchParams.get('gameId');
@@ -3635,8 +3740,8 @@ function HomeContent() {
                     <div style={{ marginTop: 'clamp(10px, 2vw, 12px)' }}>
                       {!isWrapperApproved ? (
                         <button
-                          onClick={handleWrapperApprove}
-                          disabled={isTransactionPending || isConfirming}
+                          onClick={mainPageSupportsAtomicBatch ? handleApproveAndWrap : handleWrapperApprove}
+                          disabled={isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming || (mainPageSupportsAtomicBatch && selectedNFTs.size === 0)}
                           style={{
                             width: '100%',
                             padding: 'clamp(12px, 2.5vw, 16px)',
@@ -3646,12 +3751,18 @@ function HomeContent() {
                             border: 'none',
                             background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
                             color: '#FFFFFF',
-                            cursor: (isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
-                            opacity: (isTransactionPending || isConfirming) ? 0.7 : 1,
+                            cursor: (isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming) ? 'not-allowed' : 'pointer',
+                            opacity: (isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming) ? 0.7 : 1,
                             transition: 'all 0.2s',
                           }}
                         >
-                          {isTransactionPending || isConfirming ? 'Approving...' : 'Approve Wrapper Contract'}
+                          {isMainPageBatchPending || isMainPageBatchConfirming
+                            ? '⚡ Processing...'
+                            : isTransactionPending || isConfirming
+                              ? 'Approving...'
+                              : mainPageSupportsAtomicBatch
+                                ? `⚡ Approve & Wrap ${selectedNFTs.size} NFT${selectedNFTs.size !== 1 ? 's' : ''}`
+                                : 'Approve Wrapper Contract'}
                         </button>
                       ) : (
                         <button
@@ -4070,8 +4181,8 @@ function HomeContent() {
                   {selectedUserNFT !== null && selectedWTokenNFT !== null && (
                     !isWrapperApproved ? (
                       <button
-                        onClick={handleWrapperApprove}
-                        disabled={isTransactionPending || isConfirming}
+                        onClick={mainPageSupportsAtomicBatch ? handleApproveAndSwap : handleWrapperApprove}
+                        disabled={isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming}
                         style={{
                           width: '100%',
                           padding: 'clamp(12px, 2.5vw, 16px)',
@@ -4081,12 +4192,18 @@ function HomeContent() {
                           border: 'none',
                           background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
                           color: '#FFFFFF',
-                          cursor: (isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
-                          opacity: (isTransactionPending || isConfirming) ? 0.7 : 1,
+                          cursor: (isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming) ? 'not-allowed' : 'pointer',
+                          opacity: (isTransactionPending || isConfirming || isMainPageBatchPending || isMainPageBatchConfirming) ? 0.7 : 1,
                           transition: 'all 0.2s',
                         }}
                       >
-                        {isTransactionPending || isConfirming ? 'Approving...' : 'Approve Wrapper Contract'}
+                        {isMainPageBatchPending || isMainPageBatchConfirming
+                          ? '⚡ Processing...'
+                          : isTransactionPending || isConfirming
+                            ? 'Approving...'
+                            : mainPageSupportsAtomicBatch
+                              ? '⚡ Approve & Swap'
+                              : 'Approve Wrapper Contract'}
                       </button>
                     ) : (
                       <button

@@ -7,6 +7,10 @@ import { base } from 'wagmi/chains';
 import { formatEther, parseEther } from 'viem';
 import Image from 'next/image';
 import { BuyMarketModal } from './BuyMarketModal';
+import { SubaccountsPanel } from './SubaccountsPanel';
+import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { useBatchTransaction } from '@/hooks/useBatchTransaction';
+import { useSubaccounts } from '@/hooks/useSubaccounts';
 
 interface BlackjackInterfaceProps {
   onClose: () => void;
@@ -23,7 +27,7 @@ interface ClosedGameCardProps {
   isClaimPending: boolean;
 }
 
-type TabType = 'play' | 'games' | 'closed';
+type TabType = 'play' | 'games' | 'closed' | 'accounts';
 
 interface CardDisplay {
   rank: string;
@@ -211,6 +215,19 @@ function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps
 export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
   const { address } = useAccount();
   const contracts = getContracts(base.id);
+
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch,
+    isPending: isBatchPending,
+    isConfirming: isBatchConfirming,
+    isSuccess: isBatchSuccess,
+    reset: resetBatch,
+  } = useBatchTransaction();
+
+  // Subaccounts support for gaming accounts
+  const { supportsSubaccounts, subaccounts, activeAccount: _activeAccount } = useSubaccounts();
 
   const [activeTab, setActiveTab] = useState<TabType>('play');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -462,6 +479,14 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
     }
   }, [isApproveConfirmed, refetchAllowance]);
 
+  // Handle batch transaction success
+  useEffect(() => {
+    if (isBatchSuccess) {
+      refetchAllowance();
+      resetBatch();
+    }
+  }, [isBatchSuccess, refetchAllowance, resetBatch]);
+
   // Handle errors
   useEffect(() => {
     if (startGameError) {
@@ -541,6 +566,31 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       functionName: 'startGameWithTokens',
       args: [startGameFeeInTokens],
     });
+  };
+
+  // Smart wallet: batch approve + startGameWithTokens in single transaction
+  const handleApproveAndStartWithTokens = async () => {
+    if (!address) return;
+    setErrorMessage('');
+
+    try {
+      await executeBatch([
+        {
+          address: TOKEN_ADDRESS(base.id),
+          abi: contracts.token.abi,
+          functionName: 'approve',
+          args: [BLACKJACK_ADDRESS(base.id), parseEther('3000')],
+        },
+        {
+          address: BLACKJACK_ADDRESS(base.id),
+          abi: contracts.blackjack.abi,
+          functionName: 'startGameWithTokens',
+          args: [startGameFeeInTokens],
+        },
+      ]);
+    } catch {
+      setErrorMessage('Transaction failed');
+    }
   };
 
   const handleHit = () => {
@@ -779,38 +829,53 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       </h2>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-6 flex-wrap">
         <button
           onClick={() => setActiveTab('play')}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+          className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all text-sm ${
             activeTab === 'play'
               ? 'bg-purple-600 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Play Game
+          Play
         </button>
         <button
           onClick={() => setActiveTab('games')}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+          className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all text-sm ${
             activeTab === 'games'
               ? 'bg-purple-600 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Live Games
+          Live
         </button>
         <button
           onClick={() => setActiveTab('closed')}
-          className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all relative ${
+          className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all relative text-sm ${
             activeTab === 'closed'
               ? 'bg-purple-600 text-white'
               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
           }`}
         >
-          Closed Games
+          Closed
           {hasAnyClaimable && (
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('accounts')}
+          className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all relative text-sm ${
+            activeTab === 'accounts'
+              ? 'bg-purple-600 text-white'
+              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+          }`}
+        >
+          Accounts
+          {supportsSubaccounts && subaccounts.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-xs flex items-center justify-center">
+              {subaccounts.length}
+            </span>
           )}
         </button>
       </div>
@@ -932,12 +997,18 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
                 {!isTokenApproved ? (
                   <button
-                    onClick={handleApproveTokens}
-                    disabled={isApprovePending || isApproveConfirming || !!(claimableAmount && claimableAmount > 0n)}
+                    onClick={supportsAtomicBatch ? handleApproveAndStartWithTokens : handleApproveTokens}
+                    disabled={isApprovePending || isApproveConfirming || isBatchPending || isBatchConfirming || !!(claimableAmount && claimableAmount > 0n)}
                     className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
-                    title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : 'Approve tokens to start game'}
+                    title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : supportsAtomicBatch ? 'Approve and start game with tokens' : 'Approve tokens to start game'}
                   >
-                    {isApprovePending || isApproveConfirming ? 'Approving...' : 'Approve Tokens (One-Time)'}
+                    {isBatchPending || isBatchConfirming
+                      ? '⚡ Processing...'
+                      : isApprovePending || isApproveConfirming
+                        ? 'Approving...'
+                        : supportsAtomicBatch
+                          ? `⚡ Approve & Start (${startGameFee} tokens)`
+                          : 'Approve Tokens (One-Time)'}
                   </button>
                 ) : (
                   <button
@@ -983,8 +1054,12 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                   <div className="text-sm text-gray-400">
                     Game ID: #{gameDisplay.gameId.toString()}
                   </div>
-                  <div className={`text-xs mt-1 ${gameDisplay.marketCreated ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {gameDisplay.marketCreated ? '📊 Market Active' : '⏳ Waiting for market...'}
+                  <div className={`text-xs mt-1 ${gameDisplay.marketCreated ? 'text-green-400' : gameDisplay.canStartNew ? 'text-gray-400' : 'text-yellow-400'}`}>
+                    {gameDisplay.marketCreated
+                      ? '📊 Market Active'
+                      : gameDisplay.canStartNew
+                        ? '⚡ Game ended too quickly for market'
+                        : '⏳ Waiting for market...'}
                   </div>
                 </div>
                 {gameDisplay.marketCreated && (
@@ -1106,6 +1181,17 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             </div>
           ) : null}
         </div>
+      )}
+
+      {/* Accounts Tab */}
+      {activeTab === 'accounts' && (
+        <SubaccountsPanel
+          onAccountChange={(newAddress) => {
+            console.log('Switched to account:', newAddress);
+            // Optionally trigger any refetches when account changes
+            refetchGame();
+          }}
+        />
       )}
       </div>
 

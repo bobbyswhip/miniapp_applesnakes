@@ -8,6 +8,10 @@ import { formatEther, parseEther, formatUnits, parseUnits } from 'viem';
 import Image from 'next/image';
 import { Avatar, Name } from '@coinbase/onchainkit/identity';
 import { StakingInterface } from '@/components/StakingInterface';
+import { SubaccountsPanel } from '@/components/SubaccountsPanel';
+import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { useBatchTransaction } from '@/hooks/useBatchTransaction';
+import { useSubaccounts } from '@/hooks/useSubaccounts';
 
 // Token ticker constant
 const TOKEN_TICKER = '$wASS';
@@ -130,7 +134,7 @@ interface _PlayerStats {
   winRate: bigint;
 }
 
-type ViewMode = 'live' | 'play' | 'game' | 'closed' | 'stake';
+type ViewMode = 'live' | 'play' | 'game' | 'closed' | 'stake' | 'accounts';
 
 // ===================== MINI CARD COMPONENT =====================
 function MiniCard({ card, size = 'sm', faceDown = false }: { card: CardDisplay; size?: 'sm' | 'md' | 'lg' | 'xs'; faceDown?: boolean }) {
@@ -525,6 +529,16 @@ function MarketPanel({
   const contracts = getContracts(base.id);
   const { tokenPriceUSD } = useTokenPrice();
 
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch,
+    isPending: isBatchPending,
+    isConfirming: isBatchConfirming,
+    isSuccess: isBatchSuccess,
+    reset: resetBatch,
+  } = useBatchTransaction();
+
   const [actionType, setActionType] = useState<'buy' | 'sell'>('buy');
   const [position, setPosition] = useState<'yes' | 'no'>('yes');
   const [paymentMethod, setPaymentMethod] = useState<'token' | 'eth'>('token');
@@ -601,6 +615,16 @@ function MarketPanel({
     }
   }, [isApproveConfirmed, refetchAllowance]);
 
+  // Handle batch transaction success
+  useEffect(() => {
+    if (isBatchSuccess) {
+      refetchMarket();
+      refetchAllowance();
+      setAmount('');
+      resetBatch();
+    }
+  }, [isBatchSuccess, refetchMarket, refetchAllowance, resetBatch]);
+
   const needsApproval = () => {
     if (actionType === 'sell') return false;
     if (paymentMethod === 'eth') return false;
@@ -664,10 +688,42 @@ function MarketPanel({
     }
   };
 
+  // Smart wallet: batch approve + buy in single transaction
+  const handleApproveAndTrade = async () => {
+    if (!amount || actionType !== 'buy' || paymentMethod !== 'token') return;
+    setErrorMessage('');
+
+    try {
+      const amountInWei = parseUnits(amount, tokenDecimals);
+      await executeBatch([
+        {
+          address: TOKEN_ADDRESS(base.id),
+          abi: contracts.token.abi,
+          functionName: 'approve',
+          args: [PREDICTION_HUB_ADDRESS(base.id), parseEther('3000')],
+        },
+        {
+          address: PREDICTION_HUB_ADDRESS(base.id),
+          abi: contracts.predictionHub.abi,
+          functionName: 'buyShares',
+          args: [gameId, amountInWei, position === 'yes'],
+        },
+      ]);
+    } catch {
+      setErrorMessage('Transaction failed');
+    }
+  };
+
   const getButtonText = () => {
+    if (isBatchPending || isBatchConfirming) return '⚡ Processing...';
     if (isApprovePending || isApproveConfirming) return 'Approving...';
     if (isTxPending || isTxConfirming) return 'Processing...';
-    if (needsApproval()) return `Approve ${TOKEN_TICKER}`;
+    if (needsApproval()) {
+      if (supportsAtomicBatch && actionType === 'buy' && paymentMethod === 'token') {
+        return `⚡ Approve & Buy ${position.toUpperCase()}`;
+      }
+      return `Approve ${TOKEN_TICKER}`;
+    }
     if (actionType === 'buy') {
       const method = paymentMethod === 'eth' ? 'ETH' : TOKEN_TICKER;
       return `Buy ${position.toUpperCase()} with ${method}`;
@@ -821,8 +877,19 @@ function MarketPanel({
 
       {/* Trade Button */}
       <button
-        onClick={needsApproval() ? handleApprove : handleTrade}
-        disabled={!amount || !market.tradingActive || isApprovePending || isApproveConfirming || isTxPending || isTxConfirming}
+        onClick={() => {
+          if (needsApproval()) {
+            // Smart wallet: batch approve + trade in one tx
+            if (supportsAtomicBatch && actionType === 'buy' && paymentMethod === 'token') {
+              handleApproveAndTrade();
+            } else {
+              handleApprove();
+            }
+          } else {
+            handleTrade();
+          }
+        }}
+        disabled={!amount || !market.tradingActive || isApprovePending || isApproveConfirming || isTxPending || isTxConfirming || isBatchPending || isBatchConfirming}
         className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all text-sm"
       >
         {getButtonText()}
@@ -1550,13 +1617,24 @@ function GameScreen({
           </div>
         )}
 
-        {/* Waiting for Market */}
+        {/* Waiting for Market / Game ended too quickly */}
         {activeGameId && activeGameId > 0n && !gameDisplay.marketCreated && (
-          <div className="bg-yellow-900/30 border border-yellow-600 rounded-xl p-4 text-center">
-            <div className="text-yellow-300 font-semibold mb-1">⏳ Market Creating...</div>
-            <div className="text-yellow-200 text-sm">
-              The prediction market will be available once the game initializes
-            </div>
+          <div className={`${gameDisplay.canStartNew ? 'bg-gray-800/50 border-gray-600' : 'bg-yellow-900/30 border-yellow-600'} border rounded-xl p-4 text-center`}>
+            {gameDisplay.canStartNew ? (
+              <>
+                <div className="text-gray-300 font-semibold mb-1">⚡ No Market Created</div>
+                <div className="text-gray-400 text-sm">
+                  This game ended too quickly to start a prediction market
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-yellow-300 font-semibold mb-1">⏳ Market Creating...</div>
+                <div className="text-yellow-200 text-sm">
+                  The prediction market will be available once the game initializes
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1570,6 +1648,19 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
   const contracts = getContracts(base.id);
   const { tokenPriceUSD, ethPriceUSD } = useTokenPrice();
   const [navHeight, setNavHeight] = useState(56); // Default header height
+
+  // Smart wallet detection for batch transactions
+  const { supportsAtomicBatch: mainSupportsAtomicBatch } = useSmartWallet();
+  const {
+    executeBatch: mainExecuteBatch,
+    isPending: isMainBatchPending,
+    isConfirming: isMainBatchConfirming,
+    isSuccess: isMainBatchSuccess,
+    reset: resetMainBatch,
+  } = useBatchTransaction();
+
+  // Subaccounts support for gaming accounts
+  const { supportsSubaccounts, subaccounts } = useSubaccounts();
 
   // Start on game view if initialGameId is provided, otherwise start on live view
   const [view, setView] = useState<ViewMode>(initialGameId ? 'game' : 'live');
@@ -1763,6 +1854,18 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
     if (startGameError) setErrorMessage(startGameError.message);
   }, [startGameError]);
 
+  // Handle batch transaction success for main component
+  useEffect(() => {
+    if (isMainBatchSuccess) {
+      setSelectedGameId(null);
+      refetchAllowance();
+      refetchGame().then(() => {
+        setView('game');
+      });
+      resetMainBatch();
+    }
+  }, [isMainBatchSuccess, refetchAllowance, refetchGame, resetMainBatch]);
+
   const handleStartGame = () => {
     setErrorMessage('');
     setIsWaitingForVRF(true);
@@ -1793,6 +1896,31 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
       functionName: 'startGameWithTokens',
       args: [parseEther(tokenAmount.toString())],
     });
+  };
+
+  // Smart wallet: batch approve + startGameWithTokens in single transaction
+  const handleApproveAndStartWithTokens = async () => {
+    setErrorMessage('');
+    setIsWaitingForVRF(true);
+    try {
+      await mainExecuteBatch([
+        {
+          address: TOKEN_ADDRESS(base.id),
+          abi: contracts.token.abi,
+          functionName: 'approve',
+          args: [BLACKJACK_ADDRESS(base.id), parseEther('3000')],
+        },
+        {
+          address: BLACKJACK_ADDRESS(base.id),
+          abi: contracts.blackjack.abi,
+          functionName: 'startGameWithTokens',
+          args: [parseEther(tokenAmount.toString())],
+        },
+      ]);
+    } catch {
+      setErrorMessage('Transaction failed');
+      setIsWaitingForVRF(false);
+    }
   };
 
   const handleGameSelect = useCallback((gameId: bigint) => {
@@ -1883,6 +2011,25 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               >
                 <span className="hidden sm:inline">🐍 </span>Stake
               </button>
+
+              {/* Sub Accounts tab - only show if wallet supports subaccounts */}
+              {supportsSubaccounts && (
+                <button
+                  onClick={() => setView('accounts')}
+                  className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                    view === 'accounts'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                  }`}
+                >
+                  <span className="hidden sm:inline">👥 </span>Sub Accounts
+                  {subaccounts.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full text-[10px] flex items-center justify-center">
+                      {subaccounts.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Right side: Stats + Close */}
@@ -2217,11 +2364,17 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                       </button>
                     ) : !isTokenApproved ? (
                       <button
-                        onClick={handleApprove}
-                        disabled={isApprovePending || isApproveConfirming}
+                        onClick={mainSupportsAtomicBatch ? handleApproveAndStartWithTokens : handleApprove}
+                        disabled={isApprovePending || isApproveConfirming || isMainBatchPending || isMainBatchConfirming || !gameDisplay?.canStartNew}
                         className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-bold rounded-xl transition-all"
                       >
-                        {isApprovePending || isApproveConfirming ? 'Approving...' : `Approve ${TOKEN_TICKER} (One-Time)`}
+                        {isMainBatchPending || isMainBatchConfirming
+                          ? '⚡ Processing...'
+                          : isApprovePending || isApproveConfirming
+                            ? 'Approving...'
+                            : mainSupportsAtomicBatch
+                              ? `⚡ Approve & Start (${tokenAmount.toFixed(2)} ${TOKEN_TICKER})`
+                              : `Approve ${TOKEN_TICKER} (One-Time)`}
                       </button>
                     ) : (
                       <button
@@ -2299,6 +2452,21 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                 selectedStakedSnakes={selectedStakedSnakes}
                 setSelectedStakedSnakes={setSelectedStakedSnakes}
               />
+            </div>
+          )}
+
+          {/* ============ SUB ACCOUNTS VIEW ============ */}
+          {view === 'accounts' && supportsSubaccounts && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-4 mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  👥 Sub Accounts
+                </h2>
+                <p className="text-blue-300 text-sm mt-1">
+                  Create dedicated gaming sub accounts for a seamless, gasless experience in the app.
+                </p>
+              </div>
+              <SubaccountsPanel />
             </div>
           )}
         </div>
