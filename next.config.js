@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  devIndicators: {
-    buildActivity: false,
-    buildActivityPosition: 'bottom-right',
-  },
-  eslint: {
-    // Don't fail production builds on ESLint warnings
-    ignoreDuringBuilds: true,
-  },
+  devIndicators: false,
+  // Turbopack config (Next.js 16 default bundler)
+  turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
