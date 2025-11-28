@@ -102,7 +102,7 @@ export default function WrapPage() {
   });
 
   // Direct read of held NFTs from contract - more reliable than waiting for full metadata load
-  const { data: heldNFTsData, isLoading: heldNFTsLoading, refetch: refetchHeldNFTs } = useReadContract({
+  const { data: heldNFTsData, isLoading: heldNFTsLoading, refetch: _refetchHeldNFTs } = useReadContract({
     address: contracts.wrapper.address,
     abi: contracts.wrapper.abi,
     functionName: 'getHeldNFTs',
