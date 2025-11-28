@@ -951,7 +951,7 @@ function HomeContent() {
         const eggData = {
           tokenId: 0, // Will be set after NFT refresh finds new egg
           name: 'Snake Egg',
-          imageUrl: 'QmSdqQRWUoUFEVcMfr7Y3gVCqjf9zGf8Nw7fW6sqpACYZe/Egg.png'
+          imageUrl: 'QmSdqQRWUoUFEVcMfr7Y3gVCqjf9zGf8Nw7fW6sqpACYZe/1.png'
         };
 
         console.log('✅ Breed successful, showing egg and tracking used wardens');
@@ -5057,9 +5057,8 @@ function HomeContent() {
                         borderRadius: 'clamp(10px, 1.8vw, 14px)',
                       }}
                       onError={(e) => {
-                        // Fallback to a default egg emoji if image fails to load
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.parentElement!.innerHTML = '<div style="font-size: clamp(48px, 12vw, 72px);">🥚</div>';
+                        // Fallback to token ID 1 image if image fails to load
+                        e.currentTarget.src = 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/QmSdqQRWUoUFEVcMfr7Y3gVCqjf9zGf8Nw7fW6sqpACYZe/1.png';
                       }}
                     />
                   </div>
@@ -5077,7 +5076,7 @@ function HomeContent() {
                       fontWeight: 600,
                     }}
                   >
-                    🥚 {bredNFT.name}
+                    {bredNFT.name}
                   </div>
                 </div>
               </div>

@@ -5,6 +5,28 @@ import { useState } from 'react';
 import { useChainId } from 'wagmi';
 import { NFT_ADDRESS, TOKEN_ADDRESS, HOOK_ADDRESS, POOL_MANAGER_ADDRESS } from '@/config';
 
+// PredictionJack fee constants from contracts
+const PREDICTION_FEES = {
+  // Trading fees (PredictionMarketHub.sol)
+  TOTAL_TRADING_FEE: 1, // 1% total on trades
+  CREATOR_FEE: 0.3, // 0.3% to game creator
+  STAKING_FEE: 0.65, // 0.65% to stakers
+  PROTOCOL_FEE: 0.05, // 0.05% to protocol
+
+  // ETH trading fees
+  ETH_CREATOR_FEE: 0.3, // 0.3% to creator
+  ETH_PROTOCOL_FEE: 0.7, // 0.7% to protocol
+
+  // Game fees (PredictionJack.sol)
+  START_GAME_FEE: 0.00069, // ETH to start game
+  START_GAME_PROTOCOL_FEE: 6.9, // 6.9% of start fee to protocol
+  NO_MARKET_RAKE: 4.2, // 4.2% rake when no market
+
+  // Timing
+  TRADING_DELAY: 60, // 1 minute trading window
+  VRF_TIMEOUT: 300, // 5 minute VRF timeout
+};
+
 export default function DocsPage() {
   const [activeSection, setActiveSection] = useState('overview');
   const chainId = useChainId();
@@ -14,6 +36,7 @@ export default function DocsPage() {
     { id: 'vesting', title: '🔐 Vesting System', emoji: '🔐' },
     { id: 'features', title: '✨ Features', emoji: '✨' },
     { id: 'v4hook', title: '⚡ V4 Super Strategy', emoji: '⚡' },
+    { id: 'prediction', title: '🃏 PredictionJack', emoji: '🃏' },
     { id: 'pairable', title: '🤝 Pairable Integration', emoji: '🤝' },
     { id: 'tokenomics', title: '💰 Tokenomics', emoji: '💰' },
   ];
@@ -504,6 +527,182 @@ export default function DocsPage() {
                         </code>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PredictionJack - Prediction Market Blackjack */}
+            {activeSection === 'prediction' && (
+              <div className="glass rounded-xl p-6 md:p-8 space-y-6">
+                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                  🃏 PredictionJack
+                </h2>
+
+                <div className="space-y-4 text-gray-300">
+                  <p className="text-lg leading-relaxed">
+                    PredictionJack combines classic Blackjack with prediction markets. Start a game, let others bet on your outcome,
+                    and earn fees from trading volume. Built with <span className="font-semibold text-blue-300">Chainlink VRF</span> for
+                    provably fair randomness.
+                  </p>
+
+                  {/* How It Works */}
+                  <div className="bg-gradient-to-br from-purple-950/40 via-pink-950/40 to-red-950/40 border border-purple-500/30 rounded-xl p-6">
+                    <h3 className="text-2xl font-semibold text-purple-300 mb-4">How It Works</h3>
+                    <div className="space-y-4">
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center font-bold text-white">1</div>
+                        <div>
+                          <h4 className="font-bold text-white">Start a Game</h4>
+                          <p className="text-gray-400">Pay {PREDICTION_FEES.START_GAME_FEE} ETH (or equivalent in $wASS) to start. You&apos;ll receive your initial cards via Chainlink VRF.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center font-bold text-white">2</div>
+                        <div>
+                          <h4 className="font-bold text-white">Trading Period</h4>
+                          <p className="text-gray-400">A {PREDICTION_FEES.TRADING_DELAY}-second trading window opens. Anyone can buy YES/NO shares betting on your outcome.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center font-bold text-white">3</div>
+                        <div>
+                          <h4 className="font-bold text-white">Play Your Hand</h4>
+                          <p className="text-gray-400">After trading ends, Hit or Stand to complete your hand. Each action opens a new trading window.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0 w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center font-bold text-white">4</div>
+                        <div>
+                          <h4 className="font-bold text-white">Resolution & Payout</h4>
+                          <p className="text-gray-400">Winning shares pay out 1 $wASS token each. Losers get nothing. Push = all deposits refunded.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trading Shares */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-green-950/30 border border-green-500/30 rounded-xl p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-4xl">✅</span>
+                        <div>
+                          <h4 className="font-bold text-green-400 text-lg">YES Shares</h4>
+                          <p className="text-sm text-gray-400">Player wins</p>
+                        </div>
+                      </div>
+                      <p className="text-gray-300 text-sm">
+                        Buy YES if you think the player will beat the dealer. Each share pays 1 token if player wins.
+                      </p>
+                    </div>
+                    <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-4xl">❌</span>
+                        <div>
+                          <h4 className="font-bold text-red-400 text-lg">NO Shares</h4>
+                          <p className="text-sm text-gray-400">Dealer wins</p>
+                        </div>
+                      </div>
+                      <p className="text-gray-300 text-sm">
+                        Buy NO if you think the dealer will win. Each share pays 1 token if player loses.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Fee Structure */}
+                  <div className="bg-blue-950/30 border border-blue-500/30 rounded-xl p-6">
+                    <h3 className="text-xl font-semibold text-blue-300 mb-4 flex items-center gap-2">
+                      <span>💰</span> Fee Structure
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="bg-gray-900/50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-700">
+                          <span className="text-white font-bold">Total Trading Fee</span>
+                          <span className="text-xl font-bold text-purple-400">{PREDICTION_FEES.TOTAL_TRADING_FEE}%</span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">→ Game Creator</span>
+                            <span className="text-green-400 font-semibold">{PREDICTION_FEES.CREATOR_FEE}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">→ Stakers Pool</span>
+                            <span className="text-blue-400 font-semibold">{PREDICTION_FEES.STAKING_FEE}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">→ Protocol</span>
+                            <span className="text-purple-400 font-semibold">{PREDICTION_FEES.PROTOCOL_FEE}%</span>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        Example: $1,000 in trading volume = $3.00 to creator, $6.50 to stakers, $0.50 to protocol
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Ways to Earn */}
+                  <div className="bg-gradient-to-br from-green-950/40 to-emerald-950/40 border border-green-500/30 rounded-xl p-6">
+                    <h3 className="text-xl font-semibold text-green-300 mb-4 flex items-center gap-2">
+                      <span>🏆</span> Ways to Earn
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-gray-900/50 rounded-lg p-4">
+                        <h4 className="font-bold text-purple-400 mb-2">🃏 As Creator</h4>
+                        <p className="text-sm text-gray-300">Earn {PREDICTION_FEES.CREATOR_FEE}% of all trading on your game. High-stakes games = more fees!</p>
+                      </div>
+                      <div className="bg-gray-900/50 rounded-lg p-4">
+                        <h4 className="font-bold text-green-400 mb-2">📈 As Trader</h4>
+                        <p className="text-sm text-gray-300">Spot mispriced odds and buy shares. Winning shares pay 1 token each.</p>
+                      </div>
+                      <div className="bg-gray-900/50 rounded-lg p-4">
+                        <h4 className="font-bold text-blue-400 mb-2">🏦 As Staker</h4>
+                        <p className="text-sm text-gray-300">Stake $wASS to earn {PREDICTION_FEES.STAKING_FEE}% of all platform trading fees.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Blackjack Rules Quick Reference */}
+                  <div className="bg-orange-950/30 border border-orange-500/30 rounded-lg p-5">
+                    <h3 className="text-xl font-semibold text-orange-300 flex items-center gap-2 mb-3">
+                      <span>🎰</span> Quick Blackjack Rules
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <h4 className="font-bold text-white mb-2">Card Values</h4>
+                        <ul className="space-y-1 text-gray-300">
+                          <li>2-10 = Face value</li>
+                          <li>J, Q, K = 10 points</li>
+                          <li>Ace = 1 or 11 points</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white mb-2">Win Conditions</h4>
+                        <ul className="space-y-1 text-gray-300">
+                          <li>✓ Closer to 21 than dealer</li>
+                          <li>✓ Dealer busts (over 21)</li>
+                          <li>✓ Blackjack (A + 10-card)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Play Now CTA */}
+                  <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-2 border-purple-500/50 rounded-xl p-6 text-center">
+                    <h4 className="text-2xl font-bold text-white mb-3">Ready to Play?</h4>
+                    <p className="text-gray-300 mb-4">
+                      Start a game, trade on outcomes, or stake to earn passive income
+                    </p>
+                    <Link
+                      href="/?fastTravelPrediction=true"
+                      className="inline-block px-8 py-3 rounded-lg font-semibold text-white transition-all transform hover:scale-105"
+                      style={{
+                        background: 'linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%)',
+                        boxShadow: '0 0 20px rgba(139, 92, 246, 0.5)',
+                      }}
+                    >
+                      🃏 Open PredictionJack →
+                    </Link>
                   </div>
                 </div>
               </div>

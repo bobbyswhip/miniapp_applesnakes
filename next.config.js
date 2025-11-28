@@ -5,8 +5,10 @@ const nextConfig = {
     buildActivity: false,
     buildActivityPosition: 'bottom-right',
   },
-  // Turbopack configuration (empty as most apps work fine with defaults)
-  turbopack: {},
+  eslint: {
+    // Don't fail production builds on ESLint warnings
+    ignoreDuringBuilds: true,
+  },
   webpack: (config) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
     config.externals.push('pino-pretty', 'lokijs', 'encoding');

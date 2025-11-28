@@ -11,6 +11,7 @@ import { useInventory } from '@/contexts/InventoryContext';
 import { useBasename } from '@/hooks/useBasename';
 import { useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
+import { SwapWrapModal } from './SwapWrapModal';
 
 export function Navigation() {
   const _pathname = usePathname();
@@ -25,6 +26,9 @@ export function Navigation() {
   // Token price state - exported for use in other components
   const [tokenPrice, setTokenPrice] = useState<string>('0');
   const [ethPrice, setEthPrice] = useState<number>(0);
+
+  // Swap-wrap modal state (for sold out collection)
+  const [isSwapWrapModalOpen, setIsSwapWrapModalOpen] = useState(false);
 
   // Make token price available globally via window for PredictionJack
   useEffect(() => {
@@ -221,11 +225,12 @@ export function Navigation() {
   };
 
   return (
+    <>
     <nav className="w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-40">
-      <div className="w-full px-2 sm:px-3 md:px-4 py-1.5 sm:py-2">
-        <div className="flex items-center justify-between gap-1.5 sm:gap-2 md:gap-3">
+      <div className="w-full px-0.5 xs:px-1.5 sm:px-3 md:px-4 py-0.5 xs:py-1 sm:py-2">
+        <div className="flex items-center justify-between gap-0.5 xs:gap-1 sm:gap-2 md:gap-3">
           {/* Left Side: Mint Counter and Chart locked to left */}
-          <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-0.5 xs:gap-0.5 sm:gap-1.5 md:gap-2 min-w-0 flex-1 overflow-hidden">
             {/* Futuristic Mint Counter with Integrated Button */}
             <div
               className={`relative overflow-hidden border rounded-md sm:rounded-lg flex-shrink min-w-0 ${
@@ -233,7 +238,7 @@ export function Navigation() {
                   ? 'bg-gradient-to-r from-cyan-950/40 via-purple-950/40 to-pink-950/40 border-cyan-500/30 hover:border-cyan-400/50 cursor-pointer'
                   : 'bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 cursor-pointer'
               } backdrop-blur-sm transition-all duration-300`}
-              onClick={mintIsLive ? handleFastTravelMint : () => window.open(`https://opensea.io/assets/base/${contracts.nft.address}`, '_blank')}
+              onClick={mintIsLive ? handleFastTravelMint : () => setIsSwapWrapModalOpen(true)}
               style={{
                 boxShadow: mintIsLive
                   ? '0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 15px rgba(168, 85, 247, 0.03)'
@@ -252,9 +257,9 @@ export function Navigation() {
               />
 
               {/* Content */}
-              <div className="relative flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2">
+              <div className="relative flex items-center gap-0.5 xs:gap-1 sm:gap-2 p-0.5 xs:p-1 sm:p-2">
                 {/* Wilfred Icon */}
-                <div className="relative flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5">
+                <div className="relative flex-shrink-0 w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-5 sm:h-5">
                   <img
                     src="/Images/Wilfred.png"
                     alt="Wilfred"
@@ -269,12 +274,12 @@ export function Navigation() {
 
                 {/* Counter Info */}
                 <div className="flex flex-col min-w-0">
-                  <div className={`font-medium tracking-wider text-[9px] sm:text-[10px] md:text-xs truncate ${
+                  <div className={`font-medium tracking-wider text-[7px] xs:text-[8px] sm:text-[10px] md:text-xs truncate ${
                     isLoadingMintCount ? 'text-yellow-400' : mintIsLive ? 'text-cyan-400' : 'text-purple-400'
                   }`}>
                     {isLoadingMintCount ? 'Loading' : mintIsLive ? 'MINT LIVE' : 'Collection'}
                   </div>
-                  <div className={`font-bold tracking-wide text-[10px] sm:text-xs md:text-sm truncate ${
+                  <div className={`font-bold tracking-wide text-[8px] xs:text-[9px] sm:text-xs md:text-sm truncate ${
                     isLoadingMintCount ? 'text-yellow-300' : mintIsLive ? 'text-white' : 'text-pink-300'
                   }`}>
                     {isLoadingMintCount ? '...' : mintIsLive ? `${nftsRemaining.toLocaleString()}/3K` : 'SOLD OUT'}
@@ -331,15 +336,15 @@ export function Navigation() {
               />
 
               {/* Content */}
-              <div className="relative flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2">
-                <svg className="text-green-400 flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="relative flex items-center gap-0.5 xs:gap-1 sm:gap-2 p-0.5 xs:p-1 sm:p-2">
+                <svg className="text-green-400 flex-shrink-0 w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-medium tracking-wider text-green-200 text-[9px] sm:text-[10px] md:text-xs hidden sm:block">
+                  <span className="font-medium tracking-wider text-green-200 text-[7px] xs:text-[8px] sm:text-[10px] md:text-xs hidden xs:block">
                     CHART
                   </span>
-                  <span className="font-bold tracking-wide text-white text-[10px] sm:text-xs md:text-sm truncate">
+                  <span className="font-bold tracking-wide text-white text-[8px] xs:text-[9px] sm:text-xs md:text-sm truncate">
                     {parseFloat(tokenPrice) > 0 ? `$${tokenPrice}` : '...'}
                   </span>
                 </div>
@@ -349,7 +354,7 @@ export function Navigation() {
               <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.1), transparent 70%)' }} />
             </a>
 
-            {/* Docs Button - hidden on very small screens */}
+            {/* Docs Button - hidden on small screens */}
             <Link
               href="/docs"
               className="hidden sm:flex relative overflow-hidden border bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer items-center rounded-md sm:rounded-lg flex-shrink min-w-0"
@@ -367,15 +372,15 @@ export function Navigation() {
               />
 
               {/* Content */}
-              <div className="relative flex items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2">
+              <div className="relative flex items-center gap-1 sm:gap-2 p-1 sm:p-2">
                 <svg className="text-purple-400 flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-medium tracking-wider text-purple-200 text-[9px] sm:text-[10px] md:text-xs">
+                  <span className="font-medium tracking-wider text-purple-200 text-[10px] md:text-xs">
                     DOCS
                   </span>
-                  <span className="font-bold tracking-wide text-white text-[10px] sm:text-xs md:text-sm truncate">
+                  <span className="font-bold tracking-wide text-white text-xs md:text-sm truncate">
                     <span className="hidden md:inline">Whitepaper</span>
                     <span className="md:hidden">Docs</span>
                   </span>
@@ -436,12 +441,12 @@ export function Navigation() {
                         />
 
                         {/* Content */}
-                        <div className="relative flex items-center gap-1.5 p-1.5 sm:p-2">
-                          <svg className="text-blue-400 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="relative flex items-center gap-0.5 xs:gap-1 p-0.5 xs:p-1 sm:p-2">
+                          <svg className="text-blue-400 w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
-                          <span className="font-semibold text-blue-300 tracking-wider text-[10px] sm:text-xs md:text-sm whitespace-nowrap">
-                            {authenticationStatus === 'loading' ? '...' : <><span className="hidden sm:inline">Connect</span><span className="sm:hidden">Connect</span></>}
+                          <span className="font-semibold text-blue-300 tracking-wider text-[8px] xs:text-[9px] sm:text-xs md:text-sm whitespace-nowrap">
+                            {authenticationStatus === 'loading' ? '...' : 'Connect'}
                           </span>
                         </div>
 
@@ -450,30 +455,30 @@ export function Navigation() {
                       </button>
                     ) : (
                       /* Wallet connected - show account button */
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-0.5 xs:gap-1">
                         {/* Futuristic Account Button */}
                         {chain?.unsupported ? (
                           <button
                             onClick={openChainModal}
-                            className="relative overflow-hidden border bg-gradient-to-r from-red-950/40 via-rose-950/40 to-pink-950/40 border-red-500/30 hover:border-red-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-1.5 sm:p-2"
+                            className="relative overflow-hidden border bg-gradient-to-r from-red-950/40 via-rose-950/40 to-pink-950/40 border-red-500/30 hover:border-red-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
                             style={{
                               boxShadow: '0 0 10px rgba(239, 68, 68, 0.1), inset 0 0 10px rgba(239, 68, 68, 0.03)',
                             }}
                           >
-                            <div className="relative flex items-center gap-1.5">
-                              <svg className="text-red-400 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="relative flex items-center gap-0.5 xs:gap-1">
+                              <svg className="text-red-400 w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
-                              <span className="font-medium text-red-300 text-[10px] sm:text-xs whitespace-nowrap">
-                                <span className="hidden sm:inline">Wrong Network</span>
-                                <span className="sm:hidden">Switch</span>
+                              <span className="font-medium text-red-300 text-[8px] xs:text-[9px] sm:text-xs whitespace-nowrap">
+                                <span className="hidden xs:inline">Wrong Network</span>
+                                <span className="xs:hidden">Switch</span>
                               </span>
                             </div>
                           </button>
                         ) : (
                           <button
                             onClick={toggleInventory}
-                            className="relative overflow-hidden border bg-gradient-to-r from-slate-950/40 via-gray-950/40 to-zinc-950/40 border-slate-500/30 hover:border-slate-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-1.5 sm:p-2"
+                            className="relative overflow-hidden border bg-gradient-to-r from-slate-950/40 via-gray-950/40 to-zinc-950/40 border-slate-500/30 hover:border-slate-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
                             style={{
                               boxShadow: '0 0 10px rgba(100, 116, 139, 0.1), inset 0 0 10px rgba(100, 116, 139, 0.03)',
                             }}
@@ -488,13 +493,13 @@ export function Navigation() {
                               }}
                             />
 
-                            <div className="relative flex items-center gap-1 sm:gap-1.5">
-                              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50" />
-                              <span className="font-medium text-slate-300 text-[10px] sm:text-xs md:text-sm truncate max-w-[60px] sm:max-w-[80px] md:max-w-none">
+                            <div className="relative flex items-center gap-0.5 xs:gap-0.5 sm:gap-1.5">
+                              <div className="w-1 h-1 xs:w-1.5 xs:h-1.5 sm:w-2 sm:h-2 bg-emerald-400 rounded-full animate-pulse shadow-lg shadow-emerald-400/50" />
+                              <span className="font-medium text-slate-300 text-[8px] xs:text-[9px] sm:text-xs md:text-sm truncate max-w-[40px] xs:max-w-[50px] sm:max-w-[80px] md:max-w-none">
                                 {displayName}
                               </span>
                               {hasBasename && (
-                                <svg className="text-blue-400 w-3 h-3 flex-shrink-0 hidden sm:block" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="text-blue-400 w-2 h-2 xs:w-2.5 xs:h-2.5 flex-shrink-0 hidden xs:block" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -511,5 +516,13 @@ export function Navigation() {
         </div>
       </div>
     </nav>
+
+    {/* Swap-Wrap Modal - OUTSIDE nav to avoid sticky stacking context issues */}
+    <SwapWrapModal
+      isOpen={isSwapWrapModalOpen}
+      onClose={() => setIsSwapWrapModalOpen(false)}
+      nftContractAddress={contracts.nft.address}
+    />
+    </>
   );
 }

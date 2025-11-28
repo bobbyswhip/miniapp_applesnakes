@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { getContracts, BLACKJACK_ADDRESS, PREDICTION_HUB_ADDRESS, TOKEN_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
@@ -1940,21 +1941,21 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
       style={{ top: `${navHeight}px` }}
     >
       {/* Tab Buttons Row - Compact, directly under main header */}
-      <div className="flex-shrink-0 bg-gray-900 px-2 sm:px-4 pt-2">
+      <div className="flex-shrink-0 bg-gray-900 px-0.5 xs:px-1.5 sm:px-4 pt-0.5 xs:pt-1 sm:pt-2">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-0.5 xs:gap-1 sm:gap-2">
             {/* Tab Pills - Order: Live Games → Your Game/Start Game → Claim → Stake */}
-            <div className="flex gap-1 bg-gray-800/50 p-1 rounded-xl">
+            <div className="flex gap-0.5 bg-gray-800/50 p-0.5 rounded-lg xs:rounded-xl overflow-x-auto scrollbar-hide min-w-0">
               {/* Live Games tab */}
               <button
                 onClick={() => setView('live')}
-                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'live'
                     ? 'bg-purple-600 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                 }`}
               >
-                <span className="hidden sm:inline">🎮 </span>Live Games
+                <span className="hidden sm:inline">🎮 </span><span className="hidden xs:inline">Live </span>Games
               </button>
 
               {/* Your Game tab (when user has active game) OR Start Game tab (when no active game) */}
@@ -1964,31 +1965,31 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                     setSelectedGameId(null);
                     setView('game');
                   }}
-                  className={`px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  className={`px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                     view === 'game'
                       ? 'bg-green-600 text-white'
                       : 'text-green-400 hover:text-white bg-green-900/30 animate-pulse'
                   }`}
                 >
-                  <span className="hidden sm:inline">🎯 </span>Your Game
+                  <span className="hidden sm:inline">🎯 </span><span className="xs:hidden">You</span><span className="hidden xs:inline">Your Game</span>
                 </button>
               ) : (
                 <button
                   onClick={() => setView('play')}
-                  className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                     view === 'play'
                       ? 'bg-purple-600 text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                   }`}
                 >
-                  <span className="hidden sm:inline">▶️ </span>Start Game
+                  <span className="hidden sm:inline">▶️ </span><span className="xs:hidden">Start</span><span className="hidden xs:inline">Start Game</span>
                 </button>
               )}
 
               {/* Claim tab */}
               <button
                 onClick={() => setView('closed')}
-                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'closed'
                     ? 'bg-purple-600 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
@@ -1996,14 +1997,14 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               >
                 <span className="hidden sm:inline">💰 </span>Claim
                 {claimableMarkets.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 xs:w-2 xs:h-2 bg-green-500 rounded-full animate-pulse" />
                 )}
               </button>
 
               {/* Stake tab */}
               <button
                 onClick={() => setView('stake')}
-                className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'stake'
                     ? 'bg-purple-600 text-white'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
@@ -2016,15 +2017,15 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               {supportsSubaccounts && (
                 <button
                   onClick={() => setView('accounts')}
-                  className={`relative px-3 py-1.5 font-semibold text-xs sm:text-sm transition-all rounded-lg ${
+                  className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                     view === 'accounts'
                       ? 'bg-blue-600 text-white'
                       : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
                   }`}
                 >
-                  <span className="hidden sm:inline">👥 </span>Sub Accounts
+                  <span className="hidden sm:inline">👥 </span><span className="xs:hidden">Accts</span><span className="hidden xs:inline">Sub Accts</span>
                   {subaccounts.length > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full text-[10px] flex items-center justify-center">
+                    <span className="absolute -top-0.5 -right-0.5 w-3 h-3 xs:w-4 xs:h-4 bg-green-500 rounded-full text-[8px] xs:text-[10px] flex items-center justify-center">
                       {subaccounts.length}
                     </span>
                   )}
@@ -2033,50 +2034,48 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
             </div>
 
             {/* Right side: Stats + Close */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5 xs:gap-1 sm:gap-2 flex-shrink-0">
               {/* Token Price Badge */}
               {tokenPriceUSD > 0 && (
-                <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-purple-900/30 rounded-lg text-xs">
+                <div className="hidden sm:flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-purple-900/30 rounded-md sm:rounded-lg text-[10px] sm:text-xs">
                   <span className="text-purple-400">{TOKEN_TICKER}</span>
                   <span className="text-white font-semibold">${tokenPriceUSD.toFixed(4)}</span>
                 </div>
               )}
               {/* Live Count */}
-              <div className="flex items-center gap-1 px-2 py-1 bg-gray-800/50 rounded-lg text-xs">
-                <span className="text-gray-400">Live:</span>
+              <div className="flex items-center gap-0.5 px-0.5 xs:px-1 sm:px-2 py-0.5 xs:py-0.5 sm:py-1 bg-gray-800/50 rounded-md sm:rounded-lg text-[8px] xs:text-[9px] sm:text-xs">
+                <span className="text-gray-400 hidden xs:inline">Live:</span>
                 <span className="text-green-400 font-bold">{totalActiveGames.toString()}</span>
               </div>
               {/* Claimable Button */}
               {totalClaimable > 0n && (
                 <button
                   onClick={() => setView('closed')}
-                  className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg animate-pulse flex items-center gap-1"
+                  className="px-0.5 xs:px-1 sm:px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white text-[8px] xs:text-[9px] sm:text-xs font-semibold rounded-md sm:rounded-lg animate-pulse flex items-center gap-0.5"
                 >
                   💰
                   {tokenPriceUSD > 0 && (
-                    <span>${(Number(formatEther(totalClaimable)) * tokenPriceUSD).toFixed(2)}</span>
+                    <span className="hidden xs:inline">${(Number(formatEther(totalClaimable)) * tokenPriceUSD).toFixed(2)}</span>
                   )}
                 </button>
               )}
-              {/* Help Button */}
-              <a
-                href="/blackjack/docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 hover:bg-purple-900/50 bg-purple-800/30 rounded-lg transition-colors text-purple-400 hover:text-purple-300"
+              {/* Help Button - links to main docs page */}
+              <Link
+                href="/docs"
+                className="p-0.5 xs:p-1 sm:p-1.5 hover:bg-purple-900/50 bg-purple-800/30 rounded-md sm:rounded-lg transition-colors text-purple-400 hover:text-purple-300 hidden xs:block"
                 aria-label="Help & Documentation"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-              </a>
+              </Link>
               {/* Close Button */}
               <button
                 onClick={onClose}
-                className="p-1.5 hover:bg-red-900/50 bg-red-800/30 rounded-lg transition-colors text-red-400 hover:text-red-300"
+                className="p-0.5 xs:p-1 sm:p-1.5 hover:bg-red-900/50 bg-red-800/30 rounded-md sm:rounded-lg transition-colors text-red-400 hover:text-red-300"
                 aria-label="Close"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -2086,7 +2085,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto p-3 sm:p-4">
+      <div className="flex-1 overflow-auto p-1.5 xs:p-2 sm:p-4">
         <div className="max-w-7xl mx-auto h-full">
           {/* Live Games View */}
           {view === 'live' && (

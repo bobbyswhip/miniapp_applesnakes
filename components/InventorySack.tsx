@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useReadContract, useBalance, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useReadContract, useBalance } from 'wagmi';
 import { base } from 'wagmi/chains';
 import { formatEther } from 'viem';
 import { getContracts } from '@/config';
@@ -35,52 +35,6 @@ export function InventorySack() {
     chainId: base.id,
   });
 
-  // Get vesting data
-  const { data: vestingData, refetch: refetchVesting } = useReadContract({
-    address: contracts.nft.address,
-    abi: contracts.nft.abi,
-    functionName: 'vesting',
-    args: userAddress ? [userAddress] : undefined,
-    chainId: base.id,
-  });
-
-  // Get claimable amount
-  const { data: claimableAmount, refetch: refetchClaimable } = useReadContract({
-    address: contracts.nft.address,
-    abi: contracts.nft.abi,
-    functionName: 'claimable',
-    args: userAddress ? [userAddress] : undefined,
-    chainId: base.id,
-  });
-
-  // Claim transaction state
-  const [isClaimPending, setIsClaimPending] = useState(false);
-  const {
-    data: claimHash,
-    writeContract: writeClaim,
-    isPending: isClaimWritePending,
-    error: claimError,
-    reset: resetClaim
-  } = useWriteContract();
-
-  const { isLoading: isClaimConfirming, isSuccess: isClaimSuccess } =
-    useWaitForTransactionReceipt({
-      hash: claimHash,
-    });
-
-  // Handle claim success
-  useEffect(() => {
-    if (isClaimSuccess) {
-      setIsClaimPending(false);
-      refetchVesting();
-      refetchClaimable();
-      // Reset after 3 seconds
-      setTimeout(() => {
-        resetClaim();
-      }, 3000);
-    }
-  }, [isClaimSuccess, refetchVesting, refetchClaimable, resetClaim]);
-
   // Lock body scroll when panel is open
   useEffect(() => {
     if (isOpen) {
@@ -110,46 +64,6 @@ export function InventorySack() {
 
   const wTokenBalanceFormatted = wTokenBalance ? Number(wTokenBalance) / 1e18 : 0;
   const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
-
-  // Parse vesting data
-  const vestBalance = vestingData ? Number((vestingData as unknown[])[0]) / 1e18 : 0;
-  const lastMint = vestingData ? Number((vestingData as unknown[])[1]) : 0;
-  const lastClaim = vestingData ? Number((vestingData as unknown[])[2]) : 0;
-  const claimableFormatted = claimableAmount ? Number(claimableAmount) / 1e18 : 0;
-
-  // Calculate vesting progress and time remaining
-  const now = Math.floor(Date.now() / 1000);
-  const DAY_SECONDS = 86400; // 1 day in seconds
-  const FULL_UNLOCK_SECONDS = 90 * DAY_SECONDS; // 90 days
-
-  const daysElapsed = lastMint > 0 ? Math.floor((now - lastMint) / DAY_SECONDS) : 0;
-  const vestingProgress = lastMint > 0 ? Math.min((daysElapsed / 90) * 100, 100) : 0;
-  const nextClaimTime = lastClaim + DAY_SECONDS;
-  const canClaimNow = now >= nextClaimTime && claimableFormatted > 0;
-  const timeUntilNextClaim = canClaimNow ? 0 : Math.max(0, nextClaimTime - now);
-  const _isFullyVested = lastMint > 0 && (now - lastMint >= FULL_UNLOCK_SECONDS);
-
-  // Format time remaining
-  const formatTimeRemaining = (seconds: number): string => {
-    if (seconds === 0) return 'Now';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  };
-
-  // Handle claim
-  const handleClaim = () => {
-    if (!canClaimNow || isClaimPending || isClaimWritePending || isClaimConfirming) return;
-
-    setIsClaimPending(true);
-    writeClaim({
-      address: contracts.nft.address,
-      abi: contracts.nft.abi,
-      functionName: 'claimVested',
-      args: [],
-    });
-  };
 
   // Debug logging
   useEffect(() => {
@@ -301,164 +215,6 @@ export function InventorySack() {
                       <p className="text-blue-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>ETH</p>
                       <p className="text-blue-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{ethBalanceFormatted.toFixed(4)}</p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Vested Tokens Panel - Compact */}
-              {(isWalletConnected || isReconnecting) && vestBalance > 0 && (
-                <div
-                  className="relative"
-                  style={{
-                    marginTop: 'clamp(0.5rem, 1.5vh, 0.75rem)'
-                  }}
-                >
-                  <div
-                    className="relative overflow-hidden rounded-lg border backdrop-blur-sm"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(168, 85, 247, 0.12), rgba(236, 72, 153, 0.08))',
-                      backgroundColor: 'rgba(17, 24, 39, 0.6)',
-                      border: '1.5px solid rgba(6, 182, 212, 0.25)',
-                      boxShadow: '0 0 10px rgba(6, 182, 212, 0.15)',
-                      padding: 'clamp(0.375rem, 1.2vh, 0.625rem)'
-                    }}
-                  >
-                    {/* Shimmer effect */}
-                    <div
-                      className="absolute inset-0 opacity-15"
-                      style={{
-                        background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.2), transparent)',
-                        animation: 'shimmer 3s infinite',
-                      }}
-                    />
-
-                    {/* Compact Header with Progress */}
-                    <div
-                      className="relative"
-                      style={{
-                        marginBottom: 'clamp(0.375rem, 1vh, 0.5rem)'
-                      }}
-                    >
-                      <div
-                        className="flex items-center justify-between"
-                        style={{
-                          marginBottom: 'clamp(0.25rem, 0.8vh, 0.375rem)'
-                        }}
-                      >
-                        <h3
-                          className="font-bold"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)'
-                          }}
-                        >
-                          Vested Tokens
-                        </h3>
-                        <div
-                          className="text-cyan-300 font-medium"
-                          style={{
-                            fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)'
-                          }}
-                        >
-                          {daysElapsed}/90d • {vestingProgress.toFixed(0)}%
-                        </div>
-                      </div>
-                      {/* Compact Progress Bar */}
-                      <div
-                        className="w-full bg-gray-800/60 rounded-full overflow-hidden border border-cyan-500/20"
-                        style={{
-                          height: 'clamp(0.25rem, 0.8vh, 0.375rem)'
-                        }}
-                      >
-                        <div
-                          className="h-full transition-all duration-500"
-                          style={{
-                            width: `${vestingProgress}%`,
-                            background: 'linear-gradient(90deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1), rgba(236, 72, 153, 1))',
-                            boxShadow: '0 0 8px rgba(6, 182, 212, 0.4)',
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Compact Stats Row */}
-                    <div
-                      className="relative grid grid-cols-3"
-                      style={{
-                        gap: 'clamp(0.25rem, 0.8vw, 0.375rem)',
-                        marginBottom: 'clamp(0.375rem, 1vh, 0.5rem)'
-                      }}
-                    >
-                      <div
-                        className="bg-gray-900/40 rounded border border-cyan-500/10"
-                        style={{
-                          padding: 'clamp(0.25rem, 0.8vh, 0.375rem) clamp(0.25rem, 1vw, 0.375rem)'
-                        }}
-                      >
-                        <p className="text-cyan-300/80 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.5625rem)' }}>Total</p>
-                        <p className="font-bold text-white leading-none" style={{ fontSize: 'clamp(0.625rem, 1.4vh, 0.75rem)', marginTop: '0.125rem' }}>{vestBalance.toFixed(1)}</p>
-                      </div>
-                      <div
-                        className="bg-gray-900/40 rounded border border-purple-500/10"
-                        style={{
-                          padding: 'clamp(0.25rem, 0.8vh, 0.375rem) clamp(0.25rem, 1vw, 0.375rem)'
-                        }}
-                      >
-                        <p className="text-purple-300/80 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.5625rem)' }}>Claimable</p>
-                        <p className="font-bold text-white leading-none" style={{ fontSize: 'clamp(0.625rem, 1.4vh, 0.75rem)', marginTop: '0.125rem' }}>{claimableFormatted.toFixed(3)}</p>
-                      </div>
-                      <div
-                        className="bg-gray-900/40 rounded border border-pink-500/10"
-                        style={{
-                          padding: 'clamp(0.25rem, 0.8vh, 0.375rem) clamp(0.25rem, 1vw, 0.375rem)'
-                        }}
-                      >
-                        <p className="text-pink-300/80 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.5625rem)' }}>Next</p>
-                        <p className="font-bold text-white leading-none" style={{ fontSize: 'clamp(0.625rem, 1.4vh, 0.75rem)', marginTop: '0.125rem' }}>{formatTimeRemaining(timeUntilNextClaim)}</p>
-                      </div>
-                    </div>
-
-                    {/* Compact Claim Button */}
-                    <button
-                      onClick={handleClaim}
-                      disabled={!canClaimNow || isClaimPending || isClaimWritePending || isClaimConfirming}
-                      className="relative w-full rounded font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{
-                        padding: 'clamp(0.25rem, 1vh, 0.375rem) clamp(0.5rem, 2vw, 0.75rem)',
-                        fontSize: 'clamp(0.6875rem, 1.5vh, 0.75rem)',
-                        background: canClaimNow
-                          ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.8), rgba(168, 85, 247, 0.8))'
-                          : 'linear-gradient(135deg, rgba(75, 85, 99, 0.5), rgba(55, 65, 81, 0.5))',
-                        border: '1px solid rgba(6, 182, 212, 0.4)',
-                        boxShadow: canClaimNow ? '0 0 12px rgba(6, 182, 212, 0.3)' : 'none',
-                        color: canClaimNow ? 'white' : 'rgba(156, 163, 175, 1)',
-                      }}
-                    >
-                      {isClaimConfirming
-                        ? 'Confirming...'
-                        : isClaimWritePending || isClaimPending
-                        ? 'Claiming...'
-                        : isClaimSuccess
-                        ? '✓ Claimed!'
-                        : canClaimNow
-                        ? `Claim ${claimableFormatted.toFixed(3)} wNFTs`
-                        : `Wait ${formatTimeRemaining(timeUntilNextClaim)}`}
-                    </button>
-
-                    {/* Compact Error Message */}
-                    {claimError && (
-                      <p
-                        className="text-red-400 text-center leading-tight"
-                        style={{
-                          fontSize: 'clamp(0.625rem, 1.4vh, 0.625rem)',
-                          marginTop: 'clamp(0.375rem, 1vh, 0.375rem)'
-                        }}
-                      >
-                        Error: {claimError.message.slice(0, 40)}...
-                      </p>
-                    )}
                   </div>
                 </div>
               )}
