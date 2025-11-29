@@ -237,18 +237,21 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuccess, hash]);
 
-  // Step 1: Swap ETH for Token
+  // Step 1: Swap ETH for Token (always via OTC to attribute volume to protocol)
   const handleSwap = () => {
     if (!address || parseFloat(ethNeeded) <= 0) return;
 
     setTxStep('pending');
     const ethValue = parseEther(ethNeeded);
 
+    // Always use OTC contract - routes volume through protocol
+    // OTC handles fallback internally if no OTC liquidity available
+    const minTokensOut = parseEther('0.85'); // Minimum 0.85 tokens expected for 1 token target
     writeContract({
-      address: contracts.nft.address as `0x${string}`,
-      abi: contracts.nft.abi,
+      address: contracts.otc.address as `0x${string}`,
+      abi: contracts.otc.abi,
       functionName: 'swap',
-      args: [],
+      args: [minTokensOut],
       value: ethValue,
     });
   };
@@ -291,12 +294,14 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
       const calls: ContractCall[] = [];
 
       // Only add swap if user doesn't have tokens
+      // Always use OTC contract to route volume through protocol
       if (!hasOneToken) {
+        const minTokensOut = parseEther('0.85');
         calls.push({
-          address: contracts.nft.address as `0x${string}`,
-          abi: contracts.nft.abi,
+          address: contracts.otc.address as `0x${string}`,
+          abi: contracts.otc.abi,
           functionName: 'swap',
-          args: [],
+          args: [minTokensOut],
           value: ethValue,
         });
       }

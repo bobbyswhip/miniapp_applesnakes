@@ -12,6 +12,7 @@ import { useBasename } from '@/hooks/useBasename';
 import { useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { SwapWrapModal } from './SwapWrapModal';
+import { ChartModal } from './ChartModal';
 
 export function Navigation() {
   const _pathname = usePathname();
@@ -29,6 +30,9 @@ export function Navigation() {
 
   // Swap-wrap modal state (for sold out collection)
   const [isSwapWrapModalOpen, setIsSwapWrapModalOpen] = useState(false);
+
+  // Chart modal state
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // Make token price available globally via window for PredictionJack
   useEffect(() => {
@@ -317,10 +321,8 @@ export function Navigation() {
             </div>
 
             {/* Chart Button */}
-            <a
-              href={`https://dexscreener.com/base/${contracts.token.address}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => setIsChartModalOpen(true)}
               className="relative overflow-hidden border bg-gradient-to-r from-green-950/40 via-emerald-950/40 to-teal-950/40 border-green-500/30 hover:border-green-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer flex items-center rounded-md sm:rounded-lg flex-shrink min-w-0"
               style={{
                 boxShadow: '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 10px rgba(16, 185, 129, 0.03)',
@@ -352,7 +354,7 @@ export function Navigation() {
 
               {/* Glow effect on hover */}
               <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.1), transparent 70%)' }} />
-            </a>
+            </button>
 
             {/* Docs Button - hidden on small screens */}
             <Link
@@ -522,6 +524,13 @@ export function Navigation() {
       isOpen={isSwapWrapModalOpen}
       onClose={() => setIsSwapWrapModalOpen(false)}
       nftContractAddress={contracts.nft.address}
+    />
+
+    {/* Chart Modal */}
+    <ChartModal
+      isOpen={isChartModalOpen}
+      onClose={() => setIsChartModalOpen(false)}
+      tokenPrice={tokenPrice}
     />
     </>
   );

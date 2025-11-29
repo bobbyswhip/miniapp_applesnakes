@@ -19,6 +19,9 @@ export {
   POOL_CONFIG,
   HOOK_ADDRESS,
   POOL_MANAGER_ADDRESS,
+  UNIVERSAL_ROUTER_ADDRESS,
+  PERMIT2_ADDRESS,
+  STATE_VIEW_ADDRESS,
 } from './contracts';
 
 export type { ContractConfig, ChainContracts, AppContracts } from './types';

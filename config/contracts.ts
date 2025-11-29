@@ -7,6 +7,7 @@ import { STAKING_ABI } from '@/abis/staking';
 import { PREDICTION_ABI } from '@/abis/predictionLegacy'; // Legacy combined contract
 import { BLACKJACK_ABI } from '@/abis/blackjack'; // New game contract
 import { PREDICTION_HUB_ABI } from '@/abis/predictionHub'; // New market hub
+import { WASSOTC_ABI } from '@/abis/wassotc'; // wASS OTC hybrid swap
 import type { ChainContracts } from './types';
 
 // Uniswap V4 Quoter address on Base
@@ -17,6 +18,15 @@ export const HOOK_ADDRESS = '0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8' as cons
 
 // Pool Manager address on Base
 export const POOL_MANAGER_ADDRESS = '0x498581fF718922c3f8e6A244956aF099B2652b2b' as const;
+
+// Universal Router V4 address on Base
+export const UNIVERSAL_ROUTER_ADDRESS = '0x6ff5693b99212da76ad316178a184ab56d299b43' as const;
+
+// Permit2 address (same on all chains)
+export const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3' as const;
+
+// StateView for V4 pool queries
+export const STATE_VIEW_ADDRESS = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71' as const;
 
 // Pool configuration for ETH/Token swap
 export const POOL_CONFIG = {
@@ -68,6 +78,11 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     abi: PREDICTION_HUB_ABI,
     name: 'Prediction Market Hub',
   },
+  otc: {
+    address: '0x005B9ADac22eDf5Da3068974281593A9e6b8646F',
+    abi: WASSOTC_ABI,
+    name: 'wASS OTC Swap',
+  },
 };
 
 /**
@@ -108,6 +123,11 @@ export const BASE_SEPOLIA_CONTRACTS: ChainContracts = {
     address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
     abi: PREDICTION_HUB_ABI,
     name: 'Prediction Market Hub (Testnet)',
+  },
+  otc: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: WASSOTC_ABI,
+    name: 'wASS OTC Swap (Testnet)',
   },
 };
 

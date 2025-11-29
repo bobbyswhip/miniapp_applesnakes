@@ -16,6 +16,7 @@ export interface ChainContracts {
   prediction: ContractConfig; // Legacy combined contract
   blackjack: ContractConfig; // New game-only contract
   predictionHub: ContractConfig; // New market hub contract
+  otc: ContractConfig; // wASS OTC hybrid swap contract
 }
 
 export interface AppContracts {
