@@ -5,6 +5,7 @@ import { http, fallback } from 'wagmi';
 // API Keys from environment
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 const COINBASE_RPC_KEY = process.env.NEXT_PUBLIC_COINBASE_RPC_KEY;
+const CDP_NODE_URL = process.env.NEXT_PUBLIC_CDP_NODE_URL;
 
 // Flashblocks preconf endpoints for 200ms transaction confirmations
 // https://docs.base.org/base-chain/flashblocks/apps
@@ -15,6 +16,7 @@ const FLASHBLOCKS_SEPOLIA = 'https://sepolia-preconf.base.org';
 // Flashblocks first for fastest preconfirmations (200ms)
 const BASE_RPC_ENDPOINTS = [
   FLASHBLOCKS_MAINNET, // Flashblocks preconf - 200ms confirmations
+  CDP_NODE_URL || null, // Direct CDP Node URL (highest priority after Flashblocks)
   COINBASE_RPC_KEY ? `https://api.developer.coinbase.com/rpc/v1/base/${COINBASE_RPC_KEY}` : null,
   ALCHEMY_KEY ? `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}` : null,
   'https://mainnet.base.org', // Public fallback

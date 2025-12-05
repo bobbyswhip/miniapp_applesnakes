@@ -138,7 +138,7 @@ function HomeContent() {
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
   // UI coordination from InventoryContext
-  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, showUnity, closeUnity, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack } = useInventory();
+  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, showUnity, closeUnity, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack, openNFTHub } = useInventory();
 
   // Track if we've already triggered refresh for current mint (prevent duplicate refreshes)
   const hasRefreshedRef = useRef(false);
@@ -1412,22 +1412,23 @@ function HomeContent() {
     }
   }, [searchParams, audioElement, currentLocation, masterVolume, router, openPredictionJack]);
 
-  // Handle opening shop with wrap tab from inventory
+  // Handle opening NFT Hub via query params (for backwards compatibility)
   useEffect(() => {
     const shouldOpenShopWrap = searchParams.get('openShopWrap') === 'true';
+    const shouldOpenShop = searchParams.get('openShop') === 'true';
+
     if (shouldOpenShopWrap) {
-      console.log('🛍️ Opening shop with wrap tab');
-
-      // Clear the query param
+      console.log('🛍️ Opening NFT Hub with wrap tab');
       router.replace('/');
-
-      // Set shop tab to wrap and open the shop
-      setShopTab('wrap');
-      openSwapMint();
-
-      console.log('✨ Shop opened with wrap tab');
+      openNFTHub('wrap');
+      console.log('✨ NFT Hub opened with wrap tab');
+    } else if (shouldOpenShop) {
+      console.log('🛍️ Opening NFT Hub with buy tab');
+      router.replace('/');
+      openNFTHub('buy');
+      console.log('✨ NFT Hub opened with buy tab');
     }
-  }, [searchParams, router, openSwapMint]);
+  }, [searchParams, router, openNFTHub]);
 
   // Handle location changes with fade-to-black transition and music switching
   const navigateToLocation = (newLocation: LocationId) => {
@@ -2965,41 +2966,6 @@ function HomeContent() {
 
           {/* Content wrapper */}
           <div style={{ position: 'relative', zIndex: 2 }}>
-          {/* NFTs Remaining Counter - only show in mint tab */}
-          {shopTab === 'mint' && (
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                padding: 'clamp(8px, 1.5vw, 12px) 0',
-                marginBottom: 'clamp(8px, 1.5vw, 12px)',
-              }}
-            >
-              <div
-                style={{
-                  padding: 'clamp(4px, 0.9vw, 6px) clamp(10px, 2vw, 14px)',
-                  background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(168, 85, 247, 0.2))',
-                  border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.5)',
-                  borderRadius: 'clamp(6px, 1.2vw, 8px)',
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: '0 0 15px rgba(6, 182, 212, 0.3)',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 'clamp(11px, 2.2vw, 13px)',
-                    fontWeight: 700,
-                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    textAlign: 'center',
-                  }}
-                >
-                  {nftsRemaining.toLocaleString()} NFTs left
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Shop Tabs */}
           <div style={{ display: 'flex', gap: 'clamp(6px, 1.2vw, 8px)', marginBottom: 'clamp(12px, 2.5vw, 16px)' }}>

@@ -6,7 +6,8 @@ const nextConfig = {
   turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = { fs: false, net: false, tls: false };
-    config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    // Add pino and thread-stream to externals to avoid Turbopack/bundling issues
+    config.externals.push('pino-pretty', 'lokijs', 'encoding', 'pino', 'thread-stream');
 
     // Fix MetaMask SDK React Native dependencies
     config.resolve.alias = {

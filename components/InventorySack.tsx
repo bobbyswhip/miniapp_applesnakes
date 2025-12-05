@@ -32,7 +32,7 @@ export function InventorySack() {
   const [currentOperation, setCurrentOperation] = useState<'approve' | 'stake' | 'unstake' | 'wrap' | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState<string>('');
 
-  const { isOpen, setIsOpen } = useInventory();
+  const { isOpen, setIsOpen, openNFTHub } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
   const { addTransaction } = useTransactions();
@@ -482,10 +482,10 @@ export function InventorySack() {
     }
   };
 
-  // Handle wrap action - navigate to wrap page
+  // Handle wrap action - open NFT Hub with wrap mode
   const handleWrap = () => {
     setIsOpen(false);
-    router.push('/wrap');
+    openNFTHub('wrap');
   };
 
   // Refetch when transaction confirms
@@ -712,7 +712,7 @@ export function InventorySack() {
                     padding: 'clamp(0.375rem, 1.2vh, 0.5rem) clamp(0.5rem, 2vw, 0.75rem)'
                   }}
                 >
-                  {/* wToken Balance */}
+                  {/* wToken Balance with Wrap Button */}
                   <div
                     className="flex items-center"
                     style={{
@@ -735,6 +735,14 @@ export function InventorySack() {
                       <p className="text-orange-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>wNFTs</p>
                       <p className="text-orange-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{wTokenBalanceFormatted.toFixed(2)}</p>
                     </div>
+                    {/* Wrap Button */}
+                    <button
+                      onClick={handleWrap}
+                      className="ml-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-orange-500/30 to-amber-500/30 border border-orange-500/50 hover:from-orange-500/50 hover:to-amber-500/50 transition-all"
+                      style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}
+                    >
+                      <span className="text-orange-200 font-semibold">Wrap</span>
+                    </button>
                   </div>
 
                   {/* Divider */}

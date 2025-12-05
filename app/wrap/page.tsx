@@ -282,9 +282,9 @@ export default function WrapPage() {
     }
   }, [mode, isConnected, hasOneToken, isApprovedBool]);
 
-  // Fetch quote when on step 1
+  // Fetch quote when on step 1 or in Buy NFT mode
   useEffect(() => {
-    if (mode === 'get-nft' && currentStep === 1 && isConnected) {
+    if (isConnected && ((mode === 'get-nft' && currentStep === 1) || mode === 'swap')) {
       fetchQuote();
     }
   }, [mode, currentStep, isConnected, fetchQuote]);
@@ -780,13 +780,13 @@ export default function WrapPage() {
                 </button>
                 <button
                   onClick={() => setMode('swap')}
-                  className={`py-3 px-4 rounded-xl font-semibold transition-all ${
+                  className={`py-3 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     mode === 'swap'
                       ? 'bg-green-500 text-white shadow-lg shadow-green-500/50'
                       : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
-                  Swap
+                  🛒 Buy NFT
                 </button>
               </div>
 
@@ -1038,187 +1038,184 @@ export default function WrapPage() {
                   )}
                 </div>
               ) : mode === 'swap' ? (
-                /* SWAP MODE */
+                /* BUY NFT MODE - One-click purchase from collection */
                 <div className="space-y-6">
-                  <div className="text-center space-y-2">
-                    <p className="text-gray-400">
-                      Swap your NFT for a specific NFT from the pool
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Available NFTs in pool: {wTokensTotalHeld}
-                    </p>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {/* Your NFTs */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-bold text-white border-b border-gray-700 pb-2">
-                        Your NFTs
-                      </h3>
-                      {isLoading ? (
-                        <div className="flex items-center justify-center py-16">
-                          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500"></div>
-                        </div>
-                      ) : displayedNFTs.length === 0 ? (
-                        <div className="text-center py-8">
-                          <p className="text-gray-400">No NFTs available</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2">
-                          {displayedNFTs.map((nft) => {
-                            const isSelected = selectedUserNFT === nft.tokenId;
-                            return (
-                              <button
-                                key={nft.tokenId}
-                                onClick={() => setSelectedUserNFT(isSelected ? null : nft.tokenId)}
-                                className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
-                                  isSelected
-                                    ? 'border-purple-500 shadow-lg shadow-purple-500/50 scale-95'
-                                    : 'border-gray-700 hover:border-purple-400'
-                                }`}
-                              >
-                                {/* Selection Indicator */}
-                                <div className="absolute top-2 left-2 z-10">
-                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                    isSelected ? 'bg-purple-500 border-purple-500' : 'bg-gray-800/80 border-gray-600'
-                                  }`}>
-                                    {isSelected && <span className="text-white text-xs">✓</span>}
-                                  </div>
-                                </div>
-
-                                {/* NFT Image */}
-                                <div className="aspect-square relative">
-                                  <img
-                                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
-                                    alt={nft.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-
-                                {/* NFT Info */}
-                                <div className="p-2 bg-gray-900/90">
-                                  <p className="text-white text-xs font-semibold truncate">{nft.name}</p>
-                                  <p className="text-gray-400 text-xs">#{nft.tokenId}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                  {/* Smart Wallet Badge */}
+                  {isSmartWallet && (
+                    <div className="flex justify-center">
+                      <div className="px-4 py-2 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/50 rounded-lg text-sm font-semibold text-green-400">
+                        ⚡ Smart Wallet - All Steps in One Transaction
+                      </div>
                     </div>
+                  )}
 
-                    {/* Pool NFTs */}
-                    <div className="space-y-4">
-                      <h3 className="text-xl font-bold text-white border-b border-gray-700 pb-2">
-                        Pool NFTs ({wTokensTotalHeld})
-                      </h3>
-                      {wTokensLoading ? (
-                        <div className="flex items-center justify-center py-16">
-                          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-500"></div>
-                        </div>
-                      ) : wTokensNFTs.length === 0 ? (
-                        <div className="text-center py-8">
-                          <p className="text-gray-400">No NFTs in pool</p>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-2">
-                          {wTokensNFTs.map((nft) => {
-                            const isSelected = selectedWTokenNFT === nft.tokenId;
-                            return (
-                              <button
-                                key={nft.tokenId}
-                                onClick={() => setSelectedWTokenNFT(isSelected ? null : nft.tokenId)}
-                                className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
-                                  isSelected
-                                    ? 'border-purple-500 shadow-lg shadow-purple-500/50 scale-95'
-                                    : 'border-gray-700 hover:border-purple-400'
-                                }`}
-                              >
-                                {/* Selection Indicator */}
-                                <div className="absolute top-2 left-2 z-10">
-                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                    isSelected ? 'bg-purple-500 border-purple-500' : 'bg-gray-800/80 border-gray-600'
-                                  }`}>
-                                    {isSelected && <span className="text-white text-xs">✓</span>}
-                                  </div>
-                                </div>
+                  {/* NFT Preview Card */}
+                  <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+                    <div className="text-center space-y-4">
+                      <h3 className="text-xl font-bold text-white">One-Click Purchase</h3>
+                      <p className="text-gray-400 text-sm">
+                        Buy ETH → Get Token → Receive NFT instantly
+                      </p>
 
-                                {/* NFT Image */}
-                                <div className="aspect-square relative">
-                                  <img
-                                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
-                                    alt={nft.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-
-                                {/* NFT Info */}
-                                <div className="p-2 bg-gray-900/90">
-                                  <p className="text-white text-xs font-semibold truncate">{nft.name}</p>
-                                  <p className="text-gray-400 text-xs">#{nft.tokenId}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Swap Preview */}
-                  {(selectedUserNFT !== null || selectedWTokenNFT !== null) && (
-                    <div className="border-t border-gray-700 pt-6">
-                      <div className="bg-gray-800/50 rounded-xl p-4 mb-4">
-                        <div className="flex items-center justify-center gap-4">
-                          <div className="text-center">
-                            <p className="text-gray-400 text-sm mb-1">You give</p>
-                            <p className="text-white font-bold">
-                              {selectedUserNFT !== null ? `#${selectedUserNFT}` : '—'}
-                            </p>
+                      {/* NFT Preview */}
+                      <div className="flex justify-center">
+                        {finalNFTImageUrl ? (
+                          <div className="w-32 h-32 rounded-xl overflow-hidden border-2 border-green-500/50 shadow-lg shadow-green-500/20">
+                            <img
+                              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                              alt={nextTokenId ? `Human #${nextTokenId}` : 'NFT Preview'}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
-                          <div className="text-2xl">↔️</div>
-                          <div className="text-center">
-                            <p className="text-gray-400 text-sm mb-1">You get</p>
-                            <p className="text-white font-bold">
-                              {selectedWTokenNFT !== null ? `#${selectedWTokenNFT}` : '—'}
-                            </p>
+                        ) : isLoadingImage ? (
+                          <div className="w-32 h-32 rounded-xl bg-gray-700 animate-pulse" />
+                        ) : (
+                          <div className="w-32 h-32 rounded-xl bg-gray-700 flex items-center justify-center">
+                            <span className="text-4xl text-gray-500">?</span>
                           </div>
-                        </div>
-                        <p className="text-center text-gray-500 text-sm mt-3">
-                          Fee: {swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH
-                        </p>
+                        )}
                       </div>
 
-                      {/* Approval/Swap Button */}
-                      {!isApproved ? (
-                        <button
-                          onClick={supportsAtomicBatch ? handleApproveAndSwap : handleApprove}
-                          disabled={isPending || isConfirming || isBatchPending || isBatchConfirming || (supportsAtomicBatch && (selectedUserNFT === null || selectedWTokenNFT === null))}
-                          className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isBatchPending || isBatchConfirming
-                            ? '⚡ Processing...'
-                            : isPending || isConfirming
-                              ? 'Approving...'
-                              : supportsAtomicBatch
-                                ? `⚡ Approve & Swap for ${swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH`
-                                : '✅ Approve Wrapper Contract'}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleSwap}
-                          disabled={selectedUserNFT === null || selectedWTokenNFT === null || isPending || isConfirming}
-                          className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                        >
-                          
-                          <span>
-                            {isPending || isConfirming
-                              ? 'Swapping...'
-                              : `Swap NFTs for ${swapFee ? formatEther(BigInt(swapFee as bigint)) : '0'} ETH`}
-                          </span>
-                        </button>
-                      )}
+                      <div>
+                        <div className="text-2xl font-bold text-white">
+                          {nextTokenId ? `Human #${nextTokenId}` : isLoadingImage ? 'Loading...' : '1 Human NFT'}
+                        </div>
+                        <div className="text-gray-500 text-sm">
+                          {nextTokenId ? 'Next in queue (FIFO)' : isLoadingImage ? 'Fetching preview...' : 'From collection pool'}
+                        </div>
+                        <div className="text-gray-400 text-xs mt-1">
+                          {wTokensTotalHeld} NFTs available in pool
+                        </div>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Price Breakdown */}
+                  <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Token Cost</span>
+                      <span className="text-white font-semibold">
+                        {isLoadingQuote ? 'Loading...' : `${swapCost.toFixed(6)} ETH`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Wrap Fee</span>
+                      <span className="text-white font-semibold">{wrapFeeFormatted} ETH</span>
+                    </div>
+                    <div className="border-t border-gray-600 pt-3 flex justify-between items-center">
+                      <span className="text-white font-bold">Total</span>
+                      <span className="text-green-400 font-bold text-lg">
+                        {isLoadingQuote ? 'Loading...' : `${totalCostFromStep1.toFixed(6)} ETH`}
+                      </span>
+                    </div>
+                    <div className="text-right text-gray-500 text-xs">
+                      Balance: {parseFloat(ethBalance).toFixed(4)} ETH
+                    </div>
+                  </div>
+
+                  {/* Status Messages */}
+                  {!hasEnoughEthForSwap && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-center">
+                      <span className="text-red-400 text-sm">Insufficient ETH balance</span>
+                    </div>
+                  )}
+
+                  {(writeError || batchError) && txStep === 'error' && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-center">
+                      <span className="text-red-400 text-sm">
+                        {writeError?.message?.includes('User rejected') || batchError?.message?.includes('User rejected')
+                          ? 'Transaction cancelled'
+                          : 'Transaction failed. Please try again.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Success State */}
+                  {txStep === 'success' && (
+                    <div className="p-6 bg-green-500/10 border border-green-500/30 rounded-xl text-center">
+                      <div className="text-2xl font-bold text-green-400 mb-2">NFT Acquired!</div>
+                      {finalNFTImageUrl && (
+                        <div className="flex justify-center my-4">
+                          <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-green-500 shadow-lg shadow-green-500/30">
+                            <img
+                              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                              alt={nextTokenId ? `Human #${nextTokenId}` : 'Your NFT'}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-gray-400">
+                        {nextTokenId ? `Human #${nextTokenId} is now yours!` : 'Your new Human is waiting in your wallet'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Button */}
+                  {txStep === 'success' ? (
+                    <button
+                      onClick={() => {
+                        setTxStep('idle');
+                        refetchWTokenBalance();
+                        refetchWTokensNFTs();
+                        resetWrite();
+                        fetchQuote();
+                      }}
+                      className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-4 px-6 rounded-xl transition-all hover:from-green-600 hover:to-green-700"
+                    >
+                      🛒 Buy Another NFT
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (isBusy) return;
+                        // Smart wallet can batch everything
+                        if (supportsAtomicBatch) {
+                          handleBatchAll();
+                        } else if (!hasOneToken) {
+                          handleBuyToken();
+                        } else if (!isApprovedBool) {
+                          handleApprove();
+                        } else {
+                          handleGetNFT();
+                        }
+                      }}
+                      disabled={isBusy || isLoadingQuote || !hasEnoughEthForSwap}
+                      className={`w-full font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                        isBusy
+                          ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg shadow-green-500/30'
+                      }`}
+                    >
+                      {isBusy ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          <span>Processing...</span>
+                        </>
+                      ) : isLoadingQuote ? (
+                        'Loading price...'
+                      ) : supportsAtomicBatch ? (
+                        `⚡ Buy NFT (${totalCostFromStep1.toFixed(5)} ETH)`
+                      ) : !hasOneToken ? (
+                        `Buy Token (${swapCost.toFixed(5)} ETH)`
+                      ) : !isApprovedBool ? (
+                        'Approve Wrapper'
+                      ) : (
+                        `Get NFT (${wrapFeeFormatted} ETH)`
+                      )}
+                    </button>
+                  )}
+
+                  {/* Transaction Hash */}
+                  {hash && (
+                    <a
+                      href={`https://basescan.org/tx/${hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-sm text-green-400 text-center hover:bg-green-500/20 transition-colors"
+                    >
+                      View Transaction on Basescan
+                    </a>
                   )}
                 </div>
               ) : (

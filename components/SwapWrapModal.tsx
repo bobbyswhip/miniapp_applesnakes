@@ -9,26 +9,47 @@ import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { useBatchTransaction, ContractCall } from '@/hooks/useBatchTransaction';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useNFTContext } from '@/contexts/NFTContext';
+import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
 import { ERC20_ABI } from '@/abis/erc20';
 import type { Abi } from 'viem';
 
 interface SwapWrapModalProps {
   isOpen: boolean;
   onClose: () => void;
-  nftContractAddress: string;
+  nftContractAddress?: string;
+  initialMode?: 'buy' | 'wrap';
 }
 
 type PaymentMethod = 'eth' | 'wass';
+type ModalMode = 'buy' | 'wrap';
+type WrapSubMode = 'wrap' | 'unwrap' | 'swap';
 
 // Default estimate per NFT (used while loading accurate quote)
 const DEFAULT_ETH_PER_NFT = 0.0012; // ~0.0012 ETH per NFT as initial estimate
 
-export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
+export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy' }: SwapWrapModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
   const contracts = getContracts(base.id);
   const { addTransaction: _addTransaction, updateTransaction } = useTransactions();
-  const { refetch: refetchNFTs } = useNFTContext();
+  const { nfts, isLoading: nftsLoading, refetch: refetchNFTs } = useNFTContext();
+
+  // Modal mode state
+  const [mode, setMode] = useState<ModalMode>(initialMode);
+
+  // Wrap mode state
+  const [wrapSubMode, setWrapSubMode] = useState<WrapSubMode>('wrap');
+  const [selectedNFTs, setSelectedNFTs] = useState<Set<number>>(new Set());
+  const [wrappedNFTs, setWrappedNFTs] = useState<Set<number>>(new Set());
+
+  // Unwrap mode state
+  const [unwrapCount, setUnwrapCount] = useState<number>(1);
+  const [unwrapError, setUnwrapError] = useState<string>('');
+
+  // Swap mode state - uses cached pool NFTs
+  const { nfts: poolNFTs, isLoading: poolNFTsLoading, totalHeld: poolTotalHeld, refetch: refetchPoolNFTs } = useWTokensNFTsCache(false, false);
+  const [selectedPoolNFT, setSelectedPoolNFT] = useState<number | null>(null);
+  const [selectedUserNFTForSwap, setSelectedUserNFTForSwap] = useState<number | null>(null);
 
   // Smart wallet detection for batch transactions
   const { supportsAtomicBatch, isSmartWallet } = useSmartWallet();
@@ -94,12 +115,29 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
     chainId: base.id,
   });
 
+  // Get NFT approval status for wrapper contract (for wrap mode)
+  const { data: nftApprovalData, refetch: refetchNftApproval } = useReadContract({
+    address: contracts.nft.address,
+    abi: contracts.nft.abi,
+    functionName: 'isApprovedForAll',
+    args: address && contracts.wrapper.address ? [address, contracts.wrapper.address] : undefined,
+    chainId: base.id,
+  });
+
   const ethBalance = ethBalanceData ? formatEther(ethBalanceData.value) : '0';
   const tokenBalance = tokenBalanceData ? Number(formatUnits(tokenBalanceData as bigint, 18)) : 0;
   const wassApproved = wassApprovalData ? (wassApprovalData as bigint) >= parseEther(nftCount.toString()) : false;
+  const nftApproved = Boolean(nftApprovalData);
   const wrapFee = wrapFeeData ? BigInt(wrapFeeData as bigint) : 0n;
   const wrapFeeFormatted = formatEther(wrapFee);
   const hasEnoughWass = tokenBalance >= nftCount;
+
+  // Wrap mode calculations
+  const displayedNFTs = nfts.filter(nft => !wrappedNFTs.has(nft.tokenId));
+  const selectedCount = selectedNFTs.size;
+  const totalWrapFee = wrapFee * BigInt(selectedCount);
+  const totalWrapFeeFormatted = formatEther(totalWrapFee);
+  const hasEnoughEthForWrapFee = parseFloat(ethBalance) >= parseFloat(totalWrapFeeFormatted);
 
   // Set initial estimate immediately when count changes
   useEffect(() => {
@@ -358,12 +396,178 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
 
   const totalEthCost = parseFloat(ethNeeded);
   const totalWassCost = nftCount; // 1 wASS per NFT
-  const totalWrapFee = parseFloat(wrapFeeFormatted) * nftCount;
+  const totalBuyWrapFee = parseFloat(wrapFeeFormatted) * nftCount;
   const hasEnoughEth = parseFloat(ethBalance) >= totalEthCost;
-  const hasEnoughEthForWrapFee = parseFloat(ethBalance) >= totalWrapFee;
+  const hasEnoughEthForBuyWrapFee = parseFloat(ethBalance) >= totalBuyWrapFee;
   const isTransactionPending = isWritePending || isBatchPending;
   const isTransactionConfirming = isConfirming || isBatchConfirming;
   const isBusy = isTransactionPending || isTransactionConfirming || txStep === 'pending';
+
+  // ===== WRAP MODE: NFT Selection Handlers =====
+  const toggleNFT = (tokenId: number) => {
+    const newSelected = new Set(selectedNFTs);
+    if (newSelected.has(tokenId)) {
+      newSelected.delete(tokenId);
+    } else {
+      newSelected.add(tokenId);
+    }
+    setSelectedNFTs(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    setSelectedNFTs(new Set(displayedNFTs.map(nft => nft.tokenId)));
+  };
+
+  const handleUnselectAll = () => {
+    setSelectedNFTs(new Set());
+  };
+
+  // ===== WRAP MODE: Wrap NFTs to Tokens =====
+  const handleWrapNFTs = () => {
+    if (selectedNFTs.size === 0) return;
+
+    setTxStep('pending');
+    const tokenIds = Array.from(selectedNFTs);
+    const fee = wrapFee * BigInt(tokenIds.length);
+
+    // Immediately update UI for instant feedback
+    setWrappedNFTs(new Set([...wrappedNFTs, ...selectedNFTs]));
+    setSelectedNFTs(new Set());
+
+    writeContract({
+      address: contracts.wrapper.address as `0x${string}`,
+      abi: contracts.wrapper.abi,
+      functionName: 'wrapNFTs',
+      args: [contracts.nft.address, tokenIds],
+      value: fee,
+    });
+  };
+
+  // ===== WRAP MODE: Approve NFT for Wrapper =====
+  const handleApproveNFT = () => {
+    setTxStep('pending');
+    writeContract({
+      address: contracts.nft.address as `0x${string}`,
+      abi: contracts.nft.abi,
+      functionName: 'setApprovalForAll',
+      args: [contracts.wrapper.address, true],
+    });
+  };
+
+  // ===== WRAP MODE: Batch Approve + Wrap =====
+  const handleApproveAndWrap = async () => {
+    if (selectedNFTs.size === 0) return;
+
+    setTxStep('pending');
+    const tokenIds = Array.from(selectedNFTs);
+    const fee = wrapFee * BigInt(tokenIds.length);
+
+    // Immediately update UI for instant feedback
+    setWrappedNFTs(new Set([...wrappedNFTs, ...selectedNFTs]));
+    setSelectedNFTs(new Set());
+
+    try {
+      await executeBatch([
+        {
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi as Abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+          value: 0n,
+        },
+        {
+          address: contracts.wrapper.address as `0x${string}`,
+          abi: contracts.wrapper.abi as Abi,
+          functionName: 'wrapNFTs',
+          args: [contracts.nft.address, tokenIds],
+          value: fee,
+        },
+      ]);
+    } catch (error) {
+      console.error('Wrap error:', error);
+      // Revert UI on error
+      setWrappedNFTs(new Set());
+      setTxStep('error');
+    }
+  };
+
+  // ===== UNWRAP MODE: Unwrap Tokens to NFTs =====
+  const handleUnwrapNFTs = () => {
+    if (unwrapCount < 1) return;
+
+    setTxStep('pending');
+    const fee = wrapFee * BigInt(unwrapCount);
+
+    writeContract({
+      address: contracts.wrapper.address as `0x${string}`,
+      abi: contracts.wrapper.abi,
+      functionName: 'unwrapNFTs',
+      args: [contracts.nft.address, BigInt(unwrapCount)],
+      value: fee,
+    });
+  };
+
+  // Unwrap calculations
+  const unwrapFee = wrapFee * BigInt(unwrapCount);
+  const unwrapFeeFormatted = formatEther(unwrapFee);
+  const hasEnoughEthForUnwrap = parseFloat(ethBalance) >= parseFloat(unwrapFeeFormatted);
+  const hasEnoughTokensForUnwrap = tokenBalance >= unwrapCount;
+
+  // ===== SWAP MODE: Swap user NFT for pool NFT =====
+  const handleSwapNFTs = async () => {
+    if (selectedPoolNFT === null || selectedUserNFTForSwap === null) return;
+
+    setTxStep('pending');
+    const fee = wrapFee * 2n; // Swap fee is typically 2x wrap fee (wrap + unwrap)
+
+    try {
+      if (supportsAtomicBatch && !nftApproved) {
+        // Batch: approve + swap
+        await executeBatch([
+          {
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi as Abi,
+            functionName: 'setApprovalForAll',
+            args: [contracts.wrapper.address, true],
+            value: 0n,
+          },
+          {
+            address: contracts.wrapper.address as `0x${string}`,
+            abi: contracts.wrapper.abi as Abi,
+            functionName: 'swapNFT',
+            args: [contracts.nft.address, BigInt(selectedUserNFTForSwap), BigInt(selectedPoolNFT)],
+            value: fee,
+          },
+        ]);
+      } else if (nftApproved) {
+        // Just swap
+        writeContract({
+          address: contracts.wrapper.address as `0x${string}`,
+          abi: contracts.wrapper.abi,
+          functionName: 'swapNFT',
+          args: [contracts.nft.address, BigInt(selectedUserNFTForSwap), BigInt(selectedPoolNFT)],
+          value: fee,
+        });
+      } else {
+        // Need approval first
+        writeContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        });
+      }
+    } catch (error) {
+      console.error('Swap error:', error);
+      setTxStep('error');
+    }
+  };
+
+  // Swap calculations
+  const swapFee = wrapFee * 2n;
+  const swapFeeFormatted = formatEther(swapFee);
+  const hasEnoughEthForSwap = parseFloat(ethBalance) >= parseFloat(swapFeeFormatted);
+  const canSwap = selectedPoolNFT !== null && selectedUserNFTForSwap !== null && hasEnoughEthForSwap;
 
   useEffect(() => {
     if (isOpen) {
@@ -380,10 +584,27 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
       setTxStep('idle');
       setNftCount(1);
       setQuoteReady(false);
+      setMode(initialMode);
+      setWrapSubMode('wrap');
+      setSelectedNFTs(new Set());
+      setWrappedNFTs(new Set());
+      setUnwrapCount(1);
+      setUnwrapError('');
+      setSelectedPoolNFT(null);
+      setSelectedUserNFTForSwap(null);
       resetWrite();
       resetBatch();
     }
-  }, [isOpen, resetWrite, resetBatch]);
+  }, [isOpen, initialMode, resetWrite, resetBatch]);
+
+  // Refetch NFT approval after successful wrap approval
+  useEffect(() => {
+    if (isSuccess && mode === 'wrap') {
+      refetchNftApproval();
+      refetchNFTs();
+      refetchTokenBalance();
+    }
+  }, [isSuccess, mode, refetchNftApproval, refetchNFTs, refetchTokenBalance]);
 
   if (!isOpen) return null;
 
@@ -415,7 +636,7 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div>
                 <div
@@ -427,10 +648,10 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
                     WebkitTextFillColor: 'transparent',
                   }}
                 >
-                  Get Your NFT
+                  NFT Hub
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
-                  {paymentMethod === 'wass' ? 'wASS can be unwrapped to get NFTs' : 'One-click purchase from the collection'}
+                  Buy or wrap your NFTs
                 </div>
               </div>
             </div>
@@ -446,6 +667,54 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
               }}
             >
               ✕
+            </button>
+          </div>
+
+          {/* Mode Tabs */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button
+              onClick={() => setMode('buy')}
+              disabled={isBusy}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                background: mode === 'buy'
+                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))'
+                  : 'rgba(75, 85, 99, 0.3)',
+                border: mode === 'buy'
+                  ? '2px solid rgba(168, 85, 247, 0.8)'
+                  : '2px solid rgba(75, 85, 99, 0.4)',
+                borderRadius: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#fff',
+                cursor: isBusy ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              🛒 Buy NFT
+            </button>
+            <button
+              onClick={() => setMode('wrap')}
+              disabled={isBusy}
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                background: mode === 'wrap'
+                  ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9))'
+                  : 'rgba(75, 85, 99, 0.3)',
+                border: mode === 'wrap'
+                  ? '2px solid rgba(59, 130, 246, 0.8)'
+                  : '2px solid rgba(75, 85, 99, 0.4)',
+                borderRadius: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#fff',
+                cursor: isBusy ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              🪙 Wrap NFT
             </button>
           </div>
 
@@ -473,13 +742,22 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
               <div style={{ fontSize: 20, fontWeight: 600, color: 'rgba(34, 197, 94, 1)', marginBottom: 8 }}>
-                NFT{nftCount > 1 ? 's' : ''} Acquired!
+                {mode === 'buy' ? (nftCount > 1 ? 'NFTs Acquired!' : 'NFT Acquired!') : 'NFTs Wrapped!'}
               </div>
               <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 24 }}>
-                Your new human{nftCount > 1 ? 's are' : ' is'} waiting in your wallet
+                {mode === 'buy'
+                  ? `Your new human${nftCount > 1 ? 's are' : ' is'} waiting in your wallet`
+                  : 'Your NFTs have been converted to tokens'}
               </div>
               <button
-                onClick={onClose}
+                onClick={() => {
+                  setTxStep('idle');
+                  if (mode === 'wrap') {
+                    setWrappedNFTs(new Set());
+                    refetchNFTs();
+                    refetchTokenBalance();
+                  }
+                }}
                 style={{
                   width: '100%',
                   padding: 14,
@@ -492,10 +770,832 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
                   cursor: 'pointer',
                 }}
               >
-                Done
+                {mode === 'buy' ? 'Done' : 'Continue'}
               </button>
             </div>
+          ) : mode === 'wrap' ? (
+            /* ===== WRAP MODE UI ===== */
+            <>
+              {/* Sub-Mode Tabs */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                <button
+                  onClick={() => setWrapSubMode('wrap')}
+                  disabled={isBusy}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    background: wrapSubMode === 'wrap'
+                      ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9))'
+                      : 'rgba(75, 85, 99, 0.3)',
+                    border: wrapSubMode === 'wrap'
+                      ? '2px solid rgba(59, 130, 246, 0.8)'
+                      : '2px solid rgba(75, 85, 99, 0.4)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Wrap
+                </button>
+                <button
+                  onClick={() => setWrapSubMode('unwrap')}
+                  disabled={isBusy}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    background: wrapSubMode === 'unwrap'
+                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.9))'
+                      : 'rgba(75, 85, 99, 0.3)',
+                    border: wrapSubMode === 'unwrap'
+                      ? '2px solid rgba(34, 197, 94, 0.8)'
+                      : '2px solid rgba(75, 85, 99, 0.4)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Unwrap
+                </button>
+                <button
+                  onClick={() => setWrapSubMode('swap')}
+                  disabled={isBusy}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    background: wrapSubMode === 'swap'
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))'
+                      : 'rgba(75, 85, 99, 0.3)',
+                    border: wrapSubMode === 'swap'
+                      ? '2px solid rgba(168, 85, 247, 0.8)'
+                      : '2px solid rgba(75, 85, 99, 0.4)',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Swap
+                </button>
+              </div>
+
+              {wrapSubMode === 'wrap' ? (
+                /* ===== WRAP SUB-MODE ===== */
+                <>
+                  {/* Wrap Description */}
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)' }}>
+                      Convert your NFTs to fungible wASS tokens
+                    </div>
+                  </div>
+
+              {/* Selection Controls */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+                paddingBottom: 12,
+                borderBottom: '1px solid rgba(75, 85, 99, 0.4)',
+              }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                    {selectedCount} NFT{selectedCount !== 1 ? 's' : ''} selected
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+                    Fee: {totalWrapFeeFormatted} ETH
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleSelectAll}
+                    disabled={selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0 || isBusy}
+                    style={{
+                      padding: '6px 12px',
+                      background: 'rgba(59, 130, 246, 0.3)',
+                      border: '1px solid rgba(59, 130, 246, 0.5)',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      color: '#fff',
+                      cursor: 'pointer',
+                      opacity: (selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0 || isBusy) ? 0.5 : 1,
+                    }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={handleUnselectAll}
+                    disabled={selectedNFTs.size === 0 || isBusy}
+                    style={{
+                      padding: '6px 12px',
+                      background: 'rgba(75, 85, 99, 0.3)',
+                      border: '1px solid rgba(75, 85, 99, 0.5)',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      color: '#fff',
+                      cursor: 'pointer',
+                      opacity: (selectedNFTs.size === 0 || isBusy) ? 0.5 : 1,
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* NFT Grid */}
+              {nftsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                  <div style={{
+                    width: 40,
+                    height: 40,
+                    border: '3px solid rgba(59, 130, 246, 0.3)',
+                    borderTopColor: 'rgba(59, 130, 246, 1)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                </div>
+              ) : displayedNFTs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🤷</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
+                    No NFTs Found
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)' }}>
+                    You don&apos;t own any NFTs to wrap
+                  </div>
+                  <button
+                    onClick={() => setMode('buy')}
+                    style={{
+                      marginTop: 16,
+                      padding: '10px 20px',
+                      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))',
+                      border: '2px solid rgba(168, 85, 247, 0.8)',
+                      borderRadius: 10,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Get Your First NFT
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 8,
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                  paddingRight: 4,
+                }}>
+                  {displayedNFTs.map((nft) => {
+                    const isSelected = selectedNFTs.has(nft.tokenId);
+                    return (
+                      <button
+                        key={nft.tokenId}
+                        onClick={() => !isBusy && toggleNFT(nft.tokenId)}
+                        disabled={isBusy}
+                        style={{
+                          position: 'relative',
+                          borderRadius: 10,
+                          overflow: 'hidden',
+                          border: isSelected
+                            ? '2px solid rgba(59, 130, 246, 0.8)'
+                            : '2px solid rgba(75, 85, 99, 0.4)',
+                          background: 'rgba(17, 24, 39, 0.8)',
+                          cursor: isBusy ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s',
+                          transform: isSelected ? 'scale(0.95)' : 'scale(1)',
+                          boxShadow: isSelected ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none',
+                        }}
+                      >
+                        {/* Selection Indicator */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 6,
+                          left: 6,
+                          width: 20,
+                          height: 20,
+                          borderRadius: '50%',
+                          border: '2px solid',
+                          borderColor: isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(75, 85, 99, 0.6)',
+                          background: isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(17, 24, 39, 0.8)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 1,
+                        }}>
+                          {isSelected && <span style={{ color: '#fff', fontSize: 10 }}>✓</span>}
+                        </div>
+
+                        {/* NFT Image */}
+                        <div style={{ aspectRatio: '1', position: 'relative' }}>
+                          <img
+                            src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                            alt={nft.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+
+                        {/* NFT Info */}
+                        <div style={{ padding: 6, background: 'rgba(17, 24, 39, 0.9)' }}>
+                          <div style={{ fontSize: 10, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {nft.name}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'rgba(255, 255, 255, 0.5)' }}>
+                            #{nft.tokenId}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Insufficient ETH Warning */}
+              {selectedCount > 0 && !hasEnoughEthForWrapFee && (
+                <div style={{
+                  marginTop: 12,
+                  padding: 12,
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: 10,
+                  textAlign: 'center',
+                }}>
+                  <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
+                    Insufficient ETH for wrap fee. Need {totalWrapFeeFormatted} ETH
+                  </span>
+                </div>
+              )}
+
+              {/* Wrap Action Button */}
+              {displayedNFTs.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  {!nftApproved ? (
+                    <button
+                      onClick={supportsAtomicBatch ? handleApproveAndWrap : handleApproveNFT}
+                      disabled={isBusy || (supportsAtomicBatch && selectedCount === 0) || !hasEnoughEthForWrapFee}
+                      style={{
+                        width: '100%',
+                        padding: 14,
+                        background: isBusy
+                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                          : 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
+                        border: '2px solid rgba(251, 191, 36, 0.5)',
+                        borderRadius: 12,
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: '#fff',
+                        cursor: isBusy ? 'not-allowed' : 'pointer',
+                        opacity: (isBusy || (supportsAtomicBatch && selectedCount === 0) || !hasEnoughEthForWrapFee) ? 0.7 : 1,
+                      }}
+                    >
+                      {isBusy
+                        ? '⚡ Processing...'
+                        : supportsAtomicBatch
+                          ? `⚡ Approve & Wrap ${selectedCount} NFT${selectedCount !== 1 ? 's' : ''}`
+                          : '✅ Approve Wrapper Contract'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleWrapNFTs}
+                      disabled={selectedCount === 0 || isBusy || !hasEnoughEthForWrapFee}
+                      style={{
+                        width: '100%',
+                        padding: 14,
+                        background: isBusy
+                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                          : 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95))',
+                        border: '2px solid rgba(59, 130, 246, 0.5)',
+                        borderRadius: 12,
+                        fontSize: 16,
+                        fontWeight: 700,
+                        color: '#fff',
+                        cursor: isBusy ? 'not-allowed' : 'pointer',
+                        opacity: (selectedCount === 0 || isBusy || !hasEnoughEthForWrapFee) ? 0.7 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <span>🪙</span>
+                      <span>
+                        {isBusy
+                          ? 'Processing...'
+                          : `Wrap ${selectedCount} NFT${selectedCount !== 1 ? 's' : ''} for ${totalWrapFeeFormatted} ETH`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+                </>
+              ) : wrapSubMode === 'unwrap' ? (
+                /* ===== UNWRAP SUB-MODE ===== */
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)' }}>
+                      Convert wASS tokens back to NFTs (FIFO)
+                    </div>
+                  </div>
+
+                  {/* Unwrap Form */}
+                  <div style={{
+                    backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 16,
+                    border: '1px solid rgba(34, 197, 94, 0.5)',
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      {/* Left: Balance & Input */}
+                      <div>
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4 }}>
+                            Your Balance
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                            {tokenBalance.toFixed(2)} wASS
+                          </div>
+                        </div>
+                        <label style={{ display: 'block', fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6 }}>
+                          Amount to unwrap
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={unwrapCount}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value.includes('.')) {
+                              setUnwrapError('Whole numbers only');
+                              return;
+                            }
+                            const num = parseInt(value) || 0;
+                            if (num < 1) {
+                              setUnwrapError('Must be at least 1');
+                              setUnwrapCount(0);
+                            } else {
+                              setUnwrapError('');
+                              setUnwrapCount(num);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                            border: `1px solid ${unwrapError ? 'rgba(239, 68, 68, 0.6)' : 'rgba(75, 85, 99, 0.4)'}`,
+                            borderRadius: 8,
+                            padding: 10,
+                            color: '#fff',
+                            textAlign: 'center',
+                            fontSize: 18,
+                            fontWeight: 700,
+                            outline: 'none',
+                          }}
+                        />
+                        {unwrapError && (
+                          <div style={{ fontSize: 11, color: 'rgba(239, 68, 68, 1)', marginTop: 6 }}>
+                            {unwrapError}
+                          </div>
+                        )}
+                        {!unwrapError && (
+                          <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', marginTop: 6 }}>
+                            Fee: {unwrapFeeFormatted} ETH
+                          </div>
+                        )}
+                      </div>
+                      {/* Right: You Receive */}
+                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 6 }}>
+                          You receive
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                          <div style={{ fontSize: 26, fontWeight: 700, color: 'rgba(34, 197, 94, 1)' }}>
+                            {unwrapCount}
+                          </div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                            NFT{unwrapCount !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Insufficient Balance Warning */}
+                  {!hasEnoughTokensForUnwrap && unwrapCount > 0 && (
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 12,
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: 10,
+                      textAlign: 'center',
+                    }}>
+                      <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
+                        Insufficient wASS balance. You have {tokenBalance.toFixed(2)} wASS.
+                      </span>
+                    </div>
+                  )}
+
+                  {!hasEnoughEthForUnwrap && unwrapCount > 0 && hasEnoughTokensForUnwrap && (
+                    <div style={{
+                      marginBottom: 16,
+                      padding: 12,
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: 10,
+                      textAlign: 'center',
+                    }}>
+                      <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
+                        Insufficient ETH for unwrap fee. Need {unwrapFeeFormatted} ETH
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Unwrap Button */}
+                  <button
+                    onClick={handleUnwrapNFTs}
+                    disabled={
+                      !!unwrapError ||
+                      unwrapCount < 1 ||
+                      !hasEnoughTokensForUnwrap ||
+                      !hasEnoughEthForUnwrap ||
+                      isBusy
+                    }
+                    style={{
+                      width: '100%',
+                      padding: 14,
+                      background: isBusy
+                        ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                        : 'linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95))',
+                      border: '2px solid rgba(34, 197, 94, 0.5)',
+                      borderRadius: 12,
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: '#fff',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                      opacity: (!!unwrapError || unwrapCount < 1 || !hasEnoughTokensForUnwrap || !hasEnoughEthForUnwrap || isBusy) ? 0.7 : 1,
+                    }}
+                  >
+                    {isBusy
+                      ? 'Unwrapping...'
+                      : `Unwrap ${unwrapCount} NFT${unwrapCount !== 1 ? 's' : ''} for ${unwrapFeeFormatted} ETH`}
+                  </button>
+                </>
+              ) : (
+                /* ===== SWAP SUB-MODE ===== */
+                <>
+                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)' }}>
+                      Trade your NFT for another from the pool
+                    </div>
+                  </div>
+
+                  {/* Step indicator */}
+                  <div style={{
+                    textAlign: 'center',
+                    marginBottom: 12,
+                    padding: 8,
+                    background: 'rgba(168, 85, 247, 0.1)',
+                    borderRadius: 8,
+                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                  }}>
+                    <span style={{ fontSize: 12, color: 'rgba(168, 85, 247, 1)' }}>
+                      {selectedPoolNFT === null
+                        ? 'Step 1: Select an NFT you want from the pool'
+                        : selectedUserNFTForSwap === null
+                          ? 'Step 2: Select your NFT to trade'
+                          : '✓ Ready to swap!'}
+                    </span>
+                  </div>
+
+                  {/* Step 1: Pool NFTs Selection */}
+                  {selectedPoolNFT === null ? (
+                    <>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                      }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                          Pool NFTs ({poolTotalHeld})
+                        </div>
+                        <button
+                          onClick={() => refetchPoolNFTs()}
+                          disabled={poolNFTsLoading}
+                          style={{
+                            padding: '4px 8px',
+                            background: 'rgba(168, 85, 247, 0.3)',
+                            border: '1px solid rgba(168, 85, 247, 0.5)',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            color: '#fff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {poolNFTsLoading ? '...' : '↻'}
+                        </button>
+                      </div>
+
+                      {poolNFTsLoading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                          <div style={{
+                            width: 40,
+                            height: 40,
+                            border: '3px solid rgba(168, 85, 247, 0.3)',
+                            borderTopColor: 'rgba(168, 85, 247, 1)',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                          }} />
+                        </div>
+                      ) : poolNFTs.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                          <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+                          <div style={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.6)' }}>
+                            No NFTs in pool
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 6,
+                          maxHeight: 220,
+                          overflowY: 'auto',
+                          paddingRight: 4,
+                        }}>
+                          {poolNFTs.map((nft) => (
+                            <button
+                              key={nft.tokenId}
+                              onClick={() => setSelectedPoolNFT(nft.tokenId)}
+                              style={{
+                                position: 'relative',
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '1px solid rgba(75, 85, 99, 0.4)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                background: 'rgba(17, 24, 39, 0.8)',
+                              }}
+                            >
+                              <div style={{ aspectRatio: '1', position: 'relative' }}>
+                                <img
+                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  alt={nft.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
+                              <div style={{ padding: 4, background: 'rgba(17, 24, 39, 0.9)' }}>
+                                <div style={{ fontSize: 9, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  #{nft.tokenId}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : selectedUserNFTForSwap === null ? (
+                    /* Step 2: Select your NFT to trade */
+                    <>
+                      {/* Show selected pool NFT */}
+                      <div style={{
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 12,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.6)' }}>You will receive:</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>#{selectedPoolNFT}</span>
+                        </div>
+                        <button
+                          onClick={() => setSelectedPoolNFT(null)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(239, 68, 68, 1)',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          Change
+                        </button>
+                      </div>
+
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
+                        Select your NFT to trade ({nfts.length})
+                      </div>
+
+                      {nftsLoading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+                          <div style={{
+                            width: 40,
+                            height: 40,
+                            border: '3px solid rgba(59, 130, 246, 0.3)',
+                            borderTopColor: 'rgba(59, 130, 246, 1)',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                          }} />
+                        </div>
+                      ) : nfts.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                          <div style={{ fontSize: 32, marginBottom: 8 }}>🤷</div>
+                          <div style={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.6)' }}>
+                            You don&apos;t have any NFTs to swap
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 6,
+                          maxHeight: 180,
+                          overflowY: 'auto',
+                          paddingRight: 4,
+                        }}>
+                          {nfts.map((nft) => (
+                            <button
+                              key={nft.tokenId}
+                              onClick={() => setSelectedUserNFTForSwap(nft.tokenId)}
+                              style={{
+                                position: 'relative',
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '1px solid rgba(75, 85, 99, 0.4)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                background: 'rgba(17, 24, 39, 0.8)',
+                              }}
+                            >
+                              <div style={{ aspectRatio: '1', position: 'relative' }}>
+                                <img
+                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  alt={nft.name}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
+                              <div style={{ padding: 4, background: 'rgba(17, 24, 39, 0.9)' }}>
+                                <div style={{ fontSize: 9, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  #{nft.tokenId}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* Step 3: Confirm swap */
+                    <>
+                      <div style={{
+                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        borderRadius: 12,
+                        padding: 16,
+                        marginBottom: 16,
+                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', marginBottom: 16 }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4 }}>You give</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: 'rgba(239, 68, 68, 1)' }}>#{selectedUserNFTForSwap}</div>
+                          </div>
+                          <div style={{ fontSize: 24 }}>→</div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', marginBottom: 4 }}>You get</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: 'rgba(34, 197, 94, 1)' }}>#{selectedPoolNFT}</div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'center', paddingTop: 12, borderTop: '1px solid rgba(75, 85, 99, 0.4)' }}>
+                          <span style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.6)' }}>Swap fee: </span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{swapFeeFormatted} ETH</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <button
+                          onClick={() => {
+                            setSelectedPoolNFT(null);
+                            setSelectedUserNFTForSwap(null);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: 10,
+                            background: 'rgba(75, 85, 99, 0.3)',
+                            border: '1px solid rgba(75, 85, 99, 0.5)',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            color: '#fff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Start Over
+                        </button>
+                        <button
+                          onClick={() => setSelectedUserNFTForSwap(null)}
+                          style={{
+                            flex: 1,
+                            padding: 10,
+                            background: 'rgba(59, 130, 246, 0.3)',
+                            border: '1px solid rgba(59, 130, 246, 0.5)',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            color: '#fff',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Change My NFT
+                        </button>
+                      </div>
+
+                      {!hasEnoughEthForSwap && (
+                        <div style={{
+                          marginBottom: 12,
+                          padding: 12,
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          borderRadius: 10,
+                          textAlign: 'center',
+                        }}>
+                          <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
+                            Insufficient ETH for swap fee. Need {swapFeeFormatted} ETH
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Swap Button */}
+                      {!nftApproved ? (
+                        <button
+                          onClick={handleSwapNFTs}
+                          disabled={isBusy || !hasEnoughEthForSwap}
+                          style={{
+                            width: '100%',
+                            padding: 14,
+                            background: isBusy
+                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                              : 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
+                            border: '2px solid rgba(251, 191, 36, 0.5)',
+                            borderRadius: 12,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: '#fff',
+                            cursor: isBusy ? 'not-allowed' : 'pointer',
+                            opacity: (isBusy || !hasEnoughEthForSwap) ? 0.7 : 1,
+                          }}
+                        >
+                          {isBusy
+                            ? '⚡ Processing...'
+                            : supportsAtomicBatch
+                              ? `⚡ Approve & Swap for ${swapFeeFormatted} ETH`
+                              : '✅ Approve NFT First'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSwapNFTs}
+                          disabled={isBusy || !hasEnoughEthForSwap}
+                          style={{
+                            width: '100%',
+                            padding: 14,
+                            background: isBusy
+                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                              : 'linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(139, 92, 246, 0.95))',
+                            border: '2px solid rgba(168, 85, 247, 0.5)',
+                            borderRadius: 12,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: '#fff',
+                            cursor: isBusy ? 'not-allowed' : 'pointer',
+                            opacity: (isBusy || !hasEnoughEthForSwap) ? 0.7 : 1,
+                          }}
+                        >
+                          {isBusy ? 'Swapping...' : `🔄 Swap for ${swapFeeFormatted} ETH`}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* CSS for spinner animation */}
+              <style jsx>{`
+                @keyframes spin {
+                  to { transform: rotate(360deg); }
+                }
+              `}</style>
+            </>
           ) : (
+            /* ===== BUY MODE UI ===== */
             <>
               {/* NFT Count Selector */}
               <div
@@ -679,7 +1779,7 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
                         Wrap Fee
                       </span>
                       <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>
-                        {totalWrapFee.toFixed(6)} ETH
+                        {totalBuyWrapFee.toFixed(6)} ETH
                       </span>
                     </div>
                     <div
@@ -692,7 +1792,7 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Total</span>
                         <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(34, 197, 94, 1)' }}>
-                          {totalWassCost} wASS + {totalWrapFee.toFixed(6)} ETH
+                          {totalWassCost} wASS + {totalBuyWrapFee.toFixed(6)} ETH
                         </span>
                       </div>
                     </div>
@@ -747,7 +1847,7 @@ export function SwapWrapModal({ isOpen, onClose }: SwapWrapModalProps) {
                   }}
                 >
                   <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
-                    Insufficient ETH for wrap fee. Need {totalWrapFee.toFixed(6)} ETH
+                    Insufficient ETH for wrap fee. Need {totalBuyWrapFee.toFixed(6)} ETH
                   </span>
                 </div>
               )}

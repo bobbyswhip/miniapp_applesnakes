@@ -19,6 +19,13 @@ interface InventoryContextType {
   setShowPredictionJack: (open: boolean) => void;
   showUnity: boolean;
   setShowUnity: (open: boolean) => void;
+  // NFT Hub (SwapWrapModal) state
+  showNFTHub: boolean;
+  setShowNFTHub: (open: boolean) => void;
+  nftHubMode: 'buy' | 'wrap';
+  setNFTHubMode: (mode: 'buy' | 'wrap') => void;
+  openNFTHub: (mode?: 'buy' | 'wrap') => void;
+  closeNFTHub: () => void;
   // Coordinated open functions that close other UIs
   openInventory: () => void;
   openSwapMint: () => void;
@@ -40,6 +47,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [showBreed, setShowBreed] = useState(false);
   const [showPredictionJack, setShowPredictionJack] = useState(false);
   const [showUnity, setShowUnity] = useState(false);
+  const [showNFTHub, setShowNFTHub] = useState(false);
+  const [nftHubMode, setNFTHubMode] = useState<'buy' | 'wrap'>('buy');
 
   const toggleInventory = () => setIsOpen(prev => !prev);
 
@@ -118,6 +127,23 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowUnity(false);
   };
 
+  const openNFTHub = (mode: 'buy' | 'wrap' = 'buy') => {
+    setNFTHubMode(mode);
+    setShowNFTHub(true);
+    // Close other UIs
+    setIsOpen(false);
+    setShowSwapMint(false);
+    setShowChat(false);
+    setShowHatch(false);
+    setShowBreed(false);
+    setShowPredictionJack(false);
+    setShowUnity(false);
+  };
+
+  const closeNFTHub = () => {
+    setShowNFTHub(false);
+  };
+
   return (
     <InventoryContext.Provider
       value={{
@@ -136,6 +162,12 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setShowPredictionJack,
         showUnity,
         setShowUnity,
+        showNFTHub,
+        setShowNFTHub,
+        nftHubMode,
+        setNFTHubMode,
+        openNFTHub,
+        closeNFTHub,
         openInventory,
         openSwapMint,
         openChat,

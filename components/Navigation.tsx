@@ -19,7 +19,7 @@ export function Navigation() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { nfts: _nfts } = useNFTContext();
-  const { toggleInventory, openUnity, showUnity, closeUnity } = useInventory();
+  const { toggleInventory, openUnity, showUnity, closeUnity, showNFTHub, nftHubMode, openNFTHub, closeNFTHub } = useInventory();
   const { displayName, hasBasename } = useBasename(address);
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
@@ -28,8 +28,6 @@ export function Navigation() {
   const [tokenPrice, setTokenPrice] = useState<string>('0');
   const [ethPrice, setEthPrice] = useState<number>(0);
 
-  // Swap-wrap modal state (for sold out collection)
-  const [isSwapWrapModalOpen, setIsSwapWrapModalOpen] = useState(false);
 
   // Chart modal state
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
@@ -242,7 +240,7 @@ export function Navigation() {
                   ? 'bg-gradient-to-r from-cyan-950/40 via-purple-950/40 to-pink-950/40 border-cyan-500/30 hover:border-cyan-400/50 cursor-pointer'
                   : 'bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 cursor-pointer'
               } backdrop-blur-sm transition-all duration-300`}
-              onClick={mintIsLive ? handleFastTravelMint : () => setIsSwapWrapModalOpen(true)}
+              onClick={mintIsLive ? handleFastTravelMint : () => openNFTHub('buy')}
               style={{
                 boxShadow: mintIsLive
                   ? '0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 15px rgba(168, 85, 247, 0.03)'
@@ -600,11 +598,12 @@ export function Navigation() {
       </div>
     </nav>
 
-    {/* Swap-Wrap Modal - OUTSIDE nav to avoid sticky stacking context issues */}
+    {/* SwapWrapModal - Universal NFT Hub */}
     <SwapWrapModal
-      isOpen={isSwapWrapModalOpen}
-      onClose={() => setIsSwapWrapModalOpen(false)}
+      isOpen={showNFTHub}
+      onClose={closeNFTHub}
       nftContractAddress={contracts.nft.address}
+      initialMode={nftHubMode}
     />
 
     {/* Chart Modal */}

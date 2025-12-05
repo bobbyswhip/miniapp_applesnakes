@@ -1,100 +1,80 @@
-# NFT Cache Implementation Guide
+# wTokens NFT Cache API Guide
+
+This guide explains how to use the new wTokens NFT caching system on the EC2 server to replace slow client-side RPC calls.
 
 ## Overview
 
-This guide explains how to migrate your frontend from direct blockchain/IPFS fetching to using the new cached NFT API. The cache dramatically improves load times by:
+The EC2 server now caches all NFTs held by the wTokens contract. Instead of making hundreds of RPC calls to fetch NFT data (which was slow and expensive), the frontend can now fetch cached data from a single API endpoint.
 
-1. **Pre-fetching all NFT data** from blockchain and IPFS
-2. **Storing in SQLite database** on the server
-3. **Smart cache invalidation** based on `totalFeesCollected` from wTokens contract
-4. **Rate limiting** to 1 request per minute per IP
+### Benefits
+- **Speed**: ~50ms response vs ~2-5 minutes client-side
+- **Cost**: No Alchemy/RPC credits consumed per client request
+- **Reliability**: Server handles RPC rate limits and retries
+- **Real-time Updates**: Cache refreshes every 60 seconds when changes are detected
 
-## API Endpoint
+## API Endpoints
 
-### GET `/api/nft-cache`
-
-Returns all cached NFT holdings from the wTokens wrapper contract.
-
-**Rate Limit**: 1 request per minute per IP
-
-**Response**:
-```json
-{
-  "success": true,
-  "data": {
-    "nfts": [
-      {
-        "tokenId": 123,
-        "owner": "0x038b70E9311D5aE12C816c32818aeec90cBe7C29",
-        "isSnake": false,
-        "isJailed": false,
-        "jailTime": 0,
-        "isEgg": false,
-        "mintTime": 1699123456,
-        "forceHatched": false,
-        "evolved": true,
-        "ownerIsWarden": false,
-        "ownerIsJailExempt": false,
-        "swapMintTime": 0,
-        "canUnwrap": true,
-        "imageUrl": "QmXXX.../123.png",
-        "name": "AppleSnake #123",
-        "nftType": "human",
-        "metadata": {
-          "name": "AppleSnake #123",
-          "description": "...",
-          "attributes": [...]
-        }
-      }
-    ],
-    "totalHeld": 250,
-    "cacheStatus": {
-      "lastFeesCollected": "1234567890000000000",
-      "lastUpdated": 1699123456789,
-      "totalCached": 250,
-      "isRefreshing": false
-    },
-    "fromCache": true
-  },
-  "rateLimit": {
-    "limit": 1,
-    "remaining": 0,
-    "resetIn": 60
-  },
-  "contracts": {
-    "wTokensAddress": "0x038b70E9311D5aE12C816c32818aeec90cBe7C29",
-    "nftAddress": "0xa85D49d8B7a041c339D18281a750dE3D7c15A628",
-    "ipfsGateway": "https://surrounding-amaranth-catshark.myfilebase.com/ipfs/"
-  }
-}
+### Base URL
+```
+http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001
 ```
 
-**Error Response (429 Rate Limited)**:
-```json
-{
-  "error": "Rate limit exceeded",
-  "message": "Rate limit exceeded: too many requests per minute",
-  "retryAfter": 45,
-  "limits": {
-    "perSecond": { "current": 1, "max": 1 },
-    "perMinute": { "current": 1, "max": 1 }
-  }
-}
-```
+### 1. Get Cached NFTs
 
-## Frontend Implementation
+**GET `/api/wtokens-nfts`**
 
-### 1. Create the API Hook
+Returns all NFTs currently held by the wTokens contract.
 
-Replace `useWTokensNFTs` with a new hook that calls the cached API:
+#### Query Parameters
+| Parameter | Type   | Description                              |
+|-----------|--------|------------------------------------------|
+| `limit`   | number | Max NFTs to return (optional)            |
+| `offset`  | number | Starting index for pagination (optional) |
+| `type`    | string | Filter by nftType: human, snake, egg     |
 
+#### Example Request
 ```typescript
-// hooks/useWTokensNFTsCache.ts
-import { useState, useEffect, useCallback } from 'react';
+// Fetch all NFTs
+const response = await fetch('http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/api/wtokens-nfts');
+const data = await response.json();
 
-export interface CachedNFT {
+// Fetch with pagination
+const response = await fetch('http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/api/wtokens-nfts?limit=100&offset=0');
+
+// Filter by type
+const response = await fetch('http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/api/wtokens-nfts?type=human');
+```
+
+#### Response Format
+```typescript
+interface WTokensNFTsResponse {
+  success: boolean;
+  nfts: CachedNFT[];
+  totalCount: number;       // Total NFTs matching filter
+  returnedCount: number;    // NFTs in this response
+  offset: number;
+  hasMore: boolean;
+  cacheStatus: {
+    isLoopRunning: boolean;
+    lastRefreshTime: string;  // ISO timestamp
+    isRefreshing: boolean;
+    stats: {
+      totalHeld: number;
+      humansCount: number;
+      snakesCount: number;
+      eggsCount: number;
+      jailedCount: number;
+    };
+  };
+}
+
+interface CachedNFT {
   tokenId: number;
-  owner: string;
+  imageUrl: string;           // IPFS hash (without gateway prefix)
+  name: string;
+  nftType: 'human' | 'snake' | 'egg' | 'warden';
+  owner: string;              // wTokens contract address
+  exists: boolean;
   isSnake: boolean;
   isJailed: boolean;
   jailTime: number;
@@ -106,368 +86,293 @@ export interface CachedNFT {
   ownerIsJailExempt: boolean;
   swapMintTime: number;
   canUnwrap: boolean;
-  imageUrl: string;
-  name: string;
-  nftType: 'human' | 'snake' | 'warden' | 'egg';
-  metadata: Record<string, any>;
+  metadata: {
+    name: string;
+    description: string;
+    image: string;            // ipfs:// URL
+    attributes: Array<{
+      trait_type: string;
+      value: string;
+    }>;
+  } | null;
 }
+```
+
+### 2. Get Cache Status
+
+**GET `/api/wtokens-status`**
+
+Returns the current status of the cache polling loop.
+
+#### Example Request
+```typescript
+const response = await fetch('http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/api/wtokens-status');
+const data = await response.json();
+```
+
+#### Response Format
+```typescript
+interface WTokensStatusResponse {
+  success: boolean;
+  status: {
+    isLoopRunning: boolean;       // True if polling is active
+    loopStartTime: string;        // When polling started
+    pollIntervalMs: number;       // Polling interval (60000ms)
+    totalPolls: number;           // Total poll cycles run
+    totalRefreshes: number;       // Times cache was refreshed
+    lastRefreshTime: string;      // Last successful refresh
+    isRefreshing: boolean;        // Currently refreshing?
+    refreshError: string | null;  // Last error if any
+    lastFeesCollected: string;    // "0.123 ETH" - change trigger
+    cachedNFTCount: number;       // NFTs in cache
+    stats: {
+      totalHeld: number;
+      humansCount: number;
+      snakesCount: number;
+      eggsCount: number;
+      jailedCount: number;
+    };
+    contracts: {
+      wTokens: string;            // wTokens contract address
+      nft: string;                // NFT contract address
+    };
+  };
+}
+```
+
+### 3. Force Refresh (Admin Only)
+
+**POST `/api/wtokens-refresh`**
+
+Manually trigger a cache refresh. Requires admin IP.
+
+```typescript
+const response = await fetch('http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/api/wtokens-refresh', {
+  method: 'POST'
+});
+```
+
+## Frontend Implementation
+
+### Option 1: Replace useWTokensNFTs Hook
+
+Create a new hook that uses the cached endpoint:
+
+```typescript
+// hooks/useWTokensNFTsCached.ts
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import type { UserNFT } from './useUserNFTs';
+
+const CACHE_API_URL = 'http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001';
 
 interface CacheStatus {
-  lastFeesCollected: string;
-  lastUpdated: number;
-  totalCached: number;
+  isLoopRunning: boolean;
+  lastRefreshTime: string;
   isRefreshing: boolean;
+  stats: {
+    totalHeld: number;
+    humansCount: number;
+    snakesCount: number;
+    eggsCount: number;
+    jailedCount: number;
+  };
 }
 
-interface UseWTokensNFTsCacheResult {
-  nfts: CachedNFT[];
-  totalHeld: number;
-  cacheStatus: CacheStatus | null;
+interface WTokensNFTsCachedResult {
+  nfts: UserNFT[];
   isLoading: boolean;
   error: string | null;
-  rateLimitRemaining: number;
-  rateLimitResetIn: number;
-  refresh: () => Promise<void>;
-  fromCache: boolean;
+  refetch: () => void;
+  totalHeld: number;
+  cacheStatus: CacheStatus | null;
 }
 
-// IPFS gateway for displaying images
-const IPFS_GATEWAY = 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/';
-
-export function useWTokensNFTsCache(): UseWTokensNFTsCacheResult {
-  const [nfts, setNfts] = useState<CachedNFT[]>([]);
-  const [totalHeld, setTotalHeld] = useState(0);
-  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
+export function useWTokensNFTsCached(): WTokensNFTsCachedResult {
+  const [nfts, setNfts] = useState<UserNFT[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rateLimitRemaining, setRateLimitRemaining] = useState(1);
-  const [rateLimitResetIn, setRateLimitResetIn] = useState(60);
-  const [fromCache, setFromCache] = useState(false);
+  const [totalHeld, setTotalHeld] = useState(0);
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
 
-  const fetchNFTs = useCallback(async () => {
+  const fetchFromCache = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/nft-cache');
-
-      if (response.status === 429) {
-        const errorData = await response.json();
-        setError(`Rate limited. Try again in ${errorData.retryAfter} seconds.`);
-        setRateLimitRemaining(0);
-        setRateLimitResetIn(errorData.retryAfter || 60);
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`);
-      }
+      const response = await fetch(`${CACHE_API_URL}/api/wtokens-nfts`);
+      if (!response.ok) throw new Error('Failed to fetch cached NFTs');
 
       const data = await response.json();
 
-      if (data.success) {
-        setNfts(data.data.nfts);
-        setTotalHeld(data.data.totalHeld);
-        setCacheStatus(data.data.cacheStatus);
-        setFromCache(data.data.fromCache);
-        setRateLimitRemaining(data.rateLimit?.remaining ?? 0);
-        setRateLimitResetIn(data.rateLimit?.resetIn ?? 60);
-      } else {
-        throw new Error(data.error || 'Unknown error');
+      if (!data.success) {
+        throw new Error(data.error || 'Cache fetch failed');
       }
+
+      // Transform cached NFTs to UserNFT format
+      const transformedNFTs: UserNFT[] = data.nfts.map((nft: any) => ({
+        tokenId: nft.tokenId,
+        imageUrl: nft.imageUrl,
+        name: nft.name,
+        nftType: nft.nftType,
+        owner: nft.owner,
+        exists: nft.exists,
+        isSnake: nft.isSnake,
+        isJailed: nft.isJailed,
+        jailTime: nft.jailTime,
+        isEgg: nft.isEgg,
+        mintTime: nft.mintTime,
+        forceHatched: nft.forceHatched,
+        evolved: nft.evolved,
+        ownerIsWarden: nft.ownerIsWarden,
+        ownerIsJailExempt: nft.ownerIsJailExempt,
+        swapMintTime: nft.swapMintTime,
+        canUnwrap: nft.canUnwrap,
+        metadata: nft.metadata,
+      }));
+
+      setNfts(transformedNFTs);
+      setTotalHeld(data.totalCount);
+      setCacheStatus(data.cacheStatus);
+
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch NFTs');
+      console.error('Cache fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initial fetch
   useEffect(() => {
-    fetchNFTs();
-  }, [fetchNFTs]);
-
-  // Countdown for rate limit reset
-  useEffect(() => {
-    if (rateLimitResetIn > 0 && rateLimitRemaining === 0) {
-      const timer = setInterval(() => {
-        setRateLimitResetIn(prev => {
-          if (prev <= 1) {
-            setRateLimitRemaining(1);
-            return 60;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [rateLimitResetIn, rateLimitRemaining]);
+    fetchFromCache();
+  }, [fetchFromCache]);
 
   return {
     nfts,
-    totalHeld,
-    cacheStatus,
     isLoading,
     error,
-    rateLimitRemaining,
-    rateLimitResetIn,
-    refresh: fetchNFTs,
-    fromCache,
+    refetch: fetchFromCache,
+    totalHeld,
+    cacheStatus,
   };
 }
+```
 
-/**
- * Helper to get full image URL from cached imageUrl
- */
-export function getImageUrl(imageUrl: string): string {
-  if (!imageUrl) return '';
-  if (imageUrl.startsWith('http')) return imageUrl;
-  return `${IPFS_GATEWAY}${imageUrl}`;
+### Option 2: Fallback Pattern
+
+Use cached endpoint with fallback to on-chain fetching:
+
+```typescript
+// hooks/useWTokensNFTsWithFallback.ts
+import { useWTokensNFTsCached } from './useWTokensNFTsCached';
+import { useWTokensNFTs } from './useWTokensNFTs';
+
+export function useWTokensNFTsWithFallback() {
+  const cached = useWTokensNFTsCached();
+  const onChain = useWTokensNFTs(false, false); // disabled by default
+
+  // If cache fails, fall back to on-chain
+  if (cached.error && !onChain.isLoading) {
+    return onChain;
+  }
+
+  return cached;
 }
 ```
 
-### 2. Component Example
+### Option 3: Status Indicator Component
 
-```tsx
-// components/WTokensNFTGrid.tsx
-import { useWTokensNFTsCache, getImageUrl } from '@/hooks/useWTokensNFTsCache';
-import Image from 'next/image';
+Show cache status in the UI:
 
-export function WTokensNFTGrid() {
-  const {
-    nfts,
-    totalHeld,
-    cacheStatus,
-    isLoading,
-    error,
-    rateLimitRemaining,
-    rateLimitResetIn,
-    refresh,
-    fromCache,
-  } = useWTokensNFTsCache();
+```typescript
+// components/WTokensCacheStatus.tsx
+'use client';
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-        <span className="ml-3">Loading NFTs...</span>
-      </div>
-    );
-  }
+import { useState, useEffect } from 'react';
 
-  if (error) {
-    return (
-      <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
-        <p className="text-red-200">{error}</p>
-        {rateLimitRemaining === 0 && (
-          <p className="text-sm text-red-300 mt-2">
-            Rate limited. Reset in {rateLimitResetIn}s
-          </p>
-        )}
-      </div>
-    );
-  }
+const CACHE_API_URL = 'http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001';
+
+export function WTokensCacheStatus() {
+  const [status, setStatus] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${CACHE_API_URL}/api/wtokens-status`);
+        const data = await res.json();
+        if (data.success) setStatus(data.status);
+      } catch (e) {
+        console.error('Failed to fetch cache status');
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000); // Update every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!status) return null;
 
   return (
-    <div>
-      {/* Header with cache status */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">wTokens Holdings</h2>
-          <p className="text-sm text-gray-400">
-            {totalHeld} NFTs in wrapper
-            {fromCache && (
-              <span className="ml-2 text-green-400">(cached)</span>
-            )}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {/* Cache status */}
-          {cacheStatus && (
-            <div className="text-xs text-gray-500">
-              Updated: {new Date(cacheStatus.lastUpdated).toLocaleTimeString()}
-            </div>
-          )}
-
-          {/* Refresh button with rate limit indicator */}
-          <button
-            onClick={refresh}
-            disabled={rateLimitRemaining === 0 || isLoading}
-            className={`px-4 py-2 rounded ${
-              rateLimitRemaining > 0
-                ? 'bg-blue-600 hover:bg-blue-700'
-                : 'bg-gray-600 cursor-not-allowed'
-            }`}
-          >
-            {rateLimitRemaining === 0
-              ? `Refresh (${rateLimitResetIn}s)`
-              : 'Refresh'}
-          </button>
-        </div>
-      </div>
-
-      {/* NFT Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {nfts.map((nft) => (
-          <NFTCard key={nft.tokenId} nft={nft} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function NFTCard({ nft }: { nft: CachedNFT }) {
-  const imageUrl = getImageUrl(nft.imageUrl);
-
-  return (
-    <div className="bg-gray-800 rounded-lg overflow-hidden">
-      {/* Image */}
-      <div className="aspect-square relative">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={nft.name}
-            fill
-            className="object-cover"
-            unoptimized
-          />
-        ) : (
-          <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-            <span className="text-gray-500">No Image</span>
-          </div>
-        )}
-
-        {/* Type badge */}
-        <div
-          className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold ${
-            nft.nftType === 'snake'
-              ? 'bg-green-600'
-              : nft.nftType === 'warden'
-              ? 'bg-purple-600'
-              : nft.nftType === 'egg'
-              ? 'bg-yellow-600'
-              : 'bg-blue-600'
-          }`}
-        >
-          {nft.nftType}
-        </div>
-      </div>
-
-      {/* Info */}
-      <div className="p-3">
-        <h3 className="font-semibold truncate">{nft.name}</h3>
-        <p className="text-xs text-gray-400">#{nft.tokenId}</p>
-
-        {/* Status indicators */}
-        <div className="flex gap-1 mt-2">
-          {nft.isJailed && (
-            <span className="text-xs bg-red-600 px-1 rounded">Jailed</span>
-          )}
-          {nft.evolved && (
-            <span className="text-xs bg-green-600 px-1 rounded">Evolved</span>
-          )}
-          {nft.canUnwrap && (
-            <span className="text-xs bg-blue-600 px-1 rounded">Unwrappable</span>
-          )}
-        </div>
-      </div>
+    <div className="text-sm text-gray-400 flex items-center gap-2">
+      <span className={`w-2 h-2 rounded-full ${
+        status.isLoopRunning ? 'bg-green-500' : 'bg-red-500'
+      }`} />
+      <span>
+        {status.cachedNFTCount} NFTs cached
+        {status.isRefreshing && ' (refreshing...)'}
+      </span>
     </div>
   );
 }
 ```
 
-### 3. Migration from Old Hook
+## How It Works
 
-**Before (slow)**:
-```typescript
-// OLD: Direct blockchain + IPFS fetching
-import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
+### Change Detection
+The server polls the wTokens contract every 60 seconds, checking `totalFeesCollected`:
+- If fees change → wrap/unwrap occurred → refresh cache
+- If fees unchanged → skip refresh (cache is still valid)
 
-function MyComponent() {
-  const { nfts, isLoading, progress } = useWTokensNFTs();
-  // This fetches from blockchain + IPFS on every page load
-  // Takes 30-60+ seconds for large collections
-}
-```
+### Data Flow
+1. **Server startup**: Initialize cache, fetch all NFT data
+2. **Poll cycle**: Every 60s, check for changes
+3. **On change**: Re-fetch token IDs, token info, and metadata
+4. **Client request**: Return cached data instantly
 
-**After (fast)**:
-```typescript
-// NEW: Cached API
-import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
+### Metadata Source
+Metadata is loaded from the EC2 database (where NFT images are stored), not from IPFS. This makes it much faster and eliminates IPFS rate limits.
 
-function MyComponent() {
-  const { nfts, isLoading, cacheStatus } = useWTokensNFTsCache();
-  // This fetches from cache (instant)
-  // Only refreshes when totalFeesCollected changes
-}
-```
+## Migration Notes
 
-## Cache Invalidation
+1. **Replace imports**:
+   ```typescript
+   // Before
+   import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
 
-The cache automatically refreshes when:
+   // After
+   import { useWTokensNFTsCached } from '@/hooks/useWTokensNFTsCached';
+   ```
 
-1. **`totalFeesCollected` changes** - This indicates wrap/unwrap/swap activity
-2. **Manual refresh** - Admin can POST to `/api/nft-cache` with `{"action": "refresh"}`
-3. **First request** - If cache is empty
+2. **Handle loading state**: The cached version loads much faster (~50ms), so loading spinners may flash briefly.
 
-The cache does NOT refresh on every API call. It checks `totalFeesCollected` and only refreshes if the value changed since last cache update.
+3. **Error handling**: If the cache server is down, consider falling back to the original on-chain method.
 
-## Rate Limiting
-
-- **1 request per minute per IP**
-- 429 responses include `retryAfter` header
-- The hook handles countdown automatically
-- Admins (whitelisted IPs) bypass rate limits
-
-## Performance Comparison
-
-| Metric | Old (Direct Fetch) | New (Cached API) |
-|--------|-------------------|------------------|
-| Initial Load | 30-60+ seconds | < 1 second |
-| Subsequent Loads | 30-60+ seconds | < 100ms |
-| RPC Calls | 100+ per page load | 1 per minute max |
-| IPFS Fetches | 250+ per page load | 0 (pre-cached) |
-| Rate Limited | No | Yes (1/min/IP) |
-
-## Data Freshness
-
-- Cache updates within seconds when NFT holdings change
-- `fromCache: true` in response indicates data from cache
-- `cacheStatus.lastUpdated` shows when cache was last refreshed
-- `cacheStatus.isRefreshing` indicates if refresh is in progress
+4. **CORS**: The EC2 server has CORS enabled for all origins.
 
 ## Troubleshooting
 
-### "Rate limit exceeded"
-Wait for the countdown timer. The `retryAfter` value tells you how many seconds to wait.
+### Cache shows 0 NFTs
+- Check `/api/wtokens-status` for errors
+- Verify `isLoopRunning` is true
+- Check `refreshError` for details
 
-### Data seems stale
-Check `cacheStatus.lastFeesCollected` vs current on-chain value. If they match, cache is current.
+### Stale data
+- Cache refreshes every 60s when changes occur
+- Use `/api/wtokens-refresh` (admin) to force refresh
+- Check `lastRefreshTime` to see when data was last updated
 
-### Cache not refreshing
-1. Check if `isRefreshing: true` - refresh may be in progress
-2. Verify `totalFeesCollected` changed on-chain
-3. Admin can force refresh via POST endpoint
-
-## API Admin Endpoints
-
-### Force Refresh (Admin Only)
-```bash
-curl -X POST https://your-api.com/api/nft-cache \
-  -H "Content-Type: application/json" \
-  -d '{"action": "refresh"}'
-```
-
-### Get Status Only (Admin Only)
-```bash
-curl -X POST https://your-api.com/api/nft-cache \
-  -H "Content-Type: application/json" \
-  -d '{"action": "status"}'
-```
-
-## Contract Addresses
-
-- **NFT Contract**: `0xa85D49d8B7a041c339D18281a750dE3D7c15A628`
-- **wTokens Wrapper**: `0x038b70E9311D5aE12C816c32818aeec90cBe7C29`
-- **IPFS Gateway**: `https://surrounding-amaranth-catshark.myfilebase.com/ipfs/`
+### Connection errors
+- Verify EC2 is running: `curl http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3001/health`
+- Check PM2 logs: `pm2 logs nft-generator`
