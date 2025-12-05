@@ -996,7 +996,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy' }: SwapWrap
                         {/* NFT Image */}
                         <div style={{ aspectRatio: '1', position: 'relative' }}>
                           <img
-                            src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                            src={nft.imageUrl}
                             alt={nft.name}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           />
@@ -1346,7 +1346,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy' }: SwapWrap
                             >
                               <div style={{ aspectRatio: '1', position: 'relative' }}>
                                 <img
-                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  src={nft.imageUrl}
                                   alt={nft.name}
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
@@ -1441,7 +1441,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy' }: SwapWrap
                             >
                               <div style={{ aspectRatio: '1', position: 'relative' }}>
                                 <img
-                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  src={nft.imageUrl}
                                   alt={nft.name}
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />

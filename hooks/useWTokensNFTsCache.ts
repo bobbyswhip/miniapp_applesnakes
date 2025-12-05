@@ -3,9 +3,34 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { UserNFT, NFTType } from './useUserNFTs';
 
+// Direct API URL for wTokens status
+const WTOKENS_API_URL = 'https://api.applesnakes.com/api/wtokens-status';
+
 /**
- * Cached NFT data from the backend API
- * Matches the structure from /api/nft-cache
+ * NFT data from the wtokens-status API endpoint
+ */
+interface WTokensNFT {
+  tokenId: number;
+  imageUrl: string | null;
+  imageCid: string;
+  name: string;
+  nftType: string;
+  isSnake: boolean;
+  isEgg: boolean;
+  isJailed: boolean;
+  canUnwrap: boolean;
+}
+
+/**
+ * Response from wtokens-status endpoint
+ */
+interface WTokensStatusResponse {
+  success: boolean;
+  nfts: WTokensNFT[];
+}
+
+/**
+ * Legacy cached NFT data format (for backwards compatibility)
  */
 interface CachedNFT {
   tokenId: number;
@@ -97,7 +122,45 @@ export function useWTokensNFTsCache(
   const isFetchingRef = useRef(false);
 
   /**
-   * Convert cached NFT format to UserNFT format for component compatibility
+   * Convert wTokens API NFT format to UserNFT format for component compatibility
+   */
+  const convertWTokensNFTToUserNFT = useCallback((nft: WTokensNFT): UserNFT => {
+    // Use imageUrl directly if available (already full URL from applesnakes.myfilebase.com)
+    // Fall back to imageCid with the correct gateway
+    let imageUrl = '';
+    if (nft.imageUrl) {
+      imageUrl = nft.imageUrl;
+    } else if (nft.imageCid) {
+      imageUrl = `https://applesnakes.myfilebase.com/ipfs/${nft.imageCid}`;
+    }
+
+    return {
+      tokenId: nft.tokenId,
+      imageUrl: imageUrl,
+      name: nft.name,
+      nftType: nft.nftType as NFTType,
+      owner: '', // wTokens contract owns these
+      exists: true,
+      isSnake: nft.isSnake,
+      isJailed: nft.isJailed,
+      jailTime: 0,
+      isEgg: nft.isEgg,
+      mintTime: 0,
+      forceHatched: false,
+      evolved: false,
+      ownerIsWarden: false,
+      ownerIsJailExempt: false,
+      swapMintTime: 0,
+      canUnwrap: nft.canUnwrap,
+      metadata: {
+        name: nft.name,
+        image: imageUrl,
+      },
+    };
+  }, []);
+
+  /**
+   * Convert legacy cached NFT format to UserNFT format (for backwards compatibility)
    */
   const convertToUserNFT = useCallback((cached: CachedNFT): UserNFT => {
     return {
@@ -106,7 +169,7 @@ export function useWTokensNFTsCache(
       name: cached.name,
       nftType: cached.nftType,
       owner: cached.owner,
-      exists: true, // If in cache, it exists
+      exists: true,
       isSnake: cached.isSnake,
       isJailed: cached.isJailed,
       jailTime: cached.jailTime,
@@ -129,7 +192,7 @@ export function useWTokensNFTsCache(
   }, []);
 
   /**
-   * Fetch NFTs from cached API
+   * Fetch NFTs from wTokens status API (primary) or fallback to nft-cache
    */
   const fetchCachedNFTs = useCallback(async () => {
     if (isFetchingRef.current) {
@@ -142,56 +205,84 @@ export function useWTokensNFTsCache(
     setError(null);
 
     try {
-      console.log('🚀 Fetching wTokens NFTs from cache API...');
+      console.log('🚀 Fetching wTokens NFTs from wtokens-status API...');
       const startTime = Date.now();
 
-      const response = await fetch('/api/nft-cache');
-
-      // Handle rate limiting
-      if (response.status === 429) {
-        const errorData = await response.json();
-        const retryAfter = errorData.retryAfter || 60;
-        setError(`Rate limited. Try again in ${retryAfter} seconds.`);
-        setRateLimitRemaining(0);
-        setRateLimitResetIn(retryAfter);
-        console.log(`⏳ Rate limited, retry in ${retryAfter}s`);
-        return;
-      }
+      // Try the new direct API first
+      const response = await fetch(WTOKENS_API_URL);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data: NFTCacheResponse = await response.json();
+      const data: WTokensStatusResponse = await response.json();
 
-      if (data.success && data.data) {
-        // Convert cached NFTs to UserNFT format
-        const userNFTs = data.data.nfts.map(convertToUserNFT);
+      if (data.success && data.nfts) {
+        // Convert wTokens NFTs to UserNFT format
+        const userNFTs = data.nfts.map(convertWTokensNFTToUserNFT);
 
         setNfts(userNFTs);
-        setTotalHeld(data.data.totalHeld);
-        setCacheStatus(data.data.cacheStatus);
-        setFromCache(data.data.fromCache);
-
-        // Update rate limit info
-        if (data.rateLimit) {
-          setRateLimitRemaining(data.rateLimit.remaining);
-          setRateLimitResetIn(data.rateLimit.resetIn);
-        }
+        setTotalHeld(userNFTs.length);
+        setCacheStatus({
+          lastFeesCollected: '',
+          lastUpdated: Date.now(),
+          totalCached: userNFTs.length,
+          isRefreshing: false,
+        });
+        setFromCache(true);
 
         const elapsed = Date.now() - startTime;
-        console.log(`✅ Cache loaded ${userNFTs.length} NFTs in ${elapsed}ms (fromCache: ${data.data.fromCache})`);
+        console.log(`✅ wTokens API loaded ${userNFTs.length} NFTs in ${elapsed}ms`);
       } else {
-        throw new Error(data.data ? 'Unknown error' : 'No data returned');
+        throw new Error('No NFTs returned from wtokens-status API');
       }
     } catch (err) {
-      console.error('❌ Error fetching cached NFTs:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch NFTs');
+      console.error('❌ Error fetching from wtokens-status, trying fallback...', err);
+
+      // Fallback to legacy nft-cache endpoint
+      try {
+        const fallbackResponse = await fetch('/api/nft-cache');
+
+        if (fallbackResponse.status === 429) {
+          const errorData = await fallbackResponse.json();
+          const retryAfter = errorData.retryAfter || 60;
+          setError(`Rate limited. Try again in ${retryAfter} seconds.`);
+          setRateLimitRemaining(0);
+          setRateLimitResetIn(retryAfter);
+          return;
+        }
+
+        if (!fallbackResponse.ok) {
+          throw new Error(`Fallback API error: ${fallbackResponse.status}`);
+        }
+
+        const fallbackData: NFTCacheResponse = await fallbackResponse.json();
+
+        if (fallbackData.success && fallbackData.data) {
+          const userNFTs = fallbackData.data.nfts.map(convertToUserNFT);
+          setNfts(userNFTs);
+          setTotalHeld(fallbackData.data.totalHeld);
+          setCacheStatus(fallbackData.data.cacheStatus);
+          setFromCache(fallbackData.data.fromCache);
+
+          if (fallbackData.rateLimit) {
+            setRateLimitRemaining(fallbackData.rateLimit.remaining);
+            setRateLimitResetIn(fallbackData.rateLimit.resetIn);
+          }
+
+          console.log(`✅ Fallback loaded ${userNFTs.length} NFTs`);
+        } else {
+          throw new Error('No data from fallback');
+        }
+      } catch (fallbackErr) {
+        console.error('❌ Both APIs failed:', fallbackErr);
+        setError(err instanceof Error ? err.message : 'Failed to fetch NFTs');
+      }
     } finally {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, [convertToUserNFT]);
+  }, [convertWTokensNFTToUserNFT, convertToUserNFT]);
 
   // Fetch NFTs when ready (after user NFTs load if configured)
   useEffect(() => {

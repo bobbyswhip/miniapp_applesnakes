@@ -95,6 +95,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'nft-cdn.alchemy.com' },
       { protocol: 'https', hostname: 'alchemy.mypinata.cloud' },
       // IPFS gateways for NFT images (fallback)
+      { protocol: 'https', hostname: 'applesnakes.myfilebase.com' },
       { protocol: 'https', hostname: 'surrounding-amaranth-catshark.myfilebase.com' },
       { protocol: 'https', hostname: 'cloudflare-ipfs.com' },
       { protocol: 'https', hostname: 'ipfs.io' },
