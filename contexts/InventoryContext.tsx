@@ -17,6 +17,8 @@ interface InventoryContextType {
   setShowBreed: (open: boolean) => void;
   showPredictionJack: boolean;
   setShowPredictionJack: (open: boolean) => void;
+  showUnity: boolean;
+  setShowUnity: (open: boolean) => void;
   // Coordinated open functions that close other UIs
   openInventory: () => void;
   openSwapMint: () => void;
@@ -24,6 +26,8 @@ interface InventoryContextType {
   openHatch: () => void;
   openBreed: () => void;
   openPredictionJack: () => void;
+  openUnity: () => void;
+  closeUnity: () => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -35,6 +39,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [showHatch, setShowHatch] = useState(false);
   const [showBreed, setShowBreed] = useState(false);
   const [showPredictionJack, setShowPredictionJack] = useState(false);
+  const [showUnity, setShowUnity] = useState(false);
 
   const toggleInventory = () => setIsOpen(prev => !prev);
 
@@ -46,6 +51,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
+    setShowUnity(false);
   };
 
   const openSwapMint = () => {
@@ -55,6 +61,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
+    setShowUnity(false);
   };
 
   const openChat = () => {
@@ -64,6 +71,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
+    setShowUnity(false);
   };
 
   const openHatch = () => {
@@ -73,6 +81,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowBreed(false);
     setShowPredictionJack(false);
+    setShowUnity(false);
   };
 
   const openBreed = () => {
@@ -82,6 +91,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowPredictionJack(false);
+    setShowUnity(false);
   };
 
   const openPredictionJack = () => {
@@ -91,6 +101,21 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowBreed(false);
+    setShowUnity(false);
+  };
+
+  const openUnity = () => {
+    setShowUnity(true);
+    setIsOpen(false);
+    setShowSwapMint(false);
+    setShowChat(false);
+    setShowHatch(false);
+    setShowBreed(false);
+    setShowPredictionJack(false);
+  };
+
+  const closeUnity = () => {
+    setShowUnity(false);
   };
 
   return (
@@ -109,12 +134,16 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setShowBreed,
         showPredictionJack,
         setShowPredictionJack,
+        showUnity,
+        setShowUnity,
         openInventory,
         openSwapMint,
         openChat,
         openHatch,
         openBreed,
         openPredictionJack,
+        openUnity,
+        closeUnity,
       }}
     >
       {children}

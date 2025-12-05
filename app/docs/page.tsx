@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useChainId } from 'wagmi';
 import { NFT_ADDRESS, TOKEN_ADDRESS, HOOK_ADDRESS, POOL_MANAGER_ADDRESS } from '@/config';
+import { ServerStatusDashboard } from '@/components/ServerStatusDashboard';
+import { TokenLaunchForm } from '@/components/TokenLaunchForm';
+import { X402TokenLauncher } from '@/components/X402TokenLauncher';
 
 // PredictionJack fee constants from contracts
 const PREDICTION_FEES = {
@@ -39,6 +42,8 @@ export default function DocsPage() {
     { id: 'prediction', title: '🃏 PredictionJack', emoji: '🃏' },
     { id: 'pairable', title: '🤝 Pairable Integration', emoji: '🤝' },
     { id: 'tokenomics', title: '💰 Tokenomics', emoji: '💰' },
+    { id: 'token-launcher', title: '🚀 Token Launcher', emoji: '🚀' },
+    { id: 'server-status', title: '🖥️ Server Status', emoji: '🖥️' },
   ];
 
   return (
@@ -902,6 +907,86 @@ export default function DocsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Token Launcher */}
+            {activeSection === 'token-launcher' && (
+              <div className="glass rounded-xl p-6 md:p-8 space-y-6">
+                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+                  🚀 Token Launcher
+                </h2>
+
+                <p className="text-lg leading-relaxed text-gray-300">
+                  Deploy your own token on Base paired with WASS through Clanker.
+                  Tokens launch with automatic liquidity and WASS pairing.
+                </p>
+
+                <div className="bg-purple-950/30 border border-purple-500/30 rounded-lg p-5 space-y-3">
+                  <h3 className="text-xl font-semibold text-purple-300 flex items-center gap-2">
+                    <span>&#x2728;</span> Launch Features
+                  </h3>
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-300">
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      Automatic WASS pairing
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      IPFS image hosting
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      ~$10 starting market cap
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      Optional dev buy
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      Real-time progress tracking
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-green-400">&#x2714;</span>
+                      Dexscreener listing
+                    </li>
+                  </ul>
+                </div>
+
+                {/* ETH Payment Option */}
+                <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <span className="text-blue-400">Ξ</span> Pay with ETH
+                  </h3>
+                  <TokenLaunchForm />
+                </div>
+
+                {/* USDC Payment Option (x402) */}
+                <div className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                    <span className="text-green-400">$</span> Pay with USDC (Gasless)
+                  </h3>
+                  <p className="text-sm text-gray-400 mb-3">
+                    Sign a message to authorize USDC payment - no gas fees required!
+                  </p>
+                  <X402TokenLauncher />
+                </div>
+              </div>
+            )}
+
+            {/* Server Status */}
+            {activeSection === 'server-status' && (
+              <div className="glass rounded-xl p-6 md:p-8 space-y-6">
+                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+                  🖥️ Server Status
+                </h2>
+
+                <p className="text-lg leading-relaxed text-gray-300">
+                  Real-time status of Apple Valley backend systems. Auto-refreshes every 10 seconds.
+                </p>
+
+                <ServerStatusDashboard />
               </div>
             )}
           </div>

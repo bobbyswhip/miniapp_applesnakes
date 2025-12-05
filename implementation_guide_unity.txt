@@ -1,0 +1,1296 @@
+================================================================================
+                    APPLESNAKES UNITY INTEGRATION GUIDE
+                    For Claude AI in Unity Development
+================================================================================
+
+This guide provides everything needed to integrate a Unity game client with the
+AppleSnakes web application. The web app is the source of truth for all user
+data, NFT ownership, and blockchain interactions.
+
+================================================================================
+                        SECTION 1: ARCHITECTURE OVERVIEW
+================================================================================
+
+SYSTEM ARCHITECTURE
+-------------------
+
+    [Unity Game Client]                [AppleSnakes Web App]
+          |                                    |
+          |  1. Open Browser for Auth          |
+          |----------------------------------->|
+          |                                    |
+          |  2. User connects wallet           |
+          |     (RainbowKit/MetaMask)          |
+          |                                    |
+          |  3. Signs message (SIWE)           |
+          |                                    |
+          |  4. Redirect with session token    |
+          |<-----------------------------------|
+          |                                    |
+          |  5. API calls with JWT             |
+          |----------------------------------->|
+          |                                    |
+          |  6. NFT/Token data responses       |
+          |<-----------------------------------|
+
+
+BLOCKCHAIN DETAILS
+------------------
+Network: Base Mainnet (Chain ID: 8453)
+Testnet: Base Sepolia (Chain ID: 84532)
+
+Contract Addresses (Base Mainnet):
+- NFT Contract:        0xa85D49d8B7a041c339D18281a750dE3D7c15A628
+- Token Contract:      0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6
+- Wrapper Contract:    0x038b70E9311D5aE12C816c32818aeec90cBe7C29
+- Staking Contract:    0x63b2A9Bd65f516E49Cee75C9001FB5aa3588CB3c
+- Blackjack Contract:  0x7a02CE55Ad7D01C93afb514282E816063B6e31eF
+- Prediction Hub:      0x6d16424EC2b3f0dd42481d31FFD3Dc0CD25cAa78
+- OTC Swap:           0x005B9ADac22eDf5Da3068974281593A9e6b8646F
+
+
+================================================================================
+                    SECTION 2: AUTHENTICATION FLOW DESIGN
+================================================================================
+
+RECOMMENDED: Deep Link + SIWE (Sign-In With Ethereum)
+----------------------------------------------------
+
+This approach works across all platforms (mobile, desktop, WebGL) and provides
+secure wallet-based authentication without requiring wallet SDKs in Unity.
+
+
+FLOW DIAGRAM
+------------
+
+UNITY                          BROWSER                        WEB APP API
+  |                               |                               |
+  | 1. Generate nonce             |                               |
+  |------------------------------------------------------------->|
+  |                               |                               |
+  | 2. Receive nonce              |                               |
+  |<-------------------------------------------------------------|
+  |                               |                               |
+  | 3. Open auth URL              |                               |
+  |   ?nonce=xxx&callback=app://  |                               |
+  |------------------------------>|                               |
+  |                               |                               |
+  |                               | 4. User connects wallet       |
+  |                               |------------------------------>|
+  |                               |                               |
+  |                               | 5. User signs SIWE message    |
+  |                               |   containing nonce            |
+  |                               |------------------------------>|
+  |                               |                               |
+  |                               | 6. Server verifies signature  |
+  |                               |   issues JWT token            |
+  |                               |<------------------------------|
+  |                               |                               |
+  | 7. Deep link callback         |                               |
+  |   app://auth?token=JWT        |                               |
+  |<------------------------------|                               |
+  |                               |                               |
+  | 8. Store JWT, fetch user data |                               |
+  |------------------------------------------------------------->|
+  |                               |                               |
+
+
+STEP-BY-STEP IMPLEMENTATION
+---------------------------
+
+STEP 1: Unity - Login Button Click Handler
+```csharp
+// UnityLoginManager.cs
+using UnityEngine;
+using UnityEngine.Networking;
+using System;
+using System.Collections;
+
+public class UnityLoginManager : MonoBehaviour
+{
+    [SerializeField] private string webAppBaseUrl = "https://applesnakes.com";
+    [SerializeField] private string apiBaseUrl = "https://applesnakes.com/api";
+
+    // Deep link scheme registered in Unity project settings
+    private const string DEEP_LINK_SCHEME = "applesnakes";
+
+    private string currentNonce;
+    private string jwtToken;
+    private UserData currentUser;
+
+    // Events for UI to subscribe
+    public event Action<UserData> OnLoginSuccess;
+    public event Action<string> OnLoginError;
+    public event Action OnLogout;
+
+    private void Awake()
+    {
+        // Register for deep link callbacks
+        Application.deepLinkActivated += OnDeepLinkActivated;
+    }
+
+    // Called when user taps "Login" button
+    public void StartLogin()
+    {
+        StartCoroutine(InitiateAuthFlow());
+    }
+
+    private IEnumerator InitiateAuthFlow()
+    {
+        // Step 1: Request nonce from server
+        using (UnityWebRequest request = UnityWebRequest.Get($"{apiBaseUrl}/auth/nonce"))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                OnLoginError?.Invoke("Failed to connect to server");
+                yield break;
+            }
+
+            var response = JsonUtility.FromJson<NonceResponse>(request.downloadHandler.text);
+            currentNonce = response.nonce;
+        }
+
+        // Step 2: Build auth URL with callback
+        string callbackUrl = $"{DEEP_LINK_SCHEME}://auth";
+        string authUrl = $"{webAppBaseUrl}/auth/unity?nonce={currentNonce}&callback={Uri.EscapeDataString(callbackUrl)}";
+
+        // Step 3: Open browser for authentication
+        Application.OpenURL(authUrl);
+    }
+
+    private void OnDeepLinkActivated(string url)
+    {
+        // Parse: applesnakes://auth?token=xxx&address=0x...
+        Uri uri = new Uri(url);
+
+        if (uri.Host == "auth")
+        {
+            var queryParams = ParseQueryString(uri.Query);
+
+            if (queryParams.TryGetValue("token", out string token))
+            {
+                jwtToken = token;
+                StartCoroutine(FetchUserData());
+            }
+            else if (queryParams.TryGetValue("error", out string error))
+            {
+                OnLoginError?.Invoke(error);
+            }
+        }
+    }
+
+    private IEnumerator FetchUserData()
+    {
+        using (UnityWebRequest request = UnityWebRequest.Get($"{apiBaseUrl}/user/me"))
+        {
+            request.SetRequestHeader("Authorization", $"Bearer {jwtToken}");
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                currentUser = JsonUtility.FromJson<UserData>(request.downloadHandler.text);
+                SaveSession();
+                OnLoginSuccess?.Invoke(currentUser);
+            }
+            else
+            {
+                OnLoginError?.Invoke("Failed to fetch user data");
+            }
+        }
+    }
+
+    private void SaveSession()
+    {
+        PlayerPrefs.SetString("jwt_token", jwtToken);
+        PlayerPrefs.SetString("wallet_address", currentUser.walletAddress);
+        PlayerPrefs.Save();
+    }
+
+    public bool TryRestoreSession()
+    {
+        jwtToken = PlayerPrefs.GetString("jwt_token", null);
+        if (!string.IsNullOrEmpty(jwtToken))
+        {
+            StartCoroutine(ValidateAndFetchUserData());
+            return true;
+        }
+        return false;
+    }
+
+    private IEnumerator ValidateAndFetchUserData()
+    {
+        using (UnityWebRequest request = UnityWebRequest.Get($"{apiBaseUrl}/user/me"))
+        {
+            request.SetRequestHeader("Authorization", $"Bearer {jwtToken}");
+            yield return request.SendWebRequest();
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                currentUser = JsonUtility.FromJson<UserData>(request.downloadHandler.text);
+                OnLoginSuccess?.Invoke(currentUser);
+            }
+            else
+            {
+                // Token expired or invalid
+                Logout();
+            }
+        }
+    }
+
+    public void Logout()
+    {
+        jwtToken = null;
+        currentUser = null;
+        PlayerPrefs.DeleteKey("jwt_token");
+        PlayerPrefs.DeleteKey("wallet_address");
+        OnLogout?.Invoke();
+    }
+}
+```
+
+
+STEP 2: Web App - Auth Endpoint for Unity
+Create this API route at: app/api/auth/unity/route.ts
+
+```typescript
+// app/api/auth/unity/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { generateNonce, SiweMessage } from 'siwe';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET!;
+const nonceStore = new Map<string, { nonce: string; expires: number }>();
+
+// GET /api/auth/nonce - Generate nonce for Unity client
+export async function GET(request: NextRequest) {
+  const nonce = generateNonce();
+  const expires = Date.now() + 5 * 60 * 1000; // 5 minute expiry
+
+  // Store nonce temporarily (use Redis in production)
+  nonceStore.set(nonce, { nonce, expires });
+
+  return NextResponse.json({ nonce });
+}
+
+// POST /api/auth/verify - Verify SIWE signature and issue JWT
+export async function POST(request: NextRequest) {
+  const { message, signature, nonce } = await request.json();
+
+  // Validate nonce exists and not expired
+  const storedNonce = nonceStore.get(nonce);
+  if (!storedNonce || storedNonce.expires < Date.now()) {
+    return NextResponse.json({ error: 'Invalid or expired nonce' }, { status: 400 });
+  }
+
+  try {
+    const siweMessage = new SiweMessage(message);
+    const { data: fields } = await siweMessage.verify({ signature, nonce });
+
+    // Clean up used nonce
+    nonceStore.delete(nonce);
+
+    // Issue JWT token
+    const token = jwt.sign(
+      {
+        address: fields.address,
+        chainId: fields.chainId,
+        iat: Math.floor(Date.now() / 1000),
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return NextResponse.json({
+      token,
+      address: fields.address,
+      chainId: fields.chainId,
+    });
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+}
+```
+
+
+STEP 3: Web App - Unity Auth Page Component
+Create at: app/auth/unity/page.tsx
+
+```typescript
+// app/auth/unity/page.tsx
+'use client';
+
+import { useSearchParams } from 'next/navigation';
+import { useAccount, useSignMessage } from 'wagmi';
+import { SiweMessage } from 'siwe';
+import { useState, useEffect } from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+
+export default function UnityAuthPage() {
+  const searchParams = useSearchParams();
+  const nonce = searchParams.get('nonce');
+  const callback = searchParams.get('callback');
+
+  const { address, isConnected, chain } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const [status, setStatus] = useState<'connecting' | 'signing' | 'success' | 'error'>('connecting');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isConnected && address && nonce && callback) {
+      handleSign();
+    }
+  }, [isConnected, address, nonce, callback]);
+
+  const handleSign = async () => {
+    if (!address || !nonce || !callback) return;
+
+    setStatus('signing');
+
+    try {
+      // Create SIWE message
+      const message = new SiweMessage({
+        domain: window.location.host,
+        address,
+        statement: 'Sign in to AppleSnakes Unity Game',
+        uri: window.location.origin,
+        version: '1',
+        chainId: chain?.id || 8453,
+        nonce,
+      });
+
+      const messageString = message.prepareMessage();
+      const signature = await signMessageAsync({ message: messageString });
+
+      // Verify with server and get JWT
+      const response = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: messageString,
+          signature,
+          nonce,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Verification failed');
+
+      const { token } = await response.json();
+
+      // Redirect back to Unity with token
+      setStatus('success');
+      const redirectUrl = `${callback}?token=${token}&address=${address}`;
+      window.location.href = redirectUrl;
+
+    } catch (err) {
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Authentication failed');
+
+      // Redirect with error
+      if (callback) {
+        window.location.href = `${callback}?error=${encodeURIComponent('Authentication failed')}`;
+      }
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-green-900 to-green-950">
+      <div className="bg-green-800/50 p-8 rounded-xl text-center">
+        <h1 className="text-2xl font-bold text-white mb-6">
+          Sign in to AppleSnakes
+        </h1>
+
+        {status === 'connecting' && !isConnected && (
+          <>
+            <p className="text-green-200 mb-4">Connect your wallet to continue</p>
+            <ConnectButton />
+          </>
+        )}
+
+        {status === 'signing' && (
+          <p className="text-yellow-200">Please sign the message in your wallet...</p>
+        )}
+
+        {status === 'success' && (
+          <p className="text-green-200">Success! Returning to game...</p>
+        )}
+
+        {status === 'error' && (
+          <p className="text-red-400">{error}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+
+================================================================================
+                    SECTION 3: DATA MODELS (Unity C# Classes)
+================================================================================
+
+These data models match the web app's TypeScript interfaces exactly.
+
+```csharp
+// DataModels.cs
+using System;
+using System.Collections.Generic;
+
+[Serializable]
+public class NonceResponse
+{
+    public string nonce;
+}
+
+[Serializable]
+public class AuthResponse
+{
+    public string token;
+    public string address;
+    public int chainId;
+}
+
+[Serializable]
+public class UserData
+{
+    public string walletAddress;
+    public string basename; // ENS-style name if set
+    public TokenBalance tokenBalance;
+    public List<UserNFT> nfts;
+}
+
+[Serializable]
+public class TokenBalance
+{
+    public string balance;          // Raw balance as string (bigint)
+    public string formattedBalance; // Human-readable (e.g., "1234.56")
+    public int decimals;            // Token decimals (usually 18)
+    public string symbol;           // Token symbol
+}
+
+// CRITICAL: This matches the web app's UserNFT interface EXACTLY
+[Serializable]
+public class UserNFT
+{
+    // Core identification
+    public int tokenId;
+    public string imageUrl;
+    public string name;
+    public string nftType; // "human", "snake", "warden", "egg"
+
+    // TokenInfo struct data (from blockchain)
+    public string owner;           // Wallet address
+    public bool exists;
+    public bool isSnake;
+    public bool isJailed;
+    public long jailTime;          // Unix timestamp (0 if not jailed)
+    public bool isEgg;
+    public long mintTime;          // Unix timestamp
+    public bool forceHatched;
+    public bool evolved;
+    public bool ownerIsWarden;
+    public bool ownerIsJailExempt;
+    public long swapMintTime;      // Unix timestamp (0 if not swap minted)
+    public bool canUnwrap;         // True if unwrap cooldown passed
+
+    // IPFS metadata
+    public NFTMetadata metadata;
+}
+
+[Serializable]
+public class NFTMetadata
+{
+    public string name;
+    public string description;
+    public string image;
+    public List<NFTAttribute> attributes;
+}
+
+[Serializable]
+public class NFTAttribute
+{
+    public string trait_type;
+    public string value;
+}
+
+// Game-specific data
+[Serializable]
+public class GameState
+{
+    public string currentLocation;     // "valley", "snow", "cave", etc.
+    public string timeOfDay;           // "day", "sunset", "dusk", "moonrise", "night", etc.
+    public List<InventoryItem> inventory;
+    public List<int> selectedNFTIds;   // Currently selected NFTs for gameplay
+}
+
+[Serializable]
+public class InventoryItem
+{
+    public string itemId;
+    public string itemType;
+    public int quantity;
+    public long acquiredAt;
+}
+
+// Staking data
+[Serializable]
+public class StakingInfo
+{
+    public bool isStaked;
+    public long stakedAt;
+    public string pendingRewards;
+    public string totalStaked;
+}
+
+// Prediction market data
+[Serializable]
+public class PredictionMarket
+{
+    public string marketId;
+    public string question;
+    public List<PredictionOption> options;
+    public long endTime;
+    public string totalPool;
+    public bool resolved;
+    public int winningOption;
+}
+
+[Serializable]
+public class PredictionOption
+{
+    public int optionId;
+    public string label;
+    public string totalBet;
+    public float odds;
+}
+```
+
+
+================================================================================
+                    SECTION 4: API ENDPOINTS (To Be Created)
+================================================================================
+
+The web app needs these API endpoints for Unity communication.
+All endpoints require JWT authentication via Bearer token.
+
+BASE URL: https://applesnakes.com/api
+
+AUTHENTICATION
+--------------
+GET  /api/auth/nonce              - Get fresh nonce for SIWE
+POST /api/auth/verify             - Verify SIWE signature, get JWT
+GET  /api/auth/validate           - Validate existing JWT token
+
+USER DATA
+---------
+GET  /api/user/me                 - Get current user's full profile
+     Response: {
+       walletAddress: string,
+       basename: string | null,
+       tokenBalance: TokenBalance,
+       nfts: UserNFT[]
+     }
+
+GET  /api/user/nfts               - Get user's NFT collection (paginated)
+     Query: ?page=1&limit=50
+     Response: {
+       nfts: UserNFT[],
+       total: number,
+       page: number,
+       totalPages: number
+     }
+
+GET  /api/user/nfts/:tokenId      - Get single NFT details
+     Response: UserNFT
+
+GET  /api/user/balance            - Get token balance only
+     Response: TokenBalance
+
+GAME STATE
+----------
+GET  /api/game/state              - Get user's game state
+     Response: GameState
+
+POST /api/game/state              - Update game state
+     Body: { currentLocation?, selectedNFTIds?, ... }
+
+GET  /api/game/inventory          - Get inventory items
+POST /api/game/inventory/add      - Add item to inventory
+POST /api/game/inventory/remove   - Remove item from inventory
+
+STAKING
+-------
+GET  /api/staking/info            - Get user's staking info
+     Response: StakingInfo
+
+GET  /api/staking/rewards         - Get pending rewards
+     Response: { pendingRewards: string }
+
+PREDICTIONS
+-----------
+GET  /api/predictions/active      - Get active prediction markets
+GET  /api/predictions/:marketId   - Get specific market details
+GET  /api/predictions/user/bets   - Get user's active bets
+
+TRANSACTIONS (Read-only - actual tx via web app)
+------------------------------------------------
+GET  /api/tx/history              - Get user's transaction history
+GET  /api/tx/:hash                - Get transaction status
+
+
+================================================================================
+                SECTION 5: LOGIN BUTTON UI IMPLEMENTATION
+================================================================================
+
+UNITY UI SETUP
+--------------
+
+```csharp
+// LoginButtonUI.cs
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+public class LoginButtonUI : MonoBehaviour
+{
+    [Header("UI References")]
+    [SerializeField] private Button loginButton;
+    [SerializeField] private Button logoutButton;
+    [SerializeField] private GameObject loginPanel;
+    [SerializeField] private GameObject userPanel;
+    [SerializeField] private TextMeshProUGUI walletAddressText;
+    [SerializeField] private TextMeshProUGUI balanceText;
+    [SerializeField] private TextMeshProUGUI nftCountText;
+    [SerializeField] private Image loadingSpinner;
+
+    [Header("References")]
+    [SerializeField] private UnityLoginManager loginManager;
+
+    private void Start()
+    {
+        // Subscribe to login events
+        loginManager.OnLoginSuccess += HandleLoginSuccess;
+        loginManager.OnLoginError += HandleLoginError;
+        loginManager.OnLogout += HandleLogout;
+
+        // Setup button listeners
+        loginButton.onClick.AddListener(OnLoginClick);
+        logoutButton.onClick.AddListener(OnLogoutClick);
+
+        // Try to restore previous session
+        ShowLoading(true);
+        if (!loginManager.TryRestoreSession())
+        {
+            ShowLoading(false);
+            ShowLoginPanel();
+        }
+    }
+
+    private void OnLoginClick()
+    {
+        ShowLoading(true);
+        loginManager.StartLogin();
+    }
+
+    private void OnLogoutClick()
+    {
+        loginManager.Logout();
+    }
+
+    private void HandleLoginSuccess(UserData userData)
+    {
+        ShowLoading(false);
+        ShowUserPanel(userData);
+    }
+
+    private void HandleLoginError(string error)
+    {
+        ShowLoading(false);
+        ShowLoginPanel();
+        // Show error toast/modal
+        Debug.LogError($"Login failed: {error}");
+    }
+
+    private void HandleLogout()
+    {
+        ShowLoginPanel();
+    }
+
+    private void ShowLoading(bool show)
+    {
+        loadingSpinner.gameObject.SetActive(show);
+        loginButton.interactable = !show;
+    }
+
+    private void ShowLoginPanel()
+    {
+        loginPanel.SetActive(true);
+        userPanel.SetActive(false);
+    }
+
+    private void ShowUserPanel(UserData userData)
+    {
+        loginPanel.SetActive(false);
+        userPanel.SetActive(true);
+
+        // Format wallet address (0x1234...5678)
+        string shortAddress = $"{userData.walletAddress.Substring(0, 6)}...{userData.walletAddress.Substring(userData.walletAddress.Length - 4)}";
+
+        // Use basename if available
+        walletAddressText.text = !string.IsNullOrEmpty(userData.basename)
+            ? userData.basename
+            : shortAddress;
+
+        balanceText.text = $"{userData.tokenBalance.formattedBalance} {userData.tokenBalance.symbol}";
+        nftCountText.text = $"{userData.nfts.Count} NFTs";
+    }
+
+    private void OnDestroy()
+    {
+        loginManager.OnLoginSuccess -= HandleLoginSuccess;
+        loginManager.OnLoginError -= HandleLoginError;
+        loginManager.OnLogout -= HandleLogout;
+    }
+}
+```
+
+
+VISUAL DESIGN SPECIFICATIONS
+----------------------------
+
+Login Button (Not Logged In):
+- Background: Gradient green (#10B981 to #059669)
+- Text: "Connect Wallet" or "Sign In"
+- Icon: Wallet icon on left side
+- Size: 200x50 pixels minimum touch target
+- Corner radius: 12px
+- Hover state: Slight scale up (1.05x) + brightness increase
+- Press state: Scale down (0.95x) + darken
+
+User Panel (Logged In):
+- Background: Semi-transparent dark (#1F2937 at 80% opacity)
+- Layout: Horizontal - [Avatar] [Address/Name] [Balance] [Dropdown]
+- Avatar: 40x40 circle with NFT image or identicon
+- Address: Truncated or basename
+- Balance: Token amount with symbol
+- Dropdown: Settings, View NFTs, Logout
+
+Loading State:
+- Spinner: Rotating circle animation
+- Text: "Connecting..." or "Signing..."
+- Disable interaction during loading
+
+
+================================================================================
+                    SECTION 6: DATA SYNCHRONIZATION
+================================================================================
+
+SYNC STRATEGIES
+---------------
+
+1. INITIAL LOAD (On Login)
+   - Fetch full user profile including all NFTs
+   - Cache locally with timestamp
+   - Display immediately
+
+2. PERIODIC REFRESH (Every 30-60 seconds)
+   - Light endpoint: /api/user/balance (just balances)
+   - Only refresh NFTs if balance changed significantly
+
+3. EVENT-DRIVEN UPDATES
+   - After game actions that might affect state
+   - After returning from web app (deep link callback)
+   - On app resume from background
+
+4. PULL-TO-REFRESH
+   - User-initiated full refresh
+   - Clear cache and reload everything
+
+
+```csharp
+// DataSyncManager.cs
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+public class DataSyncManager : MonoBehaviour
+{
+    [SerializeField] private float autoRefreshInterval = 30f;
+    [SerializeField] private UnityLoginManager loginManager;
+
+    private UserData cachedUserData;
+    private float lastSyncTime;
+    private bool isSyncing;
+
+    public UserData CachedUser => cachedUserData;
+    public event System.Action<UserData> OnDataUpdated;
+
+    private Coroutine autoRefreshCoroutine;
+
+    public void StartAutoRefresh()
+    {
+        if (autoRefreshCoroutine != null)
+            StopCoroutine(autoRefreshCoroutine);
+        autoRefreshCoroutine = StartCoroutine(AutoRefreshLoop());
+    }
+
+    public void StopAutoRefresh()
+    {
+        if (autoRefreshCoroutine != null)
+        {
+            StopCoroutine(autoRefreshCoroutine);
+            autoRefreshCoroutine = null;
+        }
+    }
+
+    private IEnumerator AutoRefreshLoop()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(autoRefreshInterval);
+            yield return RefreshBalanceOnly();
+        }
+    }
+
+    public IEnumerator RefreshBalanceOnly()
+    {
+        if (isSyncing) yield break;
+        isSyncing = true;
+
+        // Light refresh - just balance
+        yield return ApiManager.Instance.GetBalance((balance) =>
+        {
+            if (cachedUserData != null)
+            {
+                cachedUserData.tokenBalance = balance;
+                OnDataUpdated?.Invoke(cachedUserData);
+            }
+        });
+
+        isSyncing = false;
+    }
+
+    public IEnumerator FullRefresh()
+    {
+        if (isSyncing) yield break;
+        isSyncing = true;
+
+        yield return ApiManager.Instance.GetUserProfile((userData) =>
+        {
+            cachedUserData = userData;
+            lastSyncTime = Time.time;
+            OnDataUpdated?.Invoke(cachedUserData);
+        });
+
+        isSyncing = false;
+    }
+
+    public IEnumerator RefreshNFTs()
+    {
+        if (cachedUserData == null) yield break;
+
+        yield return ApiManager.Instance.GetUserNFTs((nfts) =>
+        {
+            cachedUserData.nfts = nfts;
+            OnDataUpdated?.Invoke(cachedUserData);
+        });
+    }
+}
+```
+
+
+================================================================================
+                    SECTION 7: HANDLING BLOCKCHAIN ACTIONS
+================================================================================
+
+CRITICAL: Unity does NOT execute blockchain transactions directly.
+All write operations happen through the web app.
+
+
+FOR TRANSACTION-REQUIRING ACTIONS
+---------------------------------
+
+1. Unity opens web app URL with action parameters
+2. User completes action in web app (connects wallet, signs tx)
+3. Web app redirects back to Unity with result
+4. Unity refreshes data to reflect changes
+
+Example: Unstaking an NFT
+
+```csharp
+// BlockchainActionManager.cs
+public class BlockchainActionManager : MonoBehaviour
+{
+    private const string WEB_APP_URL = "https://applesnakes.com";
+
+    // Open web app for staking
+    public void OpenStakingPage(int tokenId)
+    {
+        string url = $"{WEB_APP_URL}/staking?action=stake&tokenId={tokenId}&callback={GetCallbackUrl()}";
+        Application.OpenURL(url);
+    }
+
+    // Open web app for unstaking
+    public void OpenUnstakingPage(int tokenId)
+    {
+        string url = $"{WEB_APP_URL}/staking?action=unstake&tokenId={tokenId}&callback={GetCallbackUrl()}";
+        Application.OpenURL(url);
+    }
+
+    // Open web app for wrapping tokens
+    public void OpenWrapPage(string amount)
+    {
+        string url = $"{WEB_APP_URL}/wrap?amount={amount}&callback={GetCallbackUrl()}";
+        Application.OpenURL(url);
+    }
+
+    // Open web app for breeding
+    public void OpenBreedingPage(int parent1TokenId, int parent2TokenId)
+    {
+        string url = $"{WEB_APP_URL}/breed?parent1={parent1TokenId}&parent2={parent2TokenId}&callback={GetCallbackUrl()}";
+        Application.OpenURL(url);
+    }
+
+    // Open web app for prediction betting
+    public void OpenPredictionPage(string marketId, int option, string amount)
+    {
+        string url = $"{WEB_APP_URL}/predictions/{marketId}?bet={option}&amount={amount}&callback={GetCallbackUrl()}";
+        Application.OpenURL(url);
+    }
+
+    private string GetCallbackUrl()
+    {
+        return Uri.EscapeDataString("applesnakes://action-complete");
+    }
+}
+```
+
+
+================================================================================
+                    SECTION 8: IMAGE LOADING (NFT Images)
+================================================================================
+
+NFT images are stored on IPFS. Use gateway URLs for loading.
+
+```csharp
+// NFTImageLoader.cs
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.Networking;
+using System.Collections;
+
+public class NFTImageLoader : MonoBehaviour
+{
+    // IPFS Gateway fallback order
+    private static readonly string[] IPFS_GATEWAYS = new string[]
+    {
+        "https://nft-cdn.alchemy.com/base-mainnet/",        // Fastest (Alchemy CDN)
+        "https://surrounding-amaranth-catshark.myfilebase.com/ipfs/",
+        "https://ipfs.io/ipfs/",
+        "https://gateway.pinata.cloud/ipfs/",
+        "https://cloudflare-ipfs.com/ipfs/"
+    };
+
+    [SerializeField] private Image targetImage;
+    [SerializeField] private GameObject loadingIndicator;
+    [SerializeField] private Sprite fallbackSprite;
+
+    private Dictionary<string, Sprite> imageCache = new Dictionary<string, Sprite>();
+
+    public IEnumerator LoadNFTImage(UserNFT nft)
+    {
+        string imageUrl = nft.imageUrl;
+
+        // Check cache first
+        if (imageCache.TryGetValue(imageUrl, out Sprite cached))
+        {
+            targetImage.sprite = cached;
+            yield break;
+        }
+
+        loadingIndicator?.SetActive(true);
+
+        // Try each gateway until one works
+        foreach (string gateway in IPFS_GATEWAYS)
+        {
+            string fullUrl;
+
+            // Handle different URL formats
+            if (imageUrl.StartsWith("ipfs://"))
+            {
+                fullUrl = gateway + imageUrl.Substring(7);
+            }
+            else if (imageUrl.StartsWith("http"))
+            {
+                fullUrl = imageUrl; // Already a full URL
+            }
+            else
+            {
+                fullUrl = gateway + imageUrl; // Just the hash/path
+            }
+
+            using (UnityWebRequest request = UnityWebRequestTexture.GetTexture(fullUrl))
+            {
+                request.timeout = 10;
+                yield return request.SendWebRequest();
+
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    Texture2D texture = DownloadHandlerTexture.GetContent(request);
+                    Sprite sprite = Sprite.Create(
+                        texture,
+                        new Rect(0, 0, texture.width, texture.height),
+                        new Vector2(0.5f, 0.5f)
+                    );
+
+                    imageCache[imageUrl] = sprite;
+                    targetImage.sprite = sprite;
+                    loadingIndicator?.SetActive(false);
+                    yield break;
+                }
+            }
+        }
+
+        // All gateways failed - use fallback
+        targetImage.sprite = fallbackSprite;
+        loadingIndicator?.SetActive(false);
+    }
+}
+```
+
+
+================================================================================
+                    SECTION 9: PLATFORM-SPECIFIC SETUP
+================================================================================
+
+ANDROID
+-------
+AndroidManifest.xml - Add deep link intent filter:
+
+```xml
+<activity android:name="com.unity3d.player.UnityPlayerActivity">
+    <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="applesnakes" android:host="auth" />
+        <data android:scheme="applesnakes" android:host="action-complete" />
+    </intent-filter>
+</activity>
+```
+
+
+iOS
+---
+Info.plist - Add URL scheme:
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>applesnakes</string>
+        </array>
+        <key>CFBundleURLName</key>
+        <string>com.applesnakes.game</string>
+    </dict>
+</array>
+```
+
+
+WEBGL
+-----
+For WebGL builds, use JavaScript interop instead of deep links:
+
+```csharp
+// WebGLBridge.cs
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+
+public class WebGLBridge
+{
+    [DllImport("__Internal")]
+    private static extern void OpenAuthPopup(string url);
+
+    [DllImport("__Internal")]
+    private static extern string GetAuthToken();
+
+    [DllImport("__Internal")]
+    private static extern void SetAuthCallback(string objectName, string methodName);
+}
+#endif
+```
+
+JavaScript plugin (Plugins/WebGL/auth.jslib):
+```javascript
+mergeInto(LibraryManager.library, {
+    OpenAuthPopup: function(urlPtr) {
+        var url = UTF8ToString(urlPtr);
+        window.open(url, 'AppleSnakesAuth', 'width=500,height=700');
+    },
+
+    SetAuthCallback: function(objectNamePtr, methodNamePtr) {
+        var objectName = UTF8ToString(objectNamePtr);
+        var methodName = UTF8ToString(methodNamePtr);
+
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'applesnakes-auth') {
+                SendMessage(objectName, methodName, JSON.stringify(event.data));
+            }
+        });
+    }
+});
+```
+
+
+================================================================================
+                    SECTION 10: SECURITY CONSIDERATIONS
+================================================================================
+
+1. JWT TOKEN STORAGE
+   - Store in PlayerPrefs (encrypted on mobile)
+   - Never log or expose tokens in debug output
+   - Clear on logout
+
+2. NONCE VALIDATION
+   - Nonces expire in 5 minutes
+   - Each nonce can only be used once
+   - Server validates nonce before signature verification
+
+3. API SECURITY
+   - All API calls require valid JWT
+   - JWT includes wallet address - server verifies ownership
+   - Rate limiting on API endpoints
+
+4. SIGNATURE VERIFICATION
+   - SIWE message includes domain, address, chain ID
+   - Server verifies message was signed by claimed address
+   - Prevents replay attacks with nonce
+
+5. SENSITIVE DATA
+   - Never store private keys in Unity
+   - Never ask users to input seed phrases
+   - All signing happens in user's wallet app
+
+6. SSL/TLS
+   - Always use HTTPS for API calls
+   - Validate SSL certificates
+   - Pin certificates for additional security (optional)
+
+
+================================================================================
+                    SECTION 11: ERROR HANDLING
+================================================================================
+
+```csharp
+// ErrorHandler.cs
+public enum AuthErrorType
+{
+    NetworkError,
+    InvalidNonce,
+    SignatureRejected,
+    TokenExpired,
+    ServerError,
+    Unknown
+}
+
+public class AuthError
+{
+    public AuthErrorType Type { get; set; }
+    public string Message { get; set; }
+    public string Details { get; set; }
+
+    public static AuthError FromResponse(int statusCode, string body)
+    {
+        return statusCode switch
+        {
+            400 => new AuthError { Type = AuthErrorType.InvalidNonce, Message = "Session expired. Please try again." },
+            401 => new AuthError { Type = AuthErrorType.TokenExpired, Message = "Please sign in again." },
+            500 => new AuthError { Type = AuthErrorType.ServerError, Message = "Server error. Please try again later." },
+            _ => new AuthError { Type = AuthErrorType.Unknown, Message = "An unexpected error occurred." }
+        };
+    }
+}
+
+// Retry logic for transient failures
+public class RetryPolicy
+{
+    public static IEnumerator WithRetry<T>(
+        System.Func<IEnumerator> operation,
+        int maxRetries = 3,
+        float delaySeconds = 1f,
+        System.Action<T> onSuccess = null,
+        System.Action<AuthError> onFailure = null)
+    {
+        int attempts = 0;
+
+        while (attempts < maxRetries)
+        {
+            attempts++;
+
+            // Execute operation
+            yield return operation();
+
+            // Check result and retry if needed
+            // (Implementation depends on your error handling)
+
+            if (attempts < maxRetries)
+            {
+                yield return new WaitForSeconds(delaySeconds * attempts);
+            }
+        }
+    }
+}
+```
+
+
+================================================================================
+                    SECTION 12: QUICK START CHECKLIST
+================================================================================
+
+UNITY SETUP
+-----------
+[ ] Create UnityLoginManager.cs with deep link handling
+[ ] Create DataModels.cs with all data classes
+[ ] Create LoginButtonUI.cs for UI
+[ ] Create DataSyncManager.cs for data management
+[ ] Configure platform-specific deep link settings
+[ ] Add IPFS image loading with gateway fallbacks
+
+WEB APP API SETUP
+-----------------
+[ ] Create /api/auth/nonce endpoint
+[ ] Create /api/auth/verify endpoint
+[ ] Create /api/user/me endpoint
+[ ] Create /api/user/nfts endpoint
+[ ] Create /api/user/balance endpoint
+[ ] Create /app/auth/unity page for browser auth flow
+
+TESTING
+-------
+[ ] Test login flow end-to-end
+[ ] Test session persistence (close/reopen app)
+[ ] Test token refresh
+[ ] Test logout and re-login
+[ ] Test on all target platforms
+[ ] Test with slow network / offline scenarios
+
+
+================================================================================
+                    CONTACT & RESOURCES
+================================================================================
+
+Web App Repository: miniapp_applesnakes
+Blockchain: Base (https://base.org)
+RPC Endpoints:
+  - Coinbase: https://api.developer.coinbase.com/rpc/v1/base/{key}
+  - Alchemy: https://base-mainnet.g.alchemy.com/v2/{key}
+
+Contract ABIs: Located in /abis directory of web app
+NFT Images: IPFS with Alchemy CDN acceleration
+
+================================================================================
+                            END OF GUIDE
+================================================================================

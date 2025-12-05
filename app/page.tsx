@@ -7,7 +7,7 @@ import { base } from 'wagmi/chains';
 import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory } from '@/contexts/InventoryContext';
-import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
+import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { JailInterface } from '@/components/JailInterface';
@@ -15,6 +15,13 @@ import { StakingInterface } from '@/components/StakingInterface';
 import { PredictionJackApp } from '@/components/PredictionJackApp';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { useBatchTransaction } from '@/hooks/useBatchTransaction';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Unity component (client-side only, no SSR)
+const UnityWebGL = dynamic(() => import('@/components/UnityWebGL'), {
+  ssr: false,
+  loading: () => null,
+});
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
@@ -131,7 +138,7 @@ function HomeContent() {
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
   // UI coordination from InventoryContext
-  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack } = useInventory();
+  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, showUnity, closeUnity, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack } = useInventory();
 
   // Track if we've already triggered refresh for current mint (prevent duplicate refreshes)
   const hasRefreshedRef = useRef(false);
@@ -172,13 +179,13 @@ function HomeContent() {
   const [selectedUserNFT, setSelectedUserNFT] = useState<number | null>(null);
   const [selectedWTokenNFT, setSelectedWTokenNFT] = useState<number | null>(null);
 
-  // Fetch wTokens NFTs (secondary data, loads after user NFTs)
+  // Fetch wTokens NFTs from cache API (fast: <1s vs old 30-60s)
   const {
     nfts: wTokensNFTs,
     isLoading: wTokensLoading,
     refetch: refetchWTokensNFTs,
     totalHeld: wTokensTotalHeld
-  } = useWTokensNFTs(true, isLoading);
+  } = useWTokensNFTsCache(true, isLoading);
   const [unwrapCount, setUnwrapCount] = useState(1);
   const [unwrapError, setUnwrapError] = useState<string>('');
   const [currentOperationType, setCurrentOperationType] = useState<'mint' | 'hatch' | 'breed' | 'wrap' | 'unwrap' | 'swap' | null>(null);
@@ -204,6 +211,8 @@ function HomeContent() {
 
   // Jail state management
   const [showJail, setShowJail] = useState(false);
+
+  // Unity WebGL overlay state - managed via InventoryContext
 
   // Note: PredictionJack state now managed via InventoryContext (showPredictionJack, openPredictionJack)
   // Shared game ID from URL for direct navigation to a specific game
@@ -5389,6 +5398,32 @@ function HomeContent() {
             setSharedGameId(null); // Clear shared game ID when closing
           }}
           initialGameId={sharedGameId}
+        />
+      )}
+
+      {/* Unity WebGL Overlay */}
+      {showUnity && (
+        <UnityWebGL
+          buildUrl="/api/unity-build"
+          productName="WebGLBuild"
+          visible={showUnity}
+          onClose={closeUnity}
+          onStakeRequest={(tokenId) => {
+            console.log('[Unity→Page] Stake requested for tokenId:', tokenId);
+            // Close Unity and open staking UI with selected token
+            closeUnity();
+            setBreedStakeTab('stake');
+            setSelectedSnakesForStaking(new Set([tokenId]));
+            openBreed();
+          }}
+          onUnstakeRequest={(tokenId) => {
+            console.log('[Unity→Page] Unstake requested for tokenId:', tokenId);
+            // Close Unity and open staking UI with selected token
+            closeUnity();
+            setBreedStakeTab('stake');
+            setSelectedStakedSnakes(new Set([tokenId]));
+            openBreed();
+          }}
         />
       )}
 

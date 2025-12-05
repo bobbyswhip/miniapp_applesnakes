@@ -16,6 +16,77 @@ const nextConfig = {
 
     return config;
   },
+  // Unity WebGL Brotli-compressed files - rewrite requests to .br files
+  async rewrites() {
+    return [
+      // Map uncompressed URLs to Brotli-compressed files
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.data',
+        destination: '/unity/WebGLBuild/Build/WebGLBuild.data.br',
+      },
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.framework.js',
+        destination: '/unity/WebGLBuild/Build/WebGLBuild.framework.js.br',
+      },
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.wasm',
+        destination: '/unity/WebGLBuild/Build/WebGLBuild.wasm.br',
+      },
+    ];
+  },
+  // Set Content-Encoding headers for Brotli-compressed Unity files
+  async headers() {
+    return [
+      {
+        source: '/unity/WebGLBuild/Build/:path*.br',
+        headers: [
+          {
+            key: 'Content-Encoding',
+            value: 'br',
+          },
+        ],
+      },
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.data',
+        headers: [
+          {
+            key: 'Content-Encoding',
+            value: 'br',
+          },
+          {
+            key: 'Content-Type',
+            value: 'application/octet-stream',
+          },
+        ],
+      },
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.framework.js',
+        headers: [
+          {
+            key: 'Content-Encoding',
+            value: 'br',
+          },
+          {
+            key: 'Content-Type',
+            value: 'application/javascript',
+          },
+        ],
+      },
+      {
+        source: '/unity/WebGLBuild/Build/WebGLBuild.wasm',
+        headers: [
+          {
+            key: 'Content-Encoding',
+            value: 'br',
+          },
+          {
+            key: 'Content-Type',
+            value: 'application/wasm',
+          },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       // Alchemy CDN (primary - fastest)

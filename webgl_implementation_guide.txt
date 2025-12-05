@@ -1,0 +1,172 @@
+# AppleSnakes Unity ↔ Web Wallet Connection Guide
+
+## Overview
+
+The wallet connection flow for WebGL:
+
+```
+Unity Game                    Your Next.js App
+    |                              |
+    | 1. Click "Connect Wallet"    |
+    |----------------------------->|
+    |    Opens popup to /auth/unity|
+    |                              |
+    |              2. User connects wallet (RainbowKit)
+    |              3. User signs SIWE message
+    |              4. Server verifies & creates JWT
+    |                              |
+    | 5. postMessage with token    |
+    |<-----------------------------|
+    |                              |
+    | 6. Unity stores JWT          |
+    | 7. Unity calls APIs with JWT |
+    |----------------------------->|
+```
+
+---
+
+## Step 1: Install Dependencies
+
+In your Next.js project, run:
+
+```bash
+npm install siwe jsonwebtoken viem
+npm install --save-dev @types/jsonwebtoken
+```
+
+You should already have wagmi and @rainbow-me/rainbowkit installed.
+
+---
+
+## Step 2: Environment Variables
+
+Add to your `.env.local`:
+
+```env
+# IMPORTANT: Generate a secure random string for production
+JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+
+# Optional: Your RPC URL for better performance
+BASE_RPC_URL=https://mainnet.base.org
+```
+
+---
+
+## Step 3: Copy the Files
+
+Copy the files from `Assets/guides/webapp/` to your Next.js app:
+
+```
+your-nextjs-app/
+├── app/
+│   ├── api/
+│   │   ├── auth/
+│   │   │   ├── nonce/
+│   │   │   │   └── route.ts    ← Copy from guides/webapp/api/auth/nonce/
+│   │   │   └── verify/
+│   │   │       └── route.ts    ← Copy from guides/webapp/api/auth/verify/
+│   │   └── user/
+│   │       └── me/
+│   │           └── route.ts    ← Copy from guides/webapp/api/user/me/
+│   └── auth/
+│       └── unity/
+│           └── page.tsx        ← Copy from guides/webapp/auth/unity/
+```
+
+---
+
+## Step 4: Update Your Game Page
+
+In your game page (`app/game/page.tsx`), update the Unity loader to listen for auth messages:
+
+```tsx
+// Add this to your game page's useEffect where Unity loads
+
+// Listen for auth messages from Unity popup
+useEffect(() => {
+  const handleMessage = (event: MessageEvent) => {
+    if (event.data?.type === 'applesnakes-auth-success') {
+      console.log('Unity auth success:', event.data);
+      // Token is now stored in Unity, game will update
+    }
+    if (event.data?.type === 'applesnakes-auth-error') {
+      console.error('Unity auth error:', event.data.error);
+    }
+  };
+
+  window.addEventListener('message', handleMessage);
+  return () => window.removeEventListener('message', handleMessage);
+}, []);
+```
+
+---
+
+## Step 5: Test the Flow
+
+1. **Start your Next.js dev server**: `npm run dev`
+2. **Open your game**: `http://localhost:3000/game`
+3. **Click "Connect Wallet"** in the Unity game
+4. **A popup opens** at `/auth/unity`
+5. **Connect with RainbowKit**, sign the message
+6. **Popup closes**, Unity receives the token
+7. **Unity shows your wallet address & balance**
+
+---
+
+## How It Works
+
+### Unity Side (already implemented):
+
+1. `WebGLBridge.cs` calls `OpenAuthPopup()` via JavaScript
+2. JavaScript plugin opens popup to `/auth/unity?webgl=true`
+3. Plugin listens for `postMessage` from popup
+4. When token received, calls `SendMessage()` to Unity
+5. `UnityLoginManager.cs` stores JWT and fetches user data
+
+### Web App Side:
+
+1. `/auth/unity` page loads, fetches nonce from `/api/auth/nonce`
+2. User connects wallet via RainbowKit
+3. Page creates SIWE message with nonce and requests signature
+4. Signature sent to `/api/auth/verify` for validation
+5. Server verifies signature, creates JWT token
+6. Page sends token back via `postMessage`
+7. Popup closes automatically
+
+### API Calls from Unity:
+
+After authentication, Unity calls your APIs with:
+```
+Authorization: Bearer <jwt-token>
+```
+
+---
+
+## Troubleshooting
+
+### Popup blocked?
+- User needs to allow popups for your domain
+- The error is sent to Unity via postMessage
+
+### CORS errors?
+- Make sure your API routes don't have CORS restrictions for same-origin
+
+### Token invalid?
+- Check JWT_SECRET matches between sign and verify
+- Token expires after 7 days by default
+
+### No NFTs showing?
+- Check the NFT contract address is correct
+- Check your RPC endpoint is working
+
+---
+
+## Production Checklist
+
+- [ ] Set secure `JWT_SECRET` in production environment
+- [ ] Use Redis for nonce storage instead of in-memory
+- [ ] Add rate limiting to auth endpoints
+- [ ] Set proper CORS headers if needed
+- [ ] Add error logging/monitoring
+- [ ] Test on actual Base network (not just testnet)
+

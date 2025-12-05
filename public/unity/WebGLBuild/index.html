@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Appleland</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+</head>
+<body>
+    <div id="unity-container" class="unity-desktop">
+        <canvas id="unity-canvas" tabindex="-1"></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-logo"></div>
+            <div id="unity-progress-bar-empty">
+                <div id="unity-progress-bar-full"></div>
+            </div>
+        </div>
+        <div id="unity-warning"></div>
+        <div id="unity-footer">
+            <div id="unity-webgl-logo"></div>
+            <div id="unity-fullscreen-button"></div>
+            <div id="unity-build-title">Appleland</div>
+        </div>
+    </div>
+    <script>
+        var container = document.querySelector("#unity-container");
+        var canvas = document.querySelector("#unity-canvas");
+        var loadingBar = document.querySelector("#unity-loading-bar");
+        var progressBarFull = document.querySelector("#unity-progress-bar-full");
+        var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+        var warningBanner = document.querySelector("#unity-warning");
+
+        // Global reference to Unity instance for external communication
+        var unityInstance = null;
+
+        function unityShowBanner(msg, type) {
+            function updateBannerVisibility() {
+                warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+            }
+            var div = document.createElement('div');
+            div.innerHTML = msg;
+            warningBanner.appendChild(div);
+            if (type == 'error') div.style = 'background: red; padding: 10px;';
+            else {
+                if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+                setTimeout(function() {
+                    warningBanner.removeChild(div);
+                    updateBannerVisibility();
+                }, 5000);
+            }
+            updateBannerVisibility();
+        }
+
+        var buildUrl = "Build";
+        var loaderUrl = buildUrl + "/WebGLBuild.loader.js";
+        var config = {
+            dataUrl: buildUrl + "/WebGLBuild.data.br",
+            frameworkUrl: buildUrl + "/WebGLBuild.framework.js.br",
+            codeUrl: buildUrl + "/WebGLBuild.wasm.br",
+            streamingAssetsUrl: "StreamingAssets",
+            companyName: "Applesnakes",
+            productName: "Appleland",
+            productVersion: "1.0",
+            showBanner: unityShowBanner,
+        };
+
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+            var meta = document.createElement('meta');
+            meta.name = 'viewport';
+            meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+            document.getElementsByTagName('head')[0].appendChild(meta);
+            container.className = "unity-mobile";
+            canvas.className = "unity-mobile";
+        } else {
+            canvas.style.width = "800px";
+            canvas.style.height = "600px";
+        }
+
+        loadingBar.style.display = "block";
+
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+            createUnityInstance(canvas, config, (progress) => {
+                progressBarFull.style.width = 100 * progress + "%";
+            }).then((instance) => {
+                unityInstance = instance;
+                loadingBar.style.display = "none";
+                fullscreenButton.onclick = () => {
+                    instance.SetFullscreen(1);
+                };
+
+                // Set up AppleSnakes auth message listener
+                setupAppleSnakesAuth(instance);
+
+            }).catch((message) => {
+                alert(message);
+            });
+        };
+        document.body.appendChild(script);
+
+        // AppleSnakes Authentication Handler
+        function setupAppleSnakesAuth(instance) {
+            // Listen for messages from auth popup
+            window.addEventListener('message', function(event) {
+                // Validate origin in production
+                // if (event.origin !== 'https://applesnakes.com') return;
+
+                if (event.data && event.data.type) {
+                    // Handle AppleSnakes auth messages
+                    if (event.data.type.startsWith('applesnakes-')) {
+                        console.log('[AppleSnakes] Received auth message:', event.data.type);
+
+                        // Forward to Unity
+                        var messageType = event.data.type.replace('applesnakes-', '');
+                        var unityMessage = {
+                            type: messageType,
+                            token: event.data.token || null,
+                            address: event.data.address || null,
+                            chainId: event.data.chainId || 0,
+                            error: event.data.error || null,
+                            result: event.data.result || null
+                        };
+
+                        // Send to Unity WebGLBridge
+                        instance.SendMessage('WebGLBridge', 'OnAuthMessage', JSON.stringify(unityMessage));
+                    }
+                }
+            });
+
+            console.log('[AppleSnakes] Auth message listener initialized');
+        }
+
+        // Expose function for Unity to call
+        window.sendToAppleSnakesParent = function(data) {
+            if (window.opener) {
+                window.opener.postMessage(data, '*');
+            } else if (window.parent !== window) {
+                window.parent.postMessage(data, '*');
+            }
+        };
+    </script>
+</body>
+</html>

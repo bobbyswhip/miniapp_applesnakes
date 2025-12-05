@@ -7,7 +7,7 @@ import { base } from 'wagmi/chains';
 import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
-import { useWTokensNFTs } from '@/hooks/useWTokensNFTs';
+import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { useBatchTransaction, ContractCall } from '@/hooks/useBatchTransaction';
 
@@ -38,14 +38,14 @@ export default function WrapPage() {
   const [selectedUserNFT, setSelectedUserNFT] = useState<number | null>(null);
   const [selectedWTokenNFT, setSelectedWTokenNFT] = useState<number | null>(null);
 
-  // Fetch wTokens NFTs (secondary data, loads after user NFTs)
+  // Fetch wTokens NFTs from cache API (fast: <1s vs old 30-60s)
   const {
     nfts: wTokensNFTs,
     isLoading: wTokensLoading,
     error: _wTokensError,
     refetch: refetchWTokensNFTs,
     totalHeld: wTokensTotalHeld
-  } = useWTokensNFTs(true, isLoading);
+  } = useWTokensNFTsCache(true, isLoading);
 
   const [currentOperation, setCurrentOperation] = useState<'approve' | 'wrap' | 'unwrap' | 'swap' | 'buy' | null>(null);
   const [wrappedNFTs, setWrappedNFTs] = useState<Set<number>>(new Set()); // Track wrapped NFTs for instant UI update

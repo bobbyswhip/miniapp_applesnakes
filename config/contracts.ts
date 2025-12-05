@@ -28,6 +28,9 @@ export const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3' as c
 // StateView for V4 pool queries
 export const STATE_VIEW_ADDRESS = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71' as const;
 
+// External links
+export const OPENSEA_COLLECTION_URL = 'https://opensea.io/collection/applesnakes' as const;
+
 // Pool configuration for ETH/Token swap
 export const POOL_CONFIG = {
   currency0: '0x0000000000000000000000000000000000000000', // ETH
@@ -36,6 +39,68 @@ export const POOL_CONFIG = {
   tickSpacing: 60,
   hooks: HOOK_ADDRESS, // Hook address
 } as const;
+
+// Token Pair Configuration for Chart System
+export interface TokenPairConfig {
+  id: string;
+  token0: `0x${string}`;
+  token1: `0x${string}`;
+  hook: `0x${string}`;
+  fee: number;
+  tickSpacing: number;
+  geckoPoolAddress: string; // GeckoTerminal pool address for chart data
+  isDefault?: boolean;
+}
+
+// wASS token address (base token for all pairs)
+export const WASS_TOKEN_ADDRESS = '0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6' as const;
+
+// ETH represented as zero address
+export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+
+// Available token pairs for chart display
+// Names/symbols are fetched dynamically via RPC - just store addresses here
+export const TOKEN_PAIRS: TokenPairConfig[] = [
+  {
+    id: 'wass-eth',
+    token0: ETH_ADDRESS, // ETH (native)
+    token1: WASS_TOKEN_ADDRESS, // wASS
+    hook: HOOK_ADDRESS,
+    fee: 3000,
+    tickSpacing: 60,
+    geckoPoolAddress: '0xa113103448f7b09199e019656f377988c87f8f312ddcebc6fea9e78bcd6ec2af',
+    isDefault: true,
+  },
+  {
+    id: 'wass-token',
+    token0: WASS_TOKEN_ADDRESS, // wASS is token0
+    token1: '0x9B26FcCf0C90C2DAf54B82FeF07dDBF21E11c658', // Paired token (name fetched via RPC)
+    hook: '0x35B9b5b023897DA8C7375ba6141245B8416460CC' as `0x${string}`,
+    fee: 3000,
+    tickSpacing: 60,
+    geckoPoolAddress: '0xe4821b1cbfce1906c2249d1b34366610960c01fa3f762b0579c594d2033b9152',
+  },
+];
+
+// Get default token pair
+export const getDefaultPair = (): TokenPairConfig => {
+  return TOKEN_PAIRS.find(p => p.isDefault) || TOKEN_PAIRS[0];
+};
+
+// Get token pair by ID
+export const getTokenPairById = (id: string): TokenPairConfig | undefined => {
+  return TOKEN_PAIRS.find(p => p.id === id);
+};
+
+// Get all unique token addresses from pairs (excluding ETH)
+export const getAllTokenAddresses = (): `0x${string}`[] => {
+  const addresses = new Set<`0x${string}`>();
+  TOKEN_PAIRS.forEach(pair => {
+    if (pair.token0 !== ETH_ADDRESS) addresses.add(pair.token0);
+    if (pair.token1 !== ETH_ADDRESS) addresses.add(pair.token1);
+  });
+  return Array.from(addresses);
+};
 
 export { QUOTER_ABI };
 
@@ -79,9 +144,9 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     name: 'Prediction Market Hub',
   },
   otc: {
-    address: '0x005B9ADac22eDf5Da3068974281593A9e6b8646F',
+    address: '0xD39bcE42ad5Cf7704e74206aD9551206fa0aD98a',
     abi: WASSOTC_ABI,
-    name: 'wASS OTC Swap',
+    name: 'wASS OTC Router',
   },
 };
 

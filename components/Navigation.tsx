@@ -15,11 +15,11 @@ import { SwapWrapModal } from './SwapWrapModal';
 import { ChartModal } from './ChartModal';
 
 export function Navigation() {
-  const _pathname = usePathname();
+  const pathname = usePathname();
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { nfts: _nfts } = useNFTContext();
-  const { toggleInventory } = useInventory();
+  const { toggleInventory, openUnity, showUnity, closeUnity } = useInventory();
   const { displayName, hasBasename } = useBasename(address);
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
@@ -356,41 +356,57 @@ export function Navigation() {
               <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'radial-gradient(circle at center, rgba(16, 185, 129, 0.1), transparent 70%)' }} />
             </button>
 
-            {/* Docs Button - hidden on small screens */}
+            {/* Docs/Home Button - hidden on small screens, shows Home when on /docs */}
             <Link
-              href="/docs"
-              className="hidden sm:flex relative overflow-hidden border bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer items-center rounded-md sm:rounded-lg flex-shrink min-w-0"
+              href={pathname === '/docs' ? '/' : '/docs'}
+              className={`hidden sm:flex relative overflow-hidden border backdrop-blur-sm transition-all duration-300 cursor-pointer items-center rounded-md sm:rounded-lg flex-shrink min-w-0 ${
+                pathname === '/docs'
+                  ? 'bg-gradient-to-r from-emerald-950/40 via-green-950/40 to-teal-950/40 border-emerald-500/30 hover:border-emerald-400/50'
+                  : 'bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50'
+              }`}
               style={{
-                boxShadow: '0 0 10px rgba(168, 85, 247, 0.1), inset 0 0 10px rgba(168, 85, 247, 0.03)',
+                boxShadow: pathname === '/docs'
+                  ? '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 10px rgba(16, 185, 129, 0.03)'
+                  : '0 0 10px rgba(168, 85, 247, 0.1), inset 0 0 10px rgba(168, 85, 247, 0.03)',
               }}
             >
               {/* Shimmer effect */}
               <div
                 className="absolute inset-0 opacity-30"
                 style={{
-                  background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.3), transparent)',
+                  background: pathname === '/docs'
+                    ? 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.3), transparent)'
+                    : 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.3), transparent)',
                   animation: 'shimmer 3s infinite',
                 }}
               />
 
               {/* Content */}
               <div className="relative flex items-center gap-1 sm:gap-2 p-1 sm:p-2">
-                <svg className="text-purple-400 flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
+                {pathname === '/docs' ? (
+                  /* Home Icon */
+                  <svg className="text-emerald-400 flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                ) : (
+                  /* Docs Icon */
+                  <svg className="text-purple-400 flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                )}
                 <div className="flex flex-col min-w-0">
-                  <span className="font-medium tracking-wider text-purple-200 text-[10px] md:text-xs">
-                    DOCS
+                  <span className={`font-medium tracking-wider text-[10px] md:text-xs ${pathname === '/docs' ? 'text-emerald-200' : 'text-purple-200'}`}>
+                    {pathname === '/docs' ? 'GAME' : 'DOCS'}
                   </span>
                   <span className="font-bold tracking-wide text-white text-xs md:text-sm truncate">
-                    <span className="hidden md:inline">Whitepaper</span>
-                    <span className="md:hidden">Docs</span>
+                    <span className="hidden md:inline">{pathname === '/docs' ? 'Home' : 'Whitepaper'}</span>
+                    <span className="md:hidden">{pathname === '/docs' ? 'Home' : 'Docs'}</span>
                   </span>
                 </div>
               </div>
 
               {/* Glow effect on hover */}
-              <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: 'radial-gradient(circle at center, rgba(168, 85, 247, 0.1), transparent 70%)' }} />
+              <div className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" style={{ background: pathname === '/docs' ? 'radial-gradient(circle at center, rgba(16, 185, 129, 0.1), transparent 70%)' : 'radial-gradient(circle at center, rgba(168, 85, 247, 0.1), transparent 70%)' }} />
             </Link>
 
             {/* Add shimmer animation */}
@@ -478,6 +494,70 @@ export function Navigation() {
                             </div>
                           </button>
                         ) : (
+                          <>
+                          {/* Unity Game Button - Shows Play when closed, Fullscreen/Close when open */}
+                          {showUnity ? (
+                            <>
+                              {/* Fullscreen Button */}
+                              <button
+                                onClick={() => {
+                                  const fullscreen = (window as unknown as Record<string, unknown>).unityFullscreen as (() => void) | undefined;
+                                  fullscreen?.();
+                                }}
+                                className="relative overflow-hidden border bg-gradient-to-r from-green-950/40 via-emerald-950/40 to-teal-950/40 border-green-500/30 hover:border-green-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
+                                style={{
+                                  boxShadow: '0 0 10px rgba(34, 197, 94, 0.1), inset 0 0 10px rgba(34, 197, 94, 0.03)',
+                                }}
+                                title="Fullscreen"
+                              >
+                                <div className="relative flex items-center gap-0.5 xs:gap-0.5 sm:gap-1">
+                                  <svg className="w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                  </svg>
+                                </div>
+                              </button>
+                              {/* Close Game Button */}
+                              <button
+                                onClick={closeUnity}
+                                className="relative overflow-hidden border bg-gradient-to-r from-red-950/40 via-rose-950/40 to-pink-950/40 border-red-500/30 hover:border-red-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
+                                style={{
+                                  boxShadow: '0 0 10px rgba(239, 68, 68, 0.1), inset 0 0 10px rgba(239, 68, 68, 0.03)',
+                                }}
+                                title="Close Game"
+                              >
+                                <div className="relative flex items-center gap-0.5 xs:gap-0.5 sm:gap-1">
+                                  <svg className="w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </div>
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={openUnity}
+                              className="relative overflow-hidden border bg-gradient-to-r from-purple-950/40 via-indigo-950/40 to-violet-950/40 border-purple-500/30 hover:border-purple-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
+                              style={{
+                                boxShadow: '0 0 10px rgba(147, 51, 234, 0.1), inset 0 0 10px rgba(147, 51, 234, 0.03)',
+                              }}
+                              title="Play Unity Game"
+                            >
+                              {/* Shimmer effect */}
+                              <div
+                                className="absolute inset-0 opacity-20"
+                                style={{
+                                  background: 'linear-gradient(90deg, transparent, rgba(147, 51, 234, 0.3), transparent)',
+                                  animation: 'shimmer 4s infinite',
+                                }}
+                              />
+                              <div className="relative flex items-center gap-0.5 xs:gap-0.5 sm:gap-1">
+                                <svg className="w-2.5 h-2.5 xs:w-3 xs:h-3 sm:w-4 sm:h-4 text-purple-400" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                                <span className="font-medium text-purple-300 text-[8px] xs:text-[9px] sm:text-xs hidden sm:inline">Play</span>
+                              </div>
+                            </button>
+                          )}
+                          {/* Inventory Button */}
                           <button
                             onClick={toggleInventory}
                             className="relative overflow-hidden border bg-gradient-to-r from-slate-950/40 via-gray-950/40 to-zinc-950/40 border-slate-500/30 hover:border-slate-400/50 backdrop-blur-sm transition-all duration-300 rounded-md sm:rounded-lg p-0.5 xs:p-1 sm:p-2"
@@ -507,6 +587,7 @@ export function Navigation() {
                               )}
                             </div>
                           </button>
+                          </>
                         )}
                       </div>
                     )}

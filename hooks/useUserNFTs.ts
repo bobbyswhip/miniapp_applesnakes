@@ -201,10 +201,10 @@ export function useUserNFTs_Alchemy() {
   // Manual refetch function - memoized to prevent unnecessary re-renders
   const refetch = useCallback(() => {
     if (isFetchingRef.current) {
-      console.log('⚠️ Fetch already in progress, skipping duplicate request');
+      // console.log('⚠️ Fetch already in progress, skipping duplicate request');
       return;
     }
-    console.log('🔄 Manual refetch triggered');
+    // console.log('🔄 Manual refetch triggered');
     setRefetchTrigger(prev => prev + 1);
   }, []);
 
@@ -225,7 +225,7 @@ export function useUserNFTs_Alchemy() {
           throw new Error('Alchemy API key not configured');
         }
 
-        console.log('🔍 Step 1: Fetching token IDs from Alchemy...');
+        // console.log('🔍 Step 1: Fetching token IDs from Alchemy...');
 
         // Step 1: Get ONLY token IDs from Alchemy (no metadata)
         let allTokenIds: number[] = [];
@@ -245,7 +245,7 @@ export function useUserNFTs_Alchemy() {
             url.searchParams.append('pageKey', pageKey);
           }
 
-          console.log(`📄 Fetching page ${pageNumber}${pageKey ? ' (with pageKey)' : ' (first page)'}...`);
+          // console.log(`📄 Fetching page ${pageNumber}${pageKey ? ' (with pageKey)' : ' (first page)'}...`);
 
           const response = await fetch(url.toString());
           if (!response.ok) {
@@ -255,7 +255,7 @@ export function useUserNFTs_Alchemy() {
           const data = await response.json();
           totalCount = data.totalCount || 0;
 
-          console.log(`✓ Page ${pageNumber}: ${data.ownedNfts?.length || 0} NFTs, totalCount: ${totalCount}`);
+          // console.log(`✓ Page ${pageNumber}: ${data.ownedNfts?.length || 0} NFTs, totalCount: ${totalCount}`);
 
           // Extract token IDs (Alchemy returns as decimal strings)
           if (data.ownedNfts && data.ownedNfts.length > 0) {
@@ -263,14 +263,14 @@ export function useUserNFTs_Alchemy() {
               .map((nft: any) => parseInt(nft.tokenId, 10))
               .filter((id: number) => !isNaN(id));
 
-            console.log(`  Extracted token IDs from page ${pageNumber}:`, tokenIds);
+            // console.log(`  Extracted token IDs from page ${pageNumber}:`, tokenIds);
             allTokenIds = allTokenIds.concat(tokenIds);
           }
 
           pageKey = data.pageKey;
         } while (pageKey);
 
-        console.log(`✅ Found ${allTokenIds.length} NFTs owned by user`);
+        // console.log(`✅ Found ${allTokenIds.length} NFTs owned by user`);
 
         if (allTokenIds.length === 0) {
           setNfts([]);
@@ -278,7 +278,7 @@ export function useUserNFTs_Alchemy() {
         }
 
         // Step 2: Batch call getTokenInfo (optimized batch size for rate limits)
-        console.log(`🚀 Step 2: Batched getTokenInfo for ${allTokenIds.length} tokens...`);
+        // console.log(`🚀 Step 2: Batched getTokenInfo for ${allTokenIds.length} tokens...`);
 
         const BATCH_SIZE = 30; // Reduced from 50 to avoid rate limits (more conservative)
         const batches = [];
@@ -286,7 +286,7 @@ export function useUserNFTs_Alchemy() {
           batches.push(allTokenIds.slice(i, i + BATCH_SIZE));
         }
 
-        console.log(`  Splitting into ${batches.length} batch${batches.length > 1 ? 'es' : ''} of up to ${BATCH_SIZE} tokens each`);
+        // console.log(`  Splitting into ${batches.length} batch${batches.length > 1 ? 'es' : ''} of up to ${BATCH_SIZE} tokens each`);
 
         // TokenInfo interface from contract
         interface TokenInfo {
@@ -325,7 +325,7 @@ export function useUserNFTs_Alchemy() {
 
               if (isRateLimitError && attempt < maxRetries) {
                 const delay = baseDelay * Math.pow(2, attempt); // Exponential backoff
-                console.warn(`  ⏳ Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+                // console.warn(`  ⏳ Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
               } else {
                 throw error; // Re-throw if not rate limit or max retries reached
@@ -338,7 +338,7 @@ export function useUserNFTs_Alchemy() {
         // Process ALL batches - critical to get all NFTs
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
           const batch = batches[batchIndex];
-          console.log(`  📦 Processing batch ${batchIndex + 1}/${batches.length}: ${batch.length} tokens (IDs: ${batch[0]}-${batch[batch.length - 1]})`);
+          // console.log(`  📦 Processing batch ${batchIndex + 1}/${batches.length}: ${batch.length} tokens (IDs: ${batch[0]}-${batch[batch.length - 1]})`);
 
           try {
             // Single getTokenInfo call with retry logic
@@ -374,22 +374,22 @@ export function useUserNFTs_Alchemy() {
               }
             });
 
-            console.log(`  ✅ Batch ${batchIndex + 1}/${batches.length} complete: ${tokenInfoResults.length} tokens added to map (Total in map: ${tokenInfoMap.size})`);
+            // console.log(`  ✅ Batch ${batchIndex + 1}/${batches.length} complete: ${tokenInfoResults.length} tokens added to map (Total in map: ${tokenInfoMap.size})`);
 
             // Increased delay between batches to avoid rate limits (500ms instead of 200ms)
             if (batchIndex < batches.length - 1) {
               await new Promise(resolve => setTimeout(resolve, 500)); // More conservative delay
             }
           } catch (batchError) {
-            console.error(`  ❌ Batch ${batchIndex + 1}/${batches.length} FAILED after retries:`, batchError);
+            // console.error(`  ❌ Batch ${batchIndex + 1}/${batches.length} FAILED after retries:`, batchError);
             // Continue processing other batches even if one fails
           }
         }
 
-        console.log(`📊 Batch processing complete: ${tokenInfoMap.size} tokens have TokenInfo, ${tokenURIMap.size} have tokenURI`);
+        // console.log(`📊 Batch processing complete: ${tokenInfoMap.size} tokens have TokenInfo, ${tokenURIMap.size} have tokenURI`);
 
         // Step 3: Fetch metadata JSON to extract image URLs (with rate limiting)
-        console.log(`🖼️ Step 3: Fetching metadata JSON for ${allTokenIds.length} tokens...`);
+        // console.log(`🖼️ Step 3: Fetching metadata JSON for ${allTokenIds.length} tokens...`);
 
         const metadataResults: (null | { tokenId: number; imageUrl: string; name: string; metadata: any })[] = [];
         const METADATA_BATCH_SIZE = 20; // Process 20 metadata fetches at a time (IPFS is external)
@@ -399,16 +399,16 @@ export function useUserNFTs_Alchemy() {
           metadataBatches.push(allTokenIds.slice(i, i + METADATA_BATCH_SIZE));
         }
 
-        console.log(`  Splitting into ${metadataBatches.length} metadata batch${metadataBatches.length > 1 ? 'es' : ''} of up to ${METADATA_BATCH_SIZE} tokens each`);
+        // console.log(`  Splitting into ${metadataBatches.length} metadata batch${metadataBatches.length > 1 ? 'es' : ''} of up to ${METADATA_BATCH_SIZE} tokens each`);
 
         for (let batchIdx = 0; batchIdx < metadataBatches.length; batchIdx++) {
           const batch = metadataBatches[batchIdx];
-          console.log(`  📦 Fetching metadata batch ${batchIdx + 1}/${metadataBatches.length}: ${batch.length} tokens`);
+          // console.log(`  📦 Fetching metadata batch ${batchIdx + 1}/${metadataBatches.length}: ${batch.length} tokens`);
 
           const batchPromises = batch.map(async (tokenId) => {
             const tokenURI = tokenURIMap.get(tokenId);
             if (!tokenURI) {
-              console.warn(`❌ Token ${tokenId}: No tokenURI from contract`);
+              // console.warn(`❌ Token ${tokenId}: No tokenURI from contract`);
               return null;
             }
 
@@ -446,7 +446,7 @@ export function useUserNFTs_Alchemy() {
                 metadata // Store complete metadata
               };
             } catch (err) {
-              console.error(`❌ Token ${tokenId}: Metadata fetch failed - ${err}`);
+              // console.error(`❌ Token ${tokenId}: Metadata fetch failed - ${err}`);
               return null;
             }
           });
@@ -454,7 +454,7 @@ export function useUserNFTs_Alchemy() {
           const batchResults = await Promise.all(batchPromises);
           metadataResults.push(...batchResults);
 
-          console.log(`  ✅ Metadata batch ${batchIdx + 1}/${metadataBatches.length} complete`);
+          // console.log(`  ✅ Metadata batch ${batchIdx + 1}/${metadataBatches.length} complete`);
 
           // Rate limit between metadata batches
           if (batchIdx < metadataBatches.length - 1) {
@@ -466,7 +466,7 @@ export function useUserNFTs_Alchemy() {
         const successCount = metadataResults.filter(r => r !== null).length;
         const failCount = metadataResults.filter(r => r === null).length;
 
-        console.log(`📊 Metadata fetch complete: ${successCount} success, ${failCount} failed`);
+        // console.log(`📊 Metadata fetch complete: ${successCount} success, ${failCount} failed`);
 
         // Build metadata map from results
         const metadataMap = new Map<number, any>();
@@ -478,7 +478,7 @@ export function useUserNFTs_Alchemy() {
           }
         });
 
-        console.log(`📋 Maps populated - imageUrl: ${imageUrlMap.size}, metadata: ${metadataMap.size}, tokenInfo: ${tokenInfoMap.size}`);
+        // console.log(`📋 Maps populated - imageUrl: ${imageUrlMap.size}, metadata: ${metadataMap.size}, tokenInfo: ${tokenInfoMap.size}`);
 
         // Determine NFT type from metadata name (types are dynamic and can change)
         const getNFTType = (metadata: any, info: TokenInfo): NFTType => {
@@ -496,7 +496,7 @@ export function useUserNFTs_Alchemy() {
         };
 
         // Build final NFT array with complete data from getTokenInfo
-        console.log(`🔨 Step 4: Building final NFT array from ${allTokenIds.length} token IDs...`);
+        // console.log(`🔨 Step 4: Building final NFT array from ${allTokenIds.length} token IDs...`);
 
         // Check which tokens will be filtered out and why
         const missingData: { tokenId: number; missing: string[] }[] = [];
@@ -511,13 +511,13 @@ export function useUserNFTs_Alchemy() {
         });
 
         if (missingData.length > 0) {
-          console.warn(`⚠️ ${missingData.length} tokens will be excluded due to missing data:`);
-          missingData.slice(0, 10).forEach(({ tokenId, missing }) => {
-            console.warn(`  Token ${tokenId}: missing ${missing.join(', ')}`);
-          });
-          if (missingData.length > 10) {
-            console.warn(`  ... and ${missingData.length - 10} more tokens with missing data`);
-          }
+          // console.warn(`⚠️ ${missingData.length} tokens will be excluded due to missing data:`);
+          // missingData.slice(0, 10).forEach(({ tokenId, missing }) => {
+          //   console.warn(`  Token ${tokenId}: missing ${missing.join(', ')}`);
+          // });
+          // if (missingData.length > 10) {
+          //   console.warn(`  ... and ${missingData.length - 10} more tokens with missing data`);
+          // }
         }
 
         const userNFTs: UserNFT[] = allTokenIds
@@ -533,7 +533,7 @@ export function useUserNFTs_Alchemy() {
             // Use tokenId from struct to be explicit
             const tokenIdFromStruct = Number(info.tokenId);
 
-            console.log(`🏷️ Token ${tokenIdFromStruct}: "${metadata.name}" → Type: ${nftType} (jailed: ${info.isJailed}, egg: ${info.isEgg}, snake: ${info.isSnake}, evolved: ${info.evolved}, canUnwrap: ${info.canUnwrap})`);
+            // console.log(`🏷️ Token ${tokenIdFromStruct}: "${metadata.name}" → Type: ${nftType} (jailed: ${info.isJailed}, egg: ${info.isEgg}, snake: ${info.isSnake}, evolved: ${info.evolved}, canUnwrap: ${info.canUnwrap})`);
 
             // Return complete TokenInfo struct data - ALL 14 fields
             return {
@@ -561,8 +561,8 @@ export function useUserNFTs_Alchemy() {
             };
           });
 
-        console.log(`✅ SUCCESS: Loaded ${userNFTs.length} out of ${allTokenIds.length} NFTs (${((userNFTs.length / allTokenIds.length) * 100).toFixed(1)}% success rate)`);
-        console.log(`📦 Final counts: ${userNFTs.filter(n => !n.isJailed).length} free, ${userNFTs.filter(n => n.isJailed).length} jailed`);
+        // console.log(`✅ SUCCESS: Loaded ${userNFTs.length} out of ${allTokenIds.length} NFTs (${((userNFTs.length / allTokenIds.length) * 100).toFixed(1)}% success rate)`);
+        // console.log(`📦 Final counts: ${userNFTs.filter(n => !n.isJailed).length} free, ${userNFTs.filter(n => n.isJailed).length} jailed`);
 
         setNfts(userNFTs);
       } catch (err) {

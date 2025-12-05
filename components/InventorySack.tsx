@@ -32,7 +32,7 @@ export function InventorySack() {
   const [currentOperation, setCurrentOperation] = useState<'approve' | 'stake' | 'unstake' | 'wrap' | null>(null);
   const [cooldownRemaining, setCooldownRemaining] = useState<string>('');
 
-  const { isOpen, setIsOpen, openInventory, showPredictionJack } = useInventory();
+  const { isOpen, setIsOpen } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
   const { addTransaction } = useTransactions();
@@ -313,7 +313,6 @@ export function InventorySack() {
 
   // Combine regular NFTs with staked NFTs for total count
   const allNFTs: InventoryNFT[] = [...collectionNFTs, ...stakedNFTs];
-  const totalNFTCount = allNFTs.length;
 
   // Filter NFTs based on active tab
   const displayedNFTs = activeTab === 'collection' ? collectionNFTs : stakedNFTs;
@@ -658,35 +657,6 @@ export function InventorySack() {
 
   return (
     <>
-      {/* Sack Button - Fixed position, only visible when wallet connected and PredictionJack is not open */}
-      {isWalletConnected && !showPredictionJack && (
-        <button
-          onClick={() => {
-            if (!isOpen) {
-              openInventory();
-            } else {
-              setIsOpen(false);
-            }
-          }}
-          className="fixed bottom-6 right-6 z-40 transition-all duration-300 hover:scale-110 active:scale-95"
-          title="Open Inventory"
-        >
-          <div className="relative">
-            <img
-              src="/Images/Sack.png"
-              alt="Inventory"
-              className="w-16 h-16 drop-shadow-lg animate-sack-float"
-            />
-            {/* Badge showing NFT count */}
-            {totalNFTCount > 0 && (
-              <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-gray-900">
-                {totalNFTCount}
-              </div>
-            )}
-          </div>
-        </button>
-      )}
-
       {/* Inventory Panel - Slides in from right */}
       {isOpen && (
         <>
@@ -1550,26 +1520,6 @@ export function InventorySack() {
 
         .animate-slide-in-right {
           animation: slide-in-right 0.3s ease-out;
-        }
-
-        /* Sack gentle float animation - localized, with subtle scale */
-        @keyframes sack-float {
-          0%, 100% {
-            transform: translateY(0) scale(1);
-          }
-          25% {
-            transform: translateY(-6px) scale(1.03);
-          }
-          50% {
-            transform: translateY(-10px) scale(1.05);
-          }
-          75% {
-            transform: translateY(-6px) scale(1.03);
-          }
-        }
-
-        .animate-sack-float {
-          animation: sack-float 3s ease-in-out infinite;
         }
 
         @keyframes fade-in {
