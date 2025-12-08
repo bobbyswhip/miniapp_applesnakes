@@ -13,13 +13,8 @@ const USDC_DECIMALS = 6;
 // AI Wallet that receives payments (checksummed)
 const PAYMENT_WALLET = '0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098' as const;
 
-// EIP-712 domain for USDC on Base
-const USDC_DOMAIN = {
-  name: 'USD Coin',
-  version: '2',
-  chainId: 8453, // Base mainnet
-  verifyingContract: USDC_ADDRESS,
-} as const;
+// NOTE: EIP-712 domain is now built dynamically from server's payment requirements
+// See createX402PaymentHeader() - uses paymentRequirements.extra.name/version
 
 // EIP-3009 TransferWithAuthorization types
 const TRANSFER_AUTHORIZATION_TYPES = {
@@ -145,7 +140,7 @@ export function X402TokenLauncher() {
   };
 
   // Create x402 payment header with EIP-3009 signature
-  // Uses maxAmountRequired from the 402 response to ensure value >= required
+  // CRITICAL: Uses domain from server's payment requirements per TOKEN_LAUNCHER.md
   const createX402PaymentHeader = async (
     paymentRequirements: PaymentRequirements
   ): Promise<string> => {
@@ -153,66 +148,101 @@ export function X402TokenLauncher() {
       throw new Error('Wallet not connected');
     }
 
+    // CRITICAL FIX: Get domain values from server's payment requirements
+    // The x402 library expects name/version from paymentRequirements.extra
+    const extra = paymentRequirements.extra as { name?: string; version?: string } | undefined;
+    const domain = {
+      name: extra?.name || 'USD Coin',           // Use server's value!
+      version: extra?.version || '2',            // Use server's value!
+      chainId: 8453,                             // Base mainnet
+      verifyingContract: paymentRequirements.asset as `0x${string}`, // USDC address from server
+    };
+
+    console.log('[x402] Using domain from server:', domain);
+
     // Use maxAmountRequired from server - this is already in atomic units (e.g., "1000000" for 1 USDC)
-    const amountInAtomicUnits = BigInt(paymentRequirements.maxAmountRequired);
+    const value = BigInt(paymentRequirements.maxAmountRequired);
     const nonce = generateNonce();
     const now = Math.floor(Date.now() / 1000);
-    const validAfter = now - 60; // Valid from 1 minute ago
-    // Use maxTimeoutSeconds from payment requirements, default to 1 hour
-    const validBefore = now + (paymentRequirements.maxTimeoutSeconds || 3600);
+    const validAfter = BigInt(now - 600); // 10 minutes ago (matches x402 library)
+    const validBefore = BigInt(now + (paymentRequirements.maxTimeoutSeconds || 3600));
 
     // Use payTo from payment requirements (the actual recipient)
-    const recipientAddress = paymentRequirements.payTo as `0x${string}`;
+    const payTo = paymentRequirements.payTo as `0x${string}`;
 
-    console.log('Creating x402 payment header:', {
+    console.log('[x402] Creating payment header:', {
       from: address,
-      to: recipientAddress,
-      value: amountInAtomicUnits.toString(),
-      validAfter,
-      validBefore,
+      to: payTo,
+      value: value.toString(),
+      validAfter: validAfter.toString(),
+      validBefore: validBefore.toString(),
       maxAmountRequired: paymentRequirements.maxAmountRequired,
     });
 
     // EIP-712 message object - uses BigInt for uint256 types during signing
     const signingMessage = {
       from: address,
-      to: recipientAddress,
-      value: amountInAtomicUnits, // BigInt for EIP-712 signing
-      validAfter: BigInt(validAfter),
-      validBefore: BigInt(validBefore),
-      nonce,
+      to: payTo,
+      value,           // BigInt - viem handles conversion
+      validAfter,      // BigInt
+      validBefore,     // BigInt
+      nonce,           // hex string
     };
 
-    // Sign the EIP-712 typed data
-    const signature = await walletClient.signTypedData({
-      domain: USDC_DOMAIN,
-      types: TRANSFER_AUTHORIZATION_TYPES,
-      primaryType: 'TransferWithAuthorization',
-      message: signingMessage,
+    // Sign the EIP-712 typed data using SERVER-PROVIDED domain
+    console.log('[x402] Requesting signature from wallet...', {
+      account: walletClient.account?.address,
+      hasAccount: !!walletClient.account,
     });
+
+    let signature: `0x${string}`;
+    try {
+      signature = await walletClient.signTypedData({
+        account: walletClient.account!,
+        domain,  // CRITICAL: Use domain built from server response!
+        types: TRANSFER_AUTHORIZATION_TYPES,
+        primaryType: 'TransferWithAuthorization',
+        message: signingMessage,
+      });
+    } catch (signError) {
+      console.error('[x402] signTypedData failed:', signError);
+      // Re-throw with more context
+      if (signError instanceof Error) {
+        if (signError.message.includes('User rejected') || signError.message.includes('user rejected')) {
+          throw new Error('Signature rejected by user');
+        }
+        if (signError.message.includes('eth_signTypedData_v4')) {
+          throw new Error('Wallet does not support EIP-712 signing. Try a different wallet.');
+        }
+        throw signError;
+      }
+      throw new Error('Failed to sign payment authorization');
+    }
+
+    console.log('[x402] Signature obtained:', signature.slice(0, 20) + '...');
 
     // x402 authorization object - all numeric values as strings per x402 spec
     const authorization = {
       from: address,
-      to: recipientAddress,
-      value: amountInAtomicUnits.toString(), // numeric string
-      validAfter: validAfter.toString(), // unix timestamp as numeric string
-      validBefore: validBefore.toString(), // unix timestamp as numeric string
-      nonce, // 0x-prefixed hex string
+      to: payTo,
+      value: value.toString(),              // STRING
+      validAfter: validAfter.toString(),    // STRING
+      validBefore: validBefore.toString(),  // STRING
+      nonce,                                // Already a string
     };
 
     // Create x402 payment payload
     const payload = {
       x402Version: 1,
-      scheme: 'exact',
-      network: 'base',
+      scheme: paymentRequirements.scheme || 'exact',
+      network: paymentRequirements.network || 'base',
       payload: {
-        signature, // 0x-prefixed hex string
+        signature,
         authorization,
       },
     };
 
-    console.log('x402 payload:', JSON.stringify(payload, null, 2));
+    console.log('[x402] Final payload:', JSON.stringify(payload, null, 2));
 
     // Encode as base64
     return btoa(JSON.stringify(payload));

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAccount, usePublicClient, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { getContracts } from '@/config';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl } from '@/config';
 import { base } from 'wagmi/chains';
 import { getAddress } from '@coinbase/onchainkit/identity';
 import { NFTImage } from './NFTImage';
@@ -185,15 +185,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
         return;
       }
 
-      // Fetch tokenURI and metadata
-      const tokenURI = await publicClient.readContract({
-        address: contracts.nft.address as `0x${string}`,
-        abi: contracts.nft.abi,
-        functionName: 'tokenURI',
-        args: [BigInt(tokenId)],
-      }) as string;
-
-      const metadata = await fetchMetadata(tokenURI);
+      // Fetch metadata using IPNS (always gets latest version)
+      const metadata = await fetchMetadata(tokenId);
       if (!metadata) {
         setTargetError('Failed to load NFT metadata');
         return;
@@ -293,14 +286,12 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
       }
     }
 
-    // Step 3: Fetch metadata from IPFS
+    // Step 3: Fetch metadata from IPNS (always gets latest version)
     const metadataMap = new Map<number, any>();
     const metadataPromises = tokenIds.map(async (tokenIdBigInt: bigint) => {
       const tokenId = Number(tokenIdBigInt);
-      const tokenURI = tokenURIMap.get(tokenId);
-      if (!tokenURI) return null;
 
-      const metadata = await fetchMetadata(tokenURI);
+      const metadata = await fetchMetadata(tokenId);
       if (metadata) {
         metadataMap.set(tokenId, metadata);
       }
@@ -355,12 +346,10 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
     setTargetNFTs(jailableNFTs);
   };
 
-  // Fetch metadata from IPFS (same method as useUserNFTs)
-  const fetchMetadata = async (tokenURI: string) => {
+  // Fetch metadata from IPNS (always gets latest version)
+  const fetchMetadata = async (tokenId: number) => {
     try {
-      const metadataUrl = tokenURI.startsWith('ipfs://')
-        ? `https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${tokenURI.replace('ipfs://', '')}`
-        : tokenURI;
+      const metadataUrl = getNFTMetadataUrl(tokenId);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -375,10 +364,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
 
       const metadata = await response.json();
 
-      let imageUrl = metadata.image || '';
-      if (imageUrl.startsWith('ipfs://')) {
-        imageUrl = imageUrl.replace('ipfs://', '');
-      }
+      // Use IPNS image URL - always gets latest version
+      const imageUrl = getNFTImageUrl(tokenId);
 
       return {
         imageUrl,

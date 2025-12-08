@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { getContracts } from '@/config/contracts';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl } from '@/config/contracts';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
@@ -93,6 +93,16 @@ export function StakingInterface({
     },
   });
 
+  // Get global pool stats (total staked by all users)
+  const { data: poolStats } = useReadContract({
+    address: stakingConfig.address,
+    abi: stakingConfig.abi,
+    functionName: 'getPoolStats',
+    query: {
+      refetchInterval: 30000, // Refetch every 30 seconds
+    },
+  });
+
   const { writeContractAsync, data: hash, isPending: isWritePending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
 
@@ -176,23 +186,11 @@ export function StakingInterface({
 
           if (tokenURIResult.status === 'success' && tokenURIResult.result) {
             try {
-              const uri = tokenURIResult.result as string;
-              // Handle different URI formats (IPFS, HTTP, data URI)
-              let metadataUrl = uri;
-              if (uri.startsWith('ipfs://')) {
-                metadataUrl = uri.replace('ipfs://', 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/');
-              } else if (uri.startsWith('data:application/json;base64,')) {
-                const base64Data = uri.replace('data:application/json;base64,', '');
-                const jsonString = atob(base64Data);
-                metadata = JSON.parse(jsonString);
-              }
-
-              // Fetch JSON metadata if it's a URL
-              if (metadataUrl.startsWith('http')) {
-                const metadataResponse = await fetch(metadataUrl);
-                if (metadataResponse.ok) {
-                  metadata = await metadataResponse.json();
-                }
+              // Use IPNS for metadata - always gets latest version
+              const metadataUrl = getNFTMetadataUrl(tokenId);
+              const metadataResponse = await fetch(metadataUrl);
+              if (metadataResponse.ok) {
+                metadata = await metadataResponse.json();
               }
             } catch (error) {
               console.warn(`  ⚠️ Could not fetch metadata for token ${tokenId}:`, error);
@@ -205,11 +203,8 @@ export function StakingInterface({
           else if (tokenInfo.isEgg) nftType = 'egg';
           else if (tokenInfo.ownerIsWarden) nftType = 'warden';
 
-          // Extract image URL
-          let imageUrl = metadata.image || `${tokenId}.png`;
-          if (imageUrl.startsWith('ipfs://')) {
-            imageUrl = imageUrl.replace('ipfs://', '');
-          }
+          // Use IPNS image URL - always gets latest version
+          const imageUrl = getNFTImageUrl(tokenId);
 
           const userNFT: UserNFT = {
             tokenId,
@@ -412,6 +407,11 @@ export function StakingInterface({
 
   const stakedCount = userStats ? Number((userStats as any)[0]) : 0;
 
+  // Global pool stats from contract
+  // getPoolStats returns: [totalStaked, rewardPerNFTStored, totalRewardsAdded, totalRewardsClaimed, availableRewards, totalUniqueStakers, averageStakePerUser]
+  const globalTotalStaked = poolStats ? Number((poolStats as any)[0]) : 0;
+  const totalUniqueStakers = poolStats ? Number((poolStats as any)[5]) : 0;
+
   return (
     <>
       {/* Rewards Info */}
@@ -425,14 +425,51 @@ export function StakingInterface({
           flexShrink: 0,
         }}
       >
+        {/* Global Pool Stats */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 'clamp(8px, 1.5vw, 10px)',
+          paddingBottom: 'clamp(8px, 1.5vw, 10px)',
+          borderBottom: '1px solid rgba(6, 182, 212, 0.2)',
+        }}>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Total Staked:</span>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(168, 85, 247, 1)', fontWeight: 700 }}>
+            {globalTotalStaked.toLocaleString()} snakes ({totalUniqueStakers} stakers)
+          </span>
+        </div>
+
+        {/* User Stats */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'clamp(8px, 1.5vw, 10px)' }}>
-          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Snakes Staked:</span>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Your Staked:</span>
           <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(6, 182, 212, 1)', fontWeight: 700 }}>{stakedCount}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Pending Rewards:</span>
-          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(34, 197, 94, 1)', fontWeight: 700 }}>{pendingRewardsFormatted} tokens</span>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(34, 197, 94, 1)', fontWeight: 700 }}>{pendingRewardsFormatted} wASS</span>
         </div>
+
+        {/* Stake to Earn Message */}
+        {stakedCount === 0 && (
+          <div
+            style={{
+              marginTop: 'clamp(12px, 2vw, 16px)',
+              padding: 'clamp(8px, 1.6vw, 12px)',
+              backgroundColor: 'rgba(249, 115, 22, 0.1)',
+              border: '1px solid rgba(249, 115, 22, 0.3)',
+              borderRadius: 'clamp(6px, 1.2vw, 8px)',
+              textAlign: 'center',
+            }}
+          >
+            <span style={{
+              fontSize: 'clamp(10px, 2vw, 12px)',
+              color: 'rgba(249, 115, 22, 1)',
+              fontWeight: 600,
+            }}>
+              Stake your snakes to earn wASS rewards!
+            </span>
+          </div>
+        )}
 
         {/* Claim Rewards Button */}
         {Number(pendingRewardsFormatted) > 0 && (
@@ -555,7 +592,7 @@ export function StakingInterface({
                   }}
                 >
                   <img
-                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                    src={nft.imageUrl}
                     alt={nft.name}
                     style={{
                       width: '100%',
@@ -653,7 +690,7 @@ export function StakingInterface({
                   }}
                 >
                   <img
-                    src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                    src={nft.imageUrl}
                     alt={nft.name}
                     style={{
                       width: '100%',

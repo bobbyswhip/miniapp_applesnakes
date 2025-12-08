@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useBalance, useReadContract } from 'wagmi';
 import { parseEther, formatUnits, formatEther } from 'viem';
 import { base } from 'wagmi/chains';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, getNFTImageUrl } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory } from '@/contexts/InventoryContext';
 import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
@@ -3598,7 +3598,7 @@ function HomeContent() {
                             {/* NFT Image */}
                             <div style={{ aspectRatio: '1/1', position: 'relative' }}>
                               <img
-                                src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                src={nft.imageUrl}
                                 alt={nft.name}
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                               />
@@ -3972,7 +3972,7 @@ function HomeContent() {
                             >
                               <div style={{ aspectRatio: '1/1' }}>
                                 <img
-                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  src={nft.imageUrl}
                                   alt={nft.name}
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
@@ -4062,7 +4062,7 @@ function HomeContent() {
                             >
                               <div style={{ aspectRatio: '1/1' }}>
                                 <img
-                                  src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                  src={nft.imageUrl}
                                   alt={nft.name}
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
@@ -4474,7 +4474,7 @@ function HomeContent() {
                     >
                       <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}>
                         <img
-                          src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                          src={nft.imageUrl}
                           alt={nft.name}
                           style={{
                             width: '100%',
@@ -4573,7 +4573,7 @@ function HomeContent() {
                     >
                       <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}>
                         <img
-                          src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${egg.imageUrl}`}
+                          src={egg.imageUrl}
                           alt={egg.name}
                           style={{
                             width: '100%',
@@ -5023,7 +5023,7 @@ function HomeContent() {
                 >
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <img
-                      src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${bredNFT.imageUrl}`}
+                      src={bredNFT.imageUrl}
                       alt={bredNFT.name}
                       style={{
                         width: '100%',
@@ -5032,8 +5032,8 @@ function HomeContent() {
                         borderRadius: 'clamp(10px, 1.8vw, 14px)',
                       }}
                       onError={(e) => {
-                        // Fallback to token ID 1 image if image fails to load
-                        e.currentTarget.src = 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/QmSdqQRWUoUFEVcMfr7Y3gVCqjf9zGf8Nw7fW6sqpACYZe/1.png';
+                        // Fallback to token ID 1 image if image fails to load (IPNS for latest version)
+                        e.currentTarget.src = getNFTImageUrl(1);
                       }}
                     />
                   </div>
@@ -5112,7 +5112,7 @@ function HomeContent() {
                     >
                       <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}>
                         <img
-                          src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${human.imageUrl}`}
+                          src={human.imageUrl}
                           alt={human.name}
                           style={{
                             width: '100%',

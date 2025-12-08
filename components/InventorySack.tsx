@@ -1,43 +1,209 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, useReadContract, useBalance, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { base } from 'wagmi/chains';
 import { formatEther, formatUnits } from 'viem';
-import { getContracts } from '@/config';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl, QUOTER_ADDRESS, QUOTER_ABI, TOKEN_PAIRS, getDefaultPair, TokenPairConfig, ETH_ADDRESS, WASS_TOKEN_ADDRESS, getAllTokenAddresses } from '@/config';
+import { useMultipleTokenInfo } from '@/hooks/useTokenInfo';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory } from '@/contexts/InventoryContext';
-import { useTransactions } from '@/contexts/TransactionContext';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
+import { getBasescanUrl } from '@/contexts/TransactionContext';
+
+// Transaction overlay state type
+interface TxOverlay {
+  hash: `0x${string}`;
+  status: 'pending' | 'success' | 'error';
+  message: string;
+  timestamp: number;
+}
 import { useBatchTransaction } from '@/hooks/useBatchTransaction';
 import { UserNFT, NFTType } from '@/hooks/useUserNFTs';
+import { useOpenSeaListings, OpenSeaListing } from '@/hooks/useOpenSeaListings';
+import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
+import { parseEther } from 'viem';
+import { SwapWrapModal } from './SwapWrapModal';
+import { ChartModal } from './ChartModal';
+import { VerifiedTokenLauncher } from './VerifiedTokenLauncher';
+import { usePoolTrades, formatRelativeTime, truncateAddress } from '@/hooks/usePoolTrades';
 
 // Extended NFT type to include staking status
 interface InventoryNFT extends UserNFT {
   isStaked?: boolean;
 }
 
-type InventoryTab = 'collection' | 'staked';
+// Helper function to determine NFT type from tokenId
+// Snake: tokenId % 10 === 0 OR tokenId > 3000
+// Egg: name contains 'Egg'
+// Human: everything else (wardens are a subset but we're removing that filter)
+const getLocalNFTType = (tokenId: number, name: string): 'snake' | 'egg' | 'human' => {
+  // Check if egg first (based on name)
+  if (name.toLowerCase().includes('egg')) {
+    return 'egg';
+  }
+  // Check if snake (every 10th NFT OR all NFTs after 3000)
+  if (tokenId % 10 === 0 || tokenId > 3000) {
+    return 'snake';
+  }
+  // Default to human
+  return 'human';
+};
+
+type InventoryTab = 'collection' | 'listings' | 'exchange' | 'trading';
+type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'price-desc';
+type FilterType = 'all' | 'human' | 'snake' | 'egg';
+type TradingView = 'swap' | 'launch';
 
 export function InventorySack() {
   const router = useRouter();
-  const [viewingNFT, setViewingNFT] = useState<InventoryNFT | null>(null);
   const [stakedNFTs, setStakedNFTs] = useState<InventoryNFT[]>([]);
   const [isLoadingStaked, setIsLoadingStaked] = useState(false);
   const [activeTab, setActiveTab] = useState<InventoryTab>('collection');
   const [hasSetInitialTab, setHasSetInitialTab] = useState(false);
   const [selectedNFTs, setSelectedNFTs] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [currentOperation, setCurrentOperation] = useState<'approve' | 'stake' | 'unstake' | 'wrap' | null>(null);
-  const [cooldownRemaining, setCooldownRemaining] = useState<string>('');
+  const [currentOperation, setCurrentOperation] = useState<'approve' | 'stake' | 'unstake' | 'wrap' | 'buy' | null>(null);
 
-  const { isOpen, setIsOpen, openNFTHub } = useInventory();
+  // New OpenSea-style state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [showFilters, setShowFilters] = useState(true);
+  const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [showBuyModal, setShowBuyModal] = useState(false);
+
+  const { isOpen, setIsOpen } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
-  const { addTransaction } = useTransactions();
+
+  // Local transaction overlay state
+  const [txOverlay, setTxOverlay] = useState<TxOverlay | null>(null);
+
+  // Quote price for buy from pool
+  const [buyQuotePrice, setBuyQuotePrice] = useState<string | null>(null);
+  const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
+
+  // OpenSea listings for marketplace tab
+  const { listings: openSeaListings, isLoading: listingsLoading, floorPrice, totalListings, refetch: refetchListings } = useOpenSeaListings(100);
+
+  // wTokens pool NFTs for "Buy from Contract" option
+  const { nfts: poolNFTs, isLoading: poolNFTsLoading } = useWTokensNFTsCache(false, false);
+
+  // Current pool address for trade history (updated by ChartModal when pair changes)
+  const [currentPoolAddress, setCurrentPoolAddress] = useState<string | undefined>(undefined);
+
+  // Selected pair ID for sidebar (controls ChartModal's selected pair)
+  const [selectedPairId, setSelectedPairId] = useState<string>(getDefaultPair().id);
+
+  // Trading tab view mode - 'swap' for trading interface, 'launch' for token launcher
+  const [tradingView, setTradingView] = useState<TradingView>('swap');
+
+  // Price changes for all pairs (for sidebar display)
+  const [allPairChanges, setAllPairChanges] = useState<Map<string, number>>(new Map());
+
+  // Fetch token info for all pair tokens (for display names)
+  const allTokenAddresses = useMemo(() => getAllTokenAddresses(), []);
+  const { tokenInfos } = useMultipleTokenInfo(allTokenAddresses);
+
+  // Helper to get token symbol from address
+  const getTokenSymbol = useCallback((address: `0x${string}`): string => {
+    if (address === ETH_ADDRESS) return 'ETH';
+    const info = tokenInfos.get(address.toLowerCase());
+    return info?.symbol || `${address.slice(0, 6)}...`;
+  }, [tokenInfos]);
+
+  // Helper to get display name for a pair
+  const getPairDisplayName = useCallback((pair: TokenPairConfig): string => {
+    const symbol0 = getTokenSymbol(pair.token0);
+    const symbol1 = getTokenSymbol(pair.token1);
+    return `${symbol0}/${symbol1}`;
+  }, [getTokenSymbol]);
+
+  // Fetch price changes for all pairs (24h)
+  useEffect(() => {
+    if (activeTab !== 'trading') return;
+
+    const fetchAllPairChanges = async () => {
+      const changes = new Map<string, number>();
+
+      await Promise.all(
+        TOKEN_PAIRS.map(async (pair) => {
+          if (!pair.geckoPoolAddress) {
+            changes.set(pair.id, 0);
+            return;
+          }
+
+          try {
+            const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${pair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
+            const response = await fetch(url);
+
+            if (!response.ok) {
+              changes.set(pair.id, 0);
+              return;
+            }
+
+            const json = await response.json();
+            const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+
+            if (ohlcvList.length >= 2) {
+              const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0;
+              const newestPrice = ohlcvList[0]?.[4] || 0;
+              if (oldestPrice > 0) {
+                const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
+                changes.set(pair.id, percentChange);
+              } else {
+                changes.set(pair.id, 0);
+              }
+            } else {
+              changes.set(pair.id, 0);
+            }
+          } catch {
+            changes.set(pair.id, 0);
+          }
+        })
+      );
+
+      setAllPairChanges(changes);
+    };
+
+    fetchAllPairChanges();
+  }, [activeTab]);
+
+  // Handle sidebar pair selection
+  const handleSidebarPairSelect = useCallback((pair: TokenPairConfig) => {
+    setSelectedPairId(pair.id);
+    if (pair.geckoPoolAddress) {
+      setCurrentPoolAddress(pair.geckoPoolAddress);
+    }
+  }, []);
+
+  // Pool trades for transaction history in Trading tab
+  const { trades: poolTrades, isLoading: tradesLoading, refetch: refetchTrades } = usePoolTrades(currentPoolAddress);
+
+  // Get wrap fee from wrapper contract
+  const { data: wrapFeeData } = useReadContract({
+    address: contracts.wrapper.address,
+    abi: contracts.wrapper.abi,
+    functionName: 'getWrapFee',
+    chainId: base.id,
+  });
+  const wrapFee = wrapFeeData ? BigInt(wrapFeeData as bigint) : 0n;
+  const wrapFeeFormatted = formatEther(wrapFee);
+
+  // Check if wrapper contract is approved to transfer NFTs
+  const { data: isWrapperApproved, refetch: refetchWrapperApproval } = useReadContract({
+    address: contracts.nft.address,
+    abi: contracts.nft.abi,
+    functionName: 'isApprovedForAll',
+    args: userAddress ? [userAddress, contracts.wrapper.address] : undefined,
+    query: {
+      enabled: !!userAddress,
+    },
+  });
 
   // Smart wallet detection for batch transactions
   const { supportsAtomicBatch } = useSmartWallet();
@@ -90,7 +256,7 @@ export function InventorySack() {
     args: userAddress ? [userAddress] : undefined,
     query: {
       enabled: !!userAddress,
-      refetchInterval: 10000, // Refetch every 10 seconds
+      refetchInterval: 10000,
     },
   });
 
@@ -103,6 +269,16 @@ export function InventorySack() {
     query: {
       enabled: !!userAddress,
       refetchInterval: 10000,
+    },
+  });
+
+  // Get total staked across all users
+  const { data: totalStakedData } = useReadContract({
+    address: contracts.staking.address,
+    abi: contracts.staking.abi,
+    functionName: 'totalStaked',
+    query: {
+      refetchInterval: 30000,
     },
   });
 
@@ -124,7 +300,7 @@ export function InventorySack() {
     functionName: 'getStakedTokenIdsPaginated',
     args: userAddress ? [userAddress, BigInt(0), BigInt(100)] : undefined,
     query: {
-      enabled: false, // We'll manually trigger this
+      enabled: false,
     },
   });
 
@@ -133,7 +309,7 @@ export function InventorySack() {
     ? (stakedData[0] as bigint[]).map(id => Number(id))
     : [];
 
-  // Fetch full NFT data for staked tokens
+  // Fetch full NFT data for staked tokens - PROGRESSIVE LOADING
   useEffect(() => {
     if (!publicClient || stakedTokenIds.length === 0) {
       setStakedNFTs([]);
@@ -145,7 +321,6 @@ export function InventorySack() {
       setIsLoadingStaked(true);
 
       try {
-        // TokenInfo interface from contract
         interface TokenInfo {
           tokenId: bigint;
           owner: string;
@@ -163,7 +338,13 @@ export function InventorySack() {
           canUnwrap: boolean;
         }
 
-        // Batch call getTokenInfo for all staked tokens
+        const getNFTTypeFromInfo = (info: TokenInfo): NFTType => {
+          if (info.isSnake) return 'snake';
+          if (info.isEgg) return 'egg';
+          if (info.ownerIsWarden) return 'warden';
+          return 'human';
+        };
+
         const tokenInfoResults = await publicClient.readContract({
           address: contracts.nft.address as `0x${string}`,
           abi: contracts.nft.abi,
@@ -171,79 +352,13 @@ export function InventorySack() {
           args: [stakedTokenIds.map(id => BigInt(id))],
         }) as TokenInfo[];
 
-        // Batch fetch tokenURI
-        const tokenURIResults = await publicClient.multicall({
-          contracts: stakedTokenIds.map(tokenId => ({
-            address: contracts.nft.address as `0x${string}`,
-            abi: contracts.nft.abi,
-            functionName: 'tokenURI' as const,
-            args: [BigInt(tokenId)],
-          })),
-          allowFailure: true,
-        });
-
-        // Build InventoryNFT objects
-        const stakedNFTObjects: InventoryNFT[] = [];
-
-        for (let i = 0; i < stakedTokenIds.length; i++) {
-          const tokenId = stakedTokenIds[i];
+        const initialStakedNFTs: InventoryNFT[] = stakedTokenIds.map((tokenId, i) => {
           const tokenInfo = tokenInfoResults[i];
-          const tokenURIResult = tokenURIResults[i];
-
-          // Get metadata from tokenURI
-          let metadata: {
-            name: string;
-            description?: string;
-            image: string;
-            attributes?: Array<{ trait_type: string; value: string | number }>;
-            [key: string]: unknown;
-          } = {
-            name: `AppleSnake #${tokenId}`,
-            description: '',
-            image: `${tokenId}.png`,
-            attributes: [],
-          };
-
-          if (tokenURIResult.status === 'success' && tokenURIResult.result) {
-            try {
-              const uri = tokenURIResult.result as string;
-              let metadataUrl = uri;
-              if (uri.startsWith('ipfs://')) {
-                metadataUrl = uri.replace('ipfs://', 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/');
-              } else if (uri.startsWith('data:application/json;base64,')) {
-                const base64Data = uri.replace('data:application/json;base64,', '');
-                const jsonString = atob(base64Data);
-                metadata = JSON.parse(jsonString);
-              }
-
-              if (metadataUrl.startsWith('http')) {
-                const metadataResponse = await fetch(metadataUrl);
-                if (metadataResponse.ok) {
-                  metadata = await metadataResponse.json();
-                }
-              }
-            } catch {
-              // Use default metadata on error
-            }
-          }
-
-          // Determine NFT type
-          let nftType: NFTType = 'human';
-          if (tokenInfo.isSnake) nftType = 'snake';
-          else if (tokenInfo.isEgg) nftType = 'egg';
-          else if (tokenInfo.ownerIsWarden) nftType = 'warden';
-
-          // Extract image URL
-          let imageUrl = metadata.image || `${tokenId}.png`;
-          if (imageUrl.startsWith('ipfs://')) {
-            imageUrl = imageUrl.replace('ipfs://', '');
-          }
-
-          const inventoryNFT: InventoryNFT = {
+          return {
             tokenId,
-            imageUrl,
-            name: metadata.name || `AppleSnake #${tokenId}`,
-            nftType,
+            imageUrl: getNFTImageUrl(tokenId),
+            name: `AppleSnake #${tokenId}`,
+            nftType: getNFTTypeFromInfo(tokenInfo),
             owner: tokenInfo.owner,
             exists: tokenInfo.exists,
             isSnake: tokenInfo.isSnake,
@@ -257,15 +372,85 @@ export function InventorySack() {
             ownerIsJailExempt: tokenInfo.ownerIsJailExempt,
             swapMintTime: Number(tokenInfo.swapMintTime),
             canUnwrap: tokenInfo.canUnwrap,
-            metadata,
+            metadata: {
+              name: `AppleSnake #${tokenId}`,
+              description: '',
+              image: `${tokenId}.png`,
+              attributes: [],
+            },
             isStaked: true,
           };
+        });
 
-          stakedNFTObjects.push(inventoryNFT);
-        }
-
-        setStakedNFTs(stakedNFTObjects);
+        setStakedNFTs(initialStakedNFTs);
         setIsLoadingStaked(false);
+
+        const METADATA_BATCH_SIZE = 15;
+        const metadataMap = new Map<number, any>();
+
+        for (let i = 0; i < stakedTokenIds.length; i += METADATA_BATCH_SIZE) {
+          const batch = stakedTokenIds.slice(i, i + METADATA_BATCH_SIZE);
+
+          const batchPromises = batch.map(async (tokenId) => {
+            try {
+              const metadataUrl = getNFTMetadataUrl(tokenId);
+              const response = await fetch(metadataUrl);
+              if (response.ok) {
+                const metadata = await response.json();
+                return { tokenId, metadata };
+              }
+            } catch {
+              // Use default on error
+            }
+            return null;
+          });
+
+          const batchResults = await Promise.all(batchPromises);
+
+          batchResults.forEach(result => {
+            if (result) {
+              metadataMap.set(result.tokenId, result.metadata);
+            }
+          });
+
+          const enrichedStakedNFTs: InventoryNFT[] = stakedTokenIds.map((tokenId, idx) => {
+            const tokenInfo = tokenInfoResults[idx];
+            const metadata = metadataMap.get(tokenId) || {
+              name: `AppleSnake #${tokenId}`,
+              description: '',
+              image: `${tokenId}.png`,
+              attributes: [],
+            };
+
+            return {
+              tokenId,
+              imageUrl: getNFTImageUrl(tokenId),
+              name: metadata.name || `AppleSnake #${tokenId}`,
+              nftType: getNFTTypeFromInfo(tokenInfo),
+              owner: tokenInfo.owner,
+              exists: tokenInfo.exists,
+              isSnake: tokenInfo.isSnake,
+              isJailed: tokenInfo.isJailed,
+              jailTime: Number(tokenInfo.jailTime),
+              isEgg: tokenInfo.isEgg,
+              mintTime: Number(tokenInfo.mintTime),
+              forceHatched: tokenInfo.forceHatched,
+              evolved: tokenInfo.evolved,
+              ownerIsWarden: tokenInfo.ownerIsWarden,
+              ownerIsJailExempt: tokenInfo.ownerIsJailExempt,
+              swapMintTime: Number(tokenInfo.swapMintTime),
+              canUnwrap: tokenInfo.canUnwrap,
+              metadata,
+              isStaked: true,
+            };
+          });
+
+          setStakedNFTs(enrichedStakedNFTs);
+
+          if (i + METADATA_BATCH_SIZE < stakedTokenIds.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } catch (error) {
         console.error('Error fetching staked NFTs:', error);
         setStakedNFTs([]);
@@ -286,64 +471,313 @@ export function InventorySack() {
     }
   }, [isOpen]);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleEsc);
-      return () => window.removeEventListener('keydown', handleEsc);
-    }
-  }, [isOpen]);
-
   const wTokenBalanceFormatted = wTokenBalance ? Number(wTokenBalance) / 1e18 : 0;
   const ethBalanceFormatted = ethBalance ? parseFloat(formatEther(ethBalance.value)) : 0;
 
-  // Staking info formatting
   const pendingRewardsFormatted = pendingRewardsData
     ? parseFloat(formatUnits(pendingRewardsData as bigint, 18)).toFixed(4)
     : '0.0000';
   const stakedCount = userStats ? Number((userStats as [bigint])[0]) : 0;
+  const totalStakedCount = totalStakedData ? Number(totalStakedData) : 0;
+  const hasPendingRewards = pendingRewardsData && (pendingRewardsData as bigint) > 0n;
 
-  // Separate collection NFTs (owned, not staked)
-  const collectionNFTs: InventoryNFT[] = nfts.map(nft => ({ ...nft, isStaked: false }));
+  // Fetch buy quote price when pool has NFTs - uses OTC contract's quoteBuyNFT
+  // Uses same approach as SwapWrapModal for consistency
+  useEffect(() => {
+    const fetchQuote = async () => {
+      if (!publicClient || poolNFTs.length === 0) return;
 
-  // Combine regular NFTs with staked NFTs for total count
+      setIsFetchingQuote(true);
+      try {
+        // Get quote from OTC contract - includes unwrap fee + tokens needed
+        const quoteBuyNFTResult = await publicClient.readContract({
+          address: contracts.otc.address as `0x${string}`,
+          abi: contracts.otc.abi,
+          functionName: 'quoteBuyNFT',
+          args: [BigInt(1)], // Quote for 1 NFT
+        }) as [bigint, bigint];
+
+        const [unwrapFee, tokensNeeded] = quoteBuyNFTResult;
+
+        // Get pool info from NFT contract (same as SwapWrapModal)
+        const [poolIdRaw, hookAddress] = await Promise.all([
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'poolIdRaw',
+            args: [],
+          }) as Promise<`0x${string}`>,
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'hook',
+            args: [],
+          }) as Promise<`0x${string}`>,
+        ]);
+
+        // Get pool key from hook contract (not quoter - matches SwapWrapModal approach)
+        const poolKey = await publicClient.readContract({
+          address: hookAddress,
+          abi: [{
+            inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+            name: 'getPoolKey',
+            outputs: [{
+              components: [
+                { internalType: 'address', name: 'currency0', type: 'address' },
+                { internalType: 'address', name: 'currency1', type: 'address' },
+                { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                { internalType: 'address', name: 'hooks', type: 'address' },
+              ],
+              internalType: 'tuple',
+              name: '',
+              type: 'tuple',
+            }],
+            stateMutability: 'view',
+            type: 'function',
+          }],
+          functionName: 'getPoolKey',
+          args: [poolIdRaw],
+        }) as {
+          currency0: `0x${string}`;
+          currency1: `0x${string}`;
+          fee: number;
+          tickSpacing: number;
+          hooks: `0x${string}`;
+        };
+
+        // Use quoteExactOutputSingle to get ETH needed
+        const result = await publicClient.readContract({
+          address: QUOTER_ADDRESS,
+          abi: QUOTER_ABI,
+          functionName: 'quoteExactOutputSingle',
+          args: [{
+            poolKey: poolKey,
+            zeroForOne: true, // ETH -> Token
+            exactAmount: tokensNeeded,
+            sqrtPriceLimitX96: 0n,
+            hookData: '0x' as `0x${string}`,
+          }],
+        });
+
+        const [ethRequired] = result as [bigint, bigint];
+
+        // Add 5% buffer for price movement + unwrap fee
+        const ethForTokens = parseFloat(formatEther(ethRequired)) * 1.05;
+        const totalEth = ethForTokens + parseFloat(formatEther(unwrapFee));
+        setBuyQuotePrice(totalEth.toFixed(6));
+      } catch (error) {
+        console.error('Failed to fetch quote:', error);
+        setBuyQuotePrice(null);
+      } finally {
+        setIsFetchingQuote(false);
+      }
+    };
+
+    fetchQuote();
+    // Refresh quote every 30 seconds
+    const interval = setInterval(fetchQuote, 30000);
+    return () => clearInterval(interval);
+  }, [publicClient, poolNFTs.length, contracts.otc.address, contracts.otc.abi, contracts.nft.address, contracts.nft.abi]);
+
+  // Calculate effective floor price - use pool price if cheaper than OpenSea floor
+  const effectiveFloorPrice = useMemo(() => {
+    const openSeaFloor = floorPrice ? parseFloat(floorPrice) : null;
+    const poolPrice = buyQuotePrice ? parseFloat(buyQuotePrice) : null;
+
+    // If we have both, return the cheaper one
+    if (openSeaFloor && poolPrice) {
+      return Math.min(openSeaFloor, poolPrice).toFixed(4);
+    }
+    // If only one exists, return it
+    if (openSeaFloor) return openSeaFloor.toFixed(4);
+    if (poolPrice) return poolPrice.toFixed(4);
+    return null;
+  }, [floorPrice, buyQuotePrice]);
+
+  // Check if pool price is the floor
+  const isPoolFloor = useMemo(() => {
+    if (!buyQuotePrice || !floorPrice) return !!buyQuotePrice;
+    return parseFloat(buyQuotePrice) <= parseFloat(floorPrice);
+  }, [buyQuotePrice, floorPrice]);
+
+  // Apply local NFT type detection (snake: tokenId%10==0 OR tokenId>3000, egg: name contains 'Egg')
+  const collectionNFTs: InventoryNFT[] = nfts.map(nft => {
+    const localType = getLocalNFTType(nft.tokenId, nft.name);
+    return {
+      ...nft,
+      isStaked: false,
+      nftType: localType,
+      isSnake: localType === 'snake',
+      isEgg: localType === 'egg',
+    };
+  });
   const allNFTs: InventoryNFT[] = [...collectionNFTs, ...stakedNFTs];
 
-  // Filter NFTs based on active tab
-  const displayedNFTs = activeTab === 'collection' ? collectionNFTs : stakedNFTs;
+  // Combined view: collection NFTs first, staked NFTs at the bottom (when on collection tab)
+  const unifiedNFTs = useMemo(() => {
+    // Also apply local type detection to staked NFTs
+    const typedStakedNFTs = stakedNFTs.map(nft => {
+      const localType = getLocalNFTType(nft.tokenId, nft.name);
+      return {
+        ...nft,
+        nftType: localType,
+        isSnake: localType === 'snake',
+        isEgg: localType === 'egg',
+      };
+    });
+    return [...collectionNFTs, ...typedStakedNFTs];
+  }, [collectionNFTs, stakedNFTs]);
 
-  // Set initial tab based on which has more NFTs (only once after loading)
+  // Filter and sort NFTs - now works on unified view for collection tab
+  const displayedNFTs = useMemo(() => {
+    let filtered = [...unifiedNFTs];
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(nft =>
+        nft.name.toLowerCase().includes(query) ||
+        nft.tokenId.toString().includes(query)
+      );
+    }
+
+    // Apply type filter
+    if (filterType !== 'all') {
+      filtered = filtered.filter(nft => nft.nftType === filterType);
+    }
+
+    // Apply sort
+    switch (sortBy) {
+      case 'newest':
+        filtered.sort((a, b) => b.mintTime - a.mintTime);
+        break;
+      case 'oldest':
+        filtered.sort((a, b) => a.mintTime - b.mintTime);
+        break;
+      case 'id-asc':
+        filtered.sort((a, b) => a.tokenId - b.tokenId);
+        break;
+      case 'id-desc':
+        filtered.sort((a, b) => b.tokenId - a.tokenId);
+        break;
+    }
+
+    // After all sorting, move staked NFTs to bottom if no other sort is active
+    if (sortBy === 'newest' || sortBy === 'oldest') {
+      const unstaked = filtered.filter(nft => !nft.isStaked);
+      const staked = filtered.filter(nft => nft.isStaked);
+      filtered = [...unstaked, ...staked];
+    }
+
+    return filtered;
+  }, [unifiedNFTs, searchQuery, filterType, sortBy]);
+
+  // Get NFT type counts for filters (using local type detection)
+  const typeCounts = useMemo(() => {
+    const counts: Record<FilterType, number> = { all: unifiedNFTs.length, human: 0, snake: 0, egg: 0 };
+    unifiedNFTs.forEach(nft => {
+      const type = nft.nftType as FilterType;
+      if (type in counts && type !== 'all') {
+        counts[type]++;
+      }
+    });
+    return counts;
+  }, [unifiedNFTs]);
+
   useEffect(() => {
     if (!isLoading && !isLoadingStaked && !hasSetInitialTab) {
-      // Default to whichever tab has more NFTs
-      if (stakedNFTs.length > nfts.length) {
-        setActiveTab('staked');
-      } else {
-        setActiveTab('collection');
-      }
+      // Always start on collection tab (unified view)
+      setActiveTab('collection');
       setHasSetInitialTab(true);
     }
-  }, [isLoading, isLoadingStaked, hasSetInitialTab, nfts.length, stakedNFTs.length]);
+  }, [isLoading, isLoadingStaked, hasSetInitialTab]);
 
-  // Reset initial tab flag when inventory closes
   useEffect(() => {
     if (!isOpen) {
       setHasSetInitialTab(false);
+      setSearchQuery('');
+      setFilterType('all');
+      setShowBuyModal(false); // Close buy modal when closing inventory
     }
   }, [isOpen]);
 
-  // Handle buy NFT action
-  const handleBuyNFT = () => {
-    setIsOpen(false);
-    router.push('/?fastTravelMint=true');
+  // Handle tab change with filter reset
+  const handleTabChange = (tab: InventoryTab) => {
+    setActiveTab(tab);
+    setFilterType('all');
+    setSearchQuery('');
   };
 
-  // Toggle selection for an NFT
+  // Handle buy NFT action - shows buy modal popup
+  const handleBuyNFT = () => {
+    setShowBuyModal(true);
+  };
+
+  // Helper to show transaction overlay
+  const showTxOverlay = (hash: `0x${string}`, message: string) => {
+    setTxOverlay({
+      hash,
+      status: 'pending',
+      message,
+      timestamp: Date.now(),
+    });
+  };
+
+  // Helper to update transaction status
+  const updateTxOverlay = (status: 'success' | 'error') => {
+    setTxOverlay(prev => prev ? { ...prev, status } : null);
+    // Auto-hide after 5 seconds on success/error
+    setTimeout(() => setTxOverlay(null), 5000);
+  };
+
+  // Transaction timeout effect (60s max)
+  useEffect(() => {
+    if (txOverlay && txOverlay.status === 'pending') {
+      const timeout = setTimeout(() => {
+        setTxOverlay(prev => prev ? { ...prev, status: 'error' } : null);
+        setTimeout(() => setTxOverlay(null), 5000);
+      }, 60000);
+      return () => clearTimeout(timeout);
+    }
+  }, [txOverlay?.hash]);
+
+  // Watch transaction status
+  const { isLoading: txWatching, isSuccess: txSuccess, isError: txError } = useWaitForTransactionReceipt({
+    hash: txOverlay?.hash,
+  });
+
+  // Update overlay on tx completion
+  useEffect(() => {
+    if (txSuccess && txOverlay?.status === 'pending') {
+      updateTxOverlay('success');
+    }
+  }, [txSuccess]);
+
+  useEffect(() => {
+    if (txError && txOverlay?.status === 'pending') {
+      updateTxOverlay('error');
+    }
+  }, [txError]);
+
+  // Handle claim rewards
+  const handleClaimRewards = async () => {
+    if (!userAddress || !hasPendingRewards) return;
+    setCurrentOperation('stake');
+    try {
+      const hash = await writeContractAsync({
+        address: contracts.staking.address,
+        abi: contracts.staking.abi,
+        functionName: 'claimRewards',
+        args: [],
+      });
+      showTxOverlay(hash, 'Claiming rewards');
+    } catch (error) {
+      console.error('Claim error:', error);
+      setCurrentOperation(null);
+    }
+  };
+
   const toggleSelection = useCallback((tokenId: number) => {
     setSelectedNFTs(prev => {
       const newSet = new Set(prev);
@@ -352,7 +786,6 @@ export function InventorySack() {
       } else {
         newSet.add(tokenId);
       }
-      // Enable selection mode if we have selections
       if (newSet.size > 0 && !isSelectionMode) {
         setIsSelectionMode(true);
       } else if (newSet.size === 0) {
@@ -362,39 +795,49 @@ export function InventorySack() {
     });
   }, [isSelectionMode]);
 
-  // Clear all selections
   const clearSelections = useCallback(() => {
     setSelectedNFTs(new Set());
     setIsSelectionMode(false);
   }, []);
 
-  // Handle NFT click (toggle selection or view details)
-  const handleNFTInteraction = useCallback((nft: InventoryNFT, e: React.MouseEvent) => {
-    if (isSelectionMode || e.shiftKey) {
-      // In selection mode or shift+click: toggle selection
-      toggleSelection(nft.tokenId);
-    } else {
-      // Normal click: view NFT details inline
-      setViewingNFT(nft);
+  // Close on Escape key (placed after clearSelections is declared)
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedNFTs.size > 0) {
+          clearSelections();
+        } else {
+          setIsOpen(false);
+        }
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+      return () => window.removeEventListener('keydown', handleEsc);
     }
-  }, [isSelectionMode, toggleSelection]);
+  }, [isOpen, selectedNFTs.size, clearSelections, setIsOpen]);
 
-  // Close detail view and return to grid
-  const closeDetailView = useCallback(() => {
-    setViewingNFT(null);
-  }, []);
+  // Always toggle selection on NFT click (no detail sidebar)
+  const handleNFTInteraction = useCallback((nft: InventoryNFT, _e: React.MouseEvent) => {
+    toggleSelection(nft.tokenId);
+  }, [toggleSelection]);
 
-  // Get selected NFTs data
   const selectedNFTsData = displayedNFTs.filter(nft => selectedNFTs.has(nft.tokenId));
   const selectedSnakes = selectedNFTsData.filter(nft => nft.isSnake);
-  const selectedForStake = activeTab === 'collection' ? selectedSnakes : [];
-  const selectedForUnstake = activeTab === 'staked' ? selectedSnakes : [];
+  const selectedEggs = selectedNFTsData.filter(nft => nft.isEgg);
+  const selectedHumans = selectedNFTsData.filter(nft => !nft.isSnake && !nft.isEgg);
+  // In unified view: separate staked vs unstaked for different actions
+  const selectedForStake = selectedSnakes.filter(nft => !nft.isStaked);
+  const selectedForUnstake = selectedSnakes.filter(nft => nft.isStaked);
+  // Check if any humans are selected (to gray out stake button)
+  const hasHumansSelected = selectedHumans.length > 0;
+  // Can wrap any NFT that's not staked
+  const selectedForWrap = selectedNFTsData.filter(nft => !nft.isStaked);
 
-  // Handle approve staking contract
+  // Contract interaction handlers
   const handleApprove = async () => {
     if (!userAddress) return;
     setCurrentOperation('approve');
-
     try {
       const hash = await writeContractAsync({
         address: contracts.nft.address,
@@ -402,19 +845,16 @@ export function InventorySack() {
         functionName: 'setApprovalForAll',
         args: [contracts.staking.address, true],
       });
-
-      addTransaction(hash, 'Approving staking contract');
+      showTxOverlay(hash, 'Approving staking contract');
     } catch (error) {
       console.error('Approve error:', error);
       setCurrentOperation(null);
     }
   };
 
-  // Handle stake action
   const handleStake = async () => {
     if (selectedForStake.length === 0 || !userAddress) return;
     setCurrentOperation('stake');
-
     try {
       const tokenIds = selectedForStake.map(nft => BigInt(nft.tokenId));
       const hash = await writeContractAsync({
@@ -423,21 +863,17 @@ export function InventorySack() {
         functionName: 'stake',
         args: [tokenIds],
       });
-
-      addTransaction(hash, `Staking ${selectedForStake.length} snake${selectedForStake.length > 1 ? 's' : ''}`);
+      showTxOverlay(hash, `Staking ${selectedForStake.length} snake${selectedForStake.length > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Stake error:', error);
       setCurrentOperation(null);
     }
   };
 
-  // Combined approve + stake for smart wallets
   const handleApproveAndStake = async () => {
     if (selectedForStake.length === 0 || !userAddress) return;
     setCurrentOperation('stake');
-
     const tokenIds = selectedForStake.map(nft => BigInt(nft.tokenId));
-
     try {
       await executeBatch([
         {
@@ -453,19 +889,16 @@ export function InventorySack() {
           args: [tokenIds],
         },
       ]);
-
-      addTransaction('0x' as `0x${string}`, `Approving & Staking ${selectedForStake.length} snake${selectedForStake.length > 1 ? 's' : ''}`);
+      // Batch transaction doesn't return individual hashes, overlay not applicable here
     } catch (error) {
       console.error('Approve and stake error:', error);
       setCurrentOperation(null);
     }
   };
 
-  // Handle unstake action
   const handleUnstake = async () => {
     if (selectedForUnstake.length === 0 || !userAddress) return;
     setCurrentOperation('unstake');
-
     try {
       const tokenIds = selectedForUnstake.map(nft => BigInt(nft.tokenId));
       const hash = await writeContractAsync({
@@ -474,1075 +907,1352 @@ export function InventorySack() {
         functionName: 'unstake',
         args: [tokenIds],
       });
-
-      addTransaction(hash, `Unstaking ${selectedForUnstake.length} snake${selectedForUnstake.length > 1 ? 's' : ''}`);
+      showTxOverlay(hash, `Unstaking ${selectedForUnstake.length} snake${selectedForUnstake.length > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Unstake error:', error);
       setCurrentOperation(null);
     }
   };
 
-  // Handle wrap action - open NFT Hub with wrap mode
-  const handleWrap = () => {
-    setIsOpen(false);
-    openNFTHub('wrap');
+  // Handle wrap action - directly executes wrap transaction
+  const handleWrap = async () => {
+    if (selectedForWrap.length === 0 || !userAddress) return;
+    setCurrentOperation('wrap');
+
+    const tokenIds = selectedForWrap.map(nft => BigInt(nft.tokenId));
+    const totalFee = wrapFee * BigInt(tokenIds.length);
+
+    try {
+      if (supportsAtomicBatch && !isWrapperApproved) {
+        // Smart wallet: batch approve + wrap
+        await executeBatch([
+          {
+            address: contracts.nft.address,
+            abi: contracts.nft.abi,
+            functionName: 'setApprovalForAll',
+            args: [contracts.wrapper.address, true],
+          },
+          {
+            address: contracts.wrapper.address,
+            abi: contracts.wrapper.abi,
+            functionName: 'wrapNFTs',
+            args: [contracts.nft.address, tokenIds],
+            value: totalFee,
+          },
+        ]);
+      } else if (isWrapperApproved) {
+        // Already approved, just wrap
+        const hash = await writeContractAsync({
+          address: contracts.wrapper.address,
+          abi: contracts.wrapper.abi,
+          functionName: 'wrapNFTs',
+          args: [contracts.nft.address, tokenIds],
+          value: totalFee,
+        });
+        showTxOverlay(hash, `Wrapping ${tokenIds.length} NFT${tokenIds.length > 1 ? 's' : ''}`);
+      } else {
+        // EOA: need to approve first
+        const hash = await writeContractAsync({
+          address: contracts.nft.address,
+          abi: contracts.nft.abi,
+          functionName: 'setApprovalForAll',
+          args: [contracts.wrapper.address, true],
+        });
+        showTxOverlay(hash, 'Approving wrapper contract');
+      }
+    } catch (error) {
+      console.error('Wrap error:', error);
+      setCurrentOperation(null);
+    }
   };
 
-  // Refetch when transaction confirms
+  // Handle approve wrapper for wrapping
+  const handleApproveWrapper = async () => {
+    if (!userAddress) return;
+    setCurrentOperation('wrap');
+    try {
+      const hash = await writeContractAsync({
+        address: contracts.nft.address,
+        abi: contracts.nft.abi,
+        functionName: 'setApprovalForAll',
+        args: [contracts.wrapper.address, true],
+      });
+      showTxOverlay(hash, 'Approving wrapper contract');
+    } catch (error) {
+      console.error('Approve wrapper error:', error);
+      setCurrentOperation(null);
+    }
+  };
+
+  // Handle hatching eggs
+  const handleHatch = async () => {
+    if (selectedEggs.length === 0 || !userAddress) return;
+    setCurrentOperation('wrap'); // Reuse wrap operation type
+    try {
+      const tokenIds = selectedEggs.map(nft => BigInt(nft.tokenId));
+      // Get unhatch fee from contract
+      const unhatchFee = await publicClient?.readContract({
+        address: contracts.nft.address,
+        abi: contracts.nft.abi,
+        functionName: 'unhatchFee',
+        args: [],
+      }) as bigint || 0n;
+
+      // Total fee = unhatchFee * number of eggs
+      const totalFee = unhatchFee * BigInt(selectedEggs.length);
+
+      const hash = await writeContractAsync({
+        address: contracts.nft.address,
+        abi: contracts.nft.abi,
+        functionName: 'unhatch',
+        args: [tokenIds],
+        value: totalFee,
+      });
+      showTxOverlay(hash, `Hatching ${selectedEggs.length} egg${selectedEggs.length > 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Hatch error:', error);
+      setCurrentOperation(null);
+    }
+  };
+
   useEffect(() => {
     if (isConfirmed) {
       refetchStaked();
       refetchNFTs();
       refetchApproval();
+      refetchWrapperApproval();
       clearSelections();
       setCurrentOperation(null);
     }
-  }, [isConfirmed, refetchStaked, refetchNFTs, refetchApproval, clearSelections]);
+  }, [isConfirmed, refetchStaked, refetchNFTs, refetchApproval, refetchWrapperApproval, clearSelections]);
 
-  // Handle batch transaction success
   useEffect(() => {
     if (isBatchSuccess) {
       refetchStaked();
       refetchNFTs();
       refetchApproval();
+      refetchWrapperApproval();
       clearSelections();
       setCurrentOperation(null);
       resetBatch();
     }
-  }, [isBatchSuccess, refetchStaked, refetchNFTs, refetchApproval, clearSelections, resetBatch]);
+  }, [isBatchSuccess, refetchStaked, refetchNFTs, refetchApproval, refetchWrapperApproval, clearSelections, resetBatch]);
 
-  // Clear selections when switching tabs
   useEffect(() => {
     clearSelections();
   }, [activeTab, clearSelections]);
 
-  // Clear selections when closing inventory
   useEffect(() => {
     if (!isOpen) {
       clearSelections();
     }
   }, [isOpen, clearSelections]);
 
-  // Check if any operation is in progress
   const isProcessing = isWritePending || isConfirming || isBatchPending || isBatchConfirming;
 
-  // Cooldown timer for wrap cooldown
-  useEffect(() => {
-    if (!viewingNFT || viewingNFT.canUnwrap) {
-      setCooldownRemaining('');
-      return;
-    }
-
-    const updateTimer = () => {
-      const now = Math.floor(Date.now() / 1000);
-      const cooldownEnd = viewingNFT.swapMintTime + 3600; // 1 hour
-      const remaining = cooldownEnd - now;
-
-      if (remaining <= 0) {
-        setCooldownRemaining('Ready');
-      } else {
-        const minutes = Math.floor(remaining / 60);
-        const seconds = remaining % 60;
-        setCooldownRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-      }
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [viewingNFT]);
-
-  // Close detail view when inventory closes
-  useEffect(() => {
-    if (!isOpen) {
-      setViewingNFT(null);
-    }
-  }, [isOpen]);
-
-  // Single NFT action handlers (from detail view)
-  const handleSingleStake = async () => {
-    if (!viewingNFT || !viewingNFT.isSnake || !userAddress) return;
-    setCurrentOperation('stake');
-
-    try {
-      if (!isApproved && supportsAtomicBatch) {
-        // Smart wallet: batch approve + stake
-        await executeBatch([
-          {
-            address: contracts.nft.address,
-            abi: contracts.nft.abi,
-            functionName: 'setApprovalForAll',
-            args: [contracts.staking.address, true],
-          },
-          {
-            address: contracts.staking.address,
-            abi: contracts.staking.abi,
-            functionName: 'stake',
-            args: [[BigInt(viewingNFT.tokenId)]],
-          },
-        ]);
-        addTransaction('0x' as `0x${string}`, `Staking snake #${viewingNFT.tokenId}`);
-      } else if (!isApproved) {
-        // EOA: need to approve first
-        const hash = await writeContractAsync({
-          address: contracts.nft.address,
-          abi: contracts.nft.abi,
-          functionName: 'setApprovalForAll',
-          args: [contracts.staking.address, true],
-        });
-        addTransaction(hash, 'Approving staking contract');
-      } else {
-        // Already approved: just stake
-        const hash = await writeContractAsync({
-          address: contracts.staking.address,
-          abi: contracts.staking.abi,
-          functionName: 'stake',
-          args: [[BigInt(viewingNFT.tokenId)]],
-        });
-        addTransaction(hash, `Staking snake #${viewingNFT.tokenId}`);
-      }
-      setViewingNFT(null);
-    } catch (error) {
-      console.error('Stake error:', error);
-      setCurrentOperation(null);
-    }
-  };
-
-  const handleSingleUnstake = async () => {
-    if (!viewingNFT || !viewingNFT.isStaked || !userAddress) return;
-    setCurrentOperation('unstake');
-
-    try {
-      const hash = await writeContractAsync({
-        address: contracts.staking.address,
-        abi: contracts.staking.abi,
-        functionName: 'unstake',
-        args: [[BigInt(viewingNFT.tokenId)]],
-      });
-      addTransaction(hash, `Unstaking snake #${viewingNFT.tokenId}`);
-      setViewingNFT(null);
-    } catch (error) {
-      console.error('Unstake error:', error);
-      setCurrentOperation(null);
-    }
-  };
-
-  // Navigate to specific game locations
   const navigateAndClose = (path: string) => {
-    setViewingNFT(null);
     setIsOpen(false);
     router.push(path);
   };
 
-  // Get type config for detail view
   const getTypeConfig = (nft: InventoryNFT) => {
-    if (nft.isEgg) return { title: 'Egg Options', emoji: '🥚' };
-    if (nft.isSnake) return { title: 'Snake Options', emoji: '🐍' };
-    if (nft.ownerIsWarden) return { title: 'Warden Options', emoji: '⚔️' };
-    return { title: 'Human Options', emoji: '🧑' };
+    // Use local type detection (tokenId based)
+    const localType = getLocalNFTType(nft.tokenId, nft.name);
+    if (localType === 'egg') return { title: 'Egg', emoji: '🥚', color: 'amber' };
+    if (localType === 'snake') return { title: 'Snake', emoji: '🐍', color: 'green' };
+    return { title: 'Human', emoji: '🧑', color: 'cyan' };
   };
 
-  // Debug logging
-  useEffect(() => {
-    if (isOpen) {
-      console.log('🔍 InventorySack State:', {
-        isConnected,
-        isReconnecting,
-        isLoading,
-        nftsLength: nfts.length,
-        userAddress,
-      });
-    }
-  }, [isOpen, isConnected, isReconnecting, isLoading, nfts.length, userAddress]);
+  // Grid size classes
+  const gridClasses = {
+    small: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10',
+    medium: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7',
+    large: 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6',
+  };
+
+  if (!isOpen) return null;
 
   return (
     <>
-      {/* Inventory Panel - Slides in from right */}
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
-            onClick={() => setIsOpen(false)}
-          />
-
-          {/* Panel */}
-          <div className="fixed right-0 top-0 bottom-0 w-full md:w-[500px] bg-gray-950 z-50 shadow-2xl border-l border-cyan-500/20 flex flex-col animate-slide-in-right" style={{ overflowX: 'hidden' }}>
-            {/* Header */}
-            <div
-              className="relative overflow-hidden bg-gradient-to-r from-cyan-950/60 via-purple-950/60 to-pink-950/60 border-b border-cyan-500/30 backdrop-blur-sm"
-              style={{
-                padding: 'clamp(0.5rem, 2vh, 1rem) clamp(0.75rem, 3vw, 1.5rem)'
-              }}
-            >
-              {/* Shimmer effect */}
-              <div
-                className="absolute inset-0 opacity-20"
-                style={{
-                  background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.3), transparent)',
-                  animation: 'shimmer 3s infinite',
-                }}
-              />
-
-              <div
-                className="relative flex items-center justify-end"
-                style={{
-                  marginBottom: 'clamp(0.5rem, 1.5vh, 0.75rem)'
-                }}
-              >
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="text-cyan-300/80 hover:text-cyan-200 transition-colors leading-none"
-                  style={{
-                    fontSize: 'clamp(1.25rem, 3vh, 1.875rem)'
-                  }}
-                  aria-label="Close Inventory"
-                >
-                  ✕
-                </button>
+      {/* Full-Screen OpenSea-Style Modal */}
+      <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col animate-fade-in">
+        {/* Header */}
+        <header className="flex-shrink-0 border-b border-gray-800 bg-gray-900/95 backdrop-blur-xl">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+            {/* Logo & Title */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center">
+                  <span className="text-xl">🐍</span>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">NFT Hub</h1>
+                  <p className="text-xs text-gray-400">{allNFTs.length} items • All-in-One</p>
+                </div>
               </div>
-
-              {/* Balances - Compact Single Row */}
-              {(isWalletConnected || isReconnecting) && (
-                <div
-                  className="relative flex items-center justify-between rounded-lg border border-cyan-500/20 bg-gray-900/40 backdrop-blur-sm"
-                  style={{
-                    boxShadow: '0 0 8px rgba(6, 182, 212, 0.1)',
-                    gap: 'clamp(0.375rem, 1vw, 0.5rem)',
-                    padding: 'clamp(0.375rem, 1.2vh, 0.5rem) clamp(0.5rem, 2vw, 0.75rem)'
-                  }}
-                >
-                  {/* wToken Balance with Wrap Button */}
-                  <div
-                    className="flex items-center"
-                    style={{
-                      gap: 'clamp(0.375rem, 1vw, 0.5rem)'
-                    }}
-                  >
-                    <div
-                      className="rounded-full bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center border border-orange-500/30"
-                      style={{
-                        width: 'clamp(1.25rem, 3vh, 1.5rem)',
-                        height: 'clamp(1.25rem, 3vh, 1.5rem)'
-                      }}
-                    >
-                      <svg className="text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: '60%', height: '60%' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-orange-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>wNFTs</p>
-                      <p className="text-orange-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{wTokenBalanceFormatted.toFixed(2)}</p>
-                    </div>
-                    {/* Wrap Button */}
-                    <button
-                      onClick={handleWrap}
-                      className="ml-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-orange-500/30 to-amber-500/30 border border-orange-500/50 hover:from-orange-500/50 hover:to-amber-500/50 transition-all"
-                      style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}
-                    >
-                      <span className="text-orange-200 font-semibold">Wrap</span>
-                    </button>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="w-px bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent" style={{ height: 'clamp(1.5rem, 4vh, 2rem)' }} />
-
-                  {/* ETH Balance */}
-                  <div
-                    className="flex items-center"
-                    style={{
-                      gap: 'clamp(0.375rem, 1vw, 0.5rem)'
-                    }}
-                  >
-                    <div
-                      className="rounded-full bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center border border-blue-500/30"
-                      style={{
-                        width: 'clamp(1.25rem, 3vh, 1.5rem)',
-                        height: 'clamp(1.25rem, 3vh, 1.5rem)'
-                      }}
-                    >
-                      <svg className="text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ width: '60%', height: '60%' }}>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-blue-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>ETH</p>
-                      <p className="text-blue-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{ethBalanceFormatted.toFixed(4)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Staking Info Section */}
-              {(isWalletConnected || isReconnecting) && (stakedCount > 0 || Number(pendingRewardsFormatted) > 0) && (
-                <div
-                  className="relative flex items-center justify-between rounded-lg border border-purple-500/20 bg-gradient-to-r from-purple-900/20 to-pink-900/20 backdrop-blur-sm mt-2"
-                  style={{
-                    boxShadow: '0 0 8px rgba(168, 85, 247, 0.1)',
-                    gap: 'clamp(0.375rem, 1vw, 0.5rem)',
-                    padding: 'clamp(0.375rem, 1.2vh, 0.5rem) clamp(0.5rem, 2vw, 0.75rem)'
-                  }}
-                >
-                  {/* Staked Count */}
-                  <div
-                    className="flex items-center"
-                    style={{
-                      gap: 'clamp(0.375rem, 1vw, 0.5rem)'
-                    }}
-                  >
-                    <div
-                      className="rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30"
-                      style={{
-                        width: 'clamp(1.25rem, 3vh, 1.5rem)',
-                        height: 'clamp(1.25rem, 3vh, 1.5rem)'
-                      }}
-                    >
-                      <span style={{ fontSize: 'clamp(0.6rem, 1.5vh, 0.75rem)' }}>🐍</span>
-                    </div>
-                    <div>
-                      <p className="text-purple-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>Staked</p>
-                      <p className="text-purple-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{stakedCount}</p>
-                    </div>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="w-px bg-gradient-to-b from-transparent via-purple-500/30 to-transparent" style={{ height: 'clamp(1.5rem, 4vh, 2rem)' }} />
-
-                  {/* Pending Rewards */}
-                  <div
-                    className="flex items-center"
-                    style={{
-                      gap: 'clamp(0.375rem, 1vw, 0.5rem)'
-                    }}
-                  >
-                    <div
-                      className="rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center border border-green-500/30"
-                      style={{
-                        width: 'clamp(1.25rem, 3vh, 1.5rem)',
-                        height: 'clamp(1.25rem, 3vh, 1.5rem)'
-                      }}
-                    >
-                      <span style={{ fontSize: 'clamp(0.6rem, 1.5vh, 0.75rem)' }}>💰</span>
-                    </div>
-                    <div>
-                      <p className="text-green-200/60 leading-none" style={{ fontSize: 'clamp(0.5rem, 1.2vh, 0.625rem)' }}>Rewards</p>
-                      <p className="text-green-100 font-bold leading-none mt-0.5" style={{ fontSize: 'clamp(0.7rem, 1.6vh, 0.875rem)' }}>{pendingRewardsFormatted}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* NFT Collection */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 bg-gradient-to-b from-gray-950 to-gray-900" style={{ overflowX: 'hidden' }}>
-              {!(isWalletConnected || isReconnecting) ? (
-                <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="relative mb-4 sm:mb-6">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30">
-                      <svg className="w-8 h-8 sm:w-10 sm:h-10 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 mb-2">
-                    Connect Your Wallet
-                  </h3>
-                  <p className="text-cyan-200/60 text-sm sm:text-base">
-                    Connect to view your NFTs and balances
-                  </p>
-                </div>
-              ) : isReconnecting || isLoading || isLoadingStaked ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="relative">
-                    <div className="animate-spin rounded-full h-12 w-12 sm:h-16 sm:w-16 border-4 border-cyan-500/20 border-t-cyan-500"></div>
-                    <div className="absolute inset-0 animate-ping rounded-full h-12 w-12 sm:h-16 sm:w-16 border-4 border-cyan-500/10"></div>
-                  </div>
-                </div>
-              ) : allNFTs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="relative mb-4 sm:mb-6">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30">
-                      <span className="text-3xl">🎁</span>
-                    </div>
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300 mb-2">
-                    No NFTs Yet
-                  </h3>
-                  <p className="text-cyan-200/60 text-sm sm:text-base mb-4">
-                    Start your collection today!
-                  </p>
-                  <button
-                    onClick={handleBuyNFT}
-                    className="px-6 py-3 rounded-xl text-base font-bold transition-all hover:scale-105 active:scale-95"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.4), rgba(168, 85, 247, 0.4))',
-                      border: '2px solid rgba(6, 182, 212, 0.5)',
-                      color: 'white',
-                      boxShadow: '0 0 25px rgba(6, 182, 212, 0.3), 0 0 50px rgba(168, 85, 247, 0.2)',
-                    }}
-                  >
-                    🛒 Get Your First NFT
-                  </button>
-                </div>
-              ) : viewingNFT ? (
-                /* Inline NFT Detail View */
-                <div className="h-full flex flex-col animate-fade-in">
-                  {/* Back Button Header */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <button
-                      onClick={closeDetailView}
-                      className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                      <span className="text-sm font-medium">Back to {activeTab === 'staked' ? 'Staked' : 'Collection'}</span>
-                    </button>
-                  </div>
+            {/* Search Bar */}
+            <div className="hidden md:flex flex-1 max-w-xl mx-8">
+              <div className="relative w-full">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search by name or ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                />
+              </div>
+            </div>
 
-                  {/* NFT Details Card */}
-                  <div
-                    className="rounded-2xl overflow-hidden border-2 border-cyan-500/30"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
-                      boxShadow: '0 0 30px rgba(6, 182, 212, 0.2)',
-                    }}
-                  >
-                    {/* Header with Type */}
-                    <div
-                      className="px-4 py-3 border-b border-cyan-500/20"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(168, 85, 247, 0.2))',
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{getTypeConfig(viewingNFT).emoji}</span>
+            {/* Header Actions */}
+            <div className="flex items-center gap-3">
+              {/* Balance Pills */}
+              {isWalletConnected && (
+                <div className="hidden lg:flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
+                    <span className="text-orange-400 text-sm">🎁</span>
+                    <span className="text-white text-sm font-medium">{wTokenBalanceFormatted.toFixed(2)}</span>
+                    <span className="text-gray-400 text-xs">wNFT</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
+                    <span className="text-blue-400 text-sm">⚡</span>
+                    <span className="text-white text-sm font-medium">{ethBalanceFormatted.toFixed(4)}</span>
+                    <span className="text-gray-400 text-xs">ETH</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Close Button */}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white transition-all"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Search */}
+          <div className="md:hidden px-4 pb-3">
+            <div className="relative w-full">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search by name or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Tab Bar - responsive with horizontal scroll on mobile */}
+          <div className="flex items-center gap-2 sm:gap-4 md:gap-6 px-3 md:px-6 border-t border-gray-800 overflow-x-auto scrollbar-hide">
+              <button
+                onClick={() => handleTabChange('collection')}
+                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === 'collection'
+                    ? 'border-cyan-500 text-cyan-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="font-medium text-sm sm:text-base">My NFTs</span>
+                <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{collectionNFTs.length}</span>
+                {stakedCount > 0 && (
+                  <span className="hidden sm:inline ml-1 px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
+                    +{stakedCount} staked
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabChange('listings')}
+                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === 'listings'
+                    ? 'border-green-500 text-green-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="font-medium text-sm sm:text-base">Market</span>
+                {totalListings > 0 && (
+                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListings}</span>
+                )}
+                {effectiveFloorPrice && (
+                  <span className={`hidden md:inline ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
+                    {effectiveFloorPrice} ETH
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabChange('exchange')}
+                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === 'exchange'
+                    ? 'border-orange-500 text-orange-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="font-medium text-sm sm:text-base">Exchange</span>
+                {poolNFTs.length > 0 && (
+                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{poolNFTs.length}</span>
+                )}
+              </button>
+              <button
+                onClick={() => handleTabChange('trading')}
+                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === 'trading'
+                    ? 'border-yellow-500 text-yellow-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="font-medium text-sm sm:text-base">Trading</span>
+                <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-yellow-500/20 text-yellow-400">
+                  📈
+                </span>
+              </button>
+
+              {/* Staking Rewards Badge + Quick Actions - hidden on mobile, shown on larger screens */}
+              <div className="ml-auto hidden lg:flex items-center gap-3 text-sm flex-shrink-0">
+                {/* Total staked count */}
+                <div className="flex items-center gap-1.5 text-gray-400">
+                  <span>🏦</span>
+                  <span>{totalStakedCount} total</span>
+                </div>
+                {stakedCount > 0 ? (
+                  <>
+                    <div className="w-px h-4 bg-gray-700" />
+                    <div className="flex items-center gap-1.5 text-purple-400">
+                      <span>🐍</span>
+                      <span>{stakedCount}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-green-400">
+                      <span>💰</span>
+                      <span>{pendingRewardsFormatted}</span>
+                    </div>
+                    {hasPendingRewards && (
+                      <button
+                        onClick={handleClaimRewards}
+                        disabled={isProcessing}
+                        className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30 transition-all disabled:opacity-50"
+                      >
+                        Claim
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="w-px h-4 bg-gray-700" />
+                    <div className="flex items-center gap-1.5 text-orange-400">
+                      <span>🐍</span>
+                      <span>Stake to earn</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+        </header>
+
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Sidebar - shows filters for NFT tabs, token pairs for trading tab */}
+          <aside className={`flex-shrink-0 border-r border-gray-800 bg-gray-900/50 transition-all overflow-y-auto ${showFilters ? 'hidden md:block md:w-56 lg:w-64' : 'w-0'}`}>
+            {showFilters && (
+              <div className="p-4 space-y-6">
+                {activeTab === 'trading' ? (
+                  /* ===== TRADING TAB SIDEBAR ===== */
+                  <>
+                    {/* View Toggle - Swap vs Launch */}
+                    <div className="flex gap-2 p-1 bg-gray-800 rounded-lg">
+                      <button
+                        onClick={() => setTradingView('swap')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                          tradingView === 'swap'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        <span>Swap</span>
+                      </button>
+                      <button
+                        onClick={() => setTradingView('launch')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                          tradingView === 'launch'
+                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>Launch</span>
+                      </button>
+                    </div>
+
+                    {/* Conditional Sidebar Content based on view */}
+                    {tradingView === 'swap' ? (
+                      /* ===== SWAP VIEW SIDEBAR ===== */
+                      <>
+                        {/* Trading Header */}
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-white">Token Pairs</h3>
+                        </div>
+
+                        {/* Token Pairs List - Dynamic from TOKEN_PAIRS config */}
                         <div>
-                          <h3 className="font-bold text-lg bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent">
-                            {getTypeConfig(viewingNFT).title}
-                          </h3>
-                          <p className="text-cyan-200/80 text-sm">{viewingNFT.name}</p>
+                          <h4 className="text-sm font-medium text-gray-400 mb-3">Available Pairs</h4>
+                          <div className="space-y-2">
+                            {TOKEN_PAIRS
+                              .sort((a, b) => {
+                                if (a.isDefault && !b.isDefault) return -1;
+                                if (!a.isDefault && b.isDefault) return 1;
+                                const aChange = allPairChanges.get(a.id) || 0;
+                                const bChange = allPairChanges.get(b.id) || 0;
+                                return bChange - aChange;
+                              })
+                              .map((pair) => {
+                                const pairChange = allPairChanges.get(pair.id);
+                                const isSelected = selectedPairId === pair.id;
+                                return (
+                                  <button
+                                    key={pair.id}
+                                    onClick={() => handleSidebarPairSelect(pair)}
+                                    className={`w-full block p-3 rounded-lg border transition-all text-left ${
+                                      isSelected
+                                        ? 'bg-emerald-500/20 border-emerald-500/50'
+                                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className={`font-medium ${isSelected ? 'text-emerald-400' : 'text-white'}`}>
+                                        {getPairDisplayName(pair)}
+                                      </span>
+                                      {pairChange !== undefined && (
+                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                          pairChange >= 0
+                                            ? 'text-emerald-400 bg-emerald-500/20'
+                                            : 'text-red-400 bg-red-500/20'
+                                        }`}>
+                                          {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-gray-400">
+                                      <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
+                                      <span>{(pair.fee / 10000).toFixed(1)}% fee</span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* ===== LAUNCH VIEW SIDEBAR ===== */
+                      <>
+                        {/* Launch Header */}
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-white">Verified Launcher</h3>
+                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full">AI Verified</span>
+                        </div>
+
+                        {/* 2-Step Flow */}
+                        <div className="p-3 bg-purple-950/30 border border-purple-500/30 rounded-lg">
+                          <div className="flex items-center gap-2 mb-3">
+                            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            <span className="text-sm font-medium text-purple-400">2-Step Launch</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="w-5 h-5 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-full text-xs font-bold">1</span>
+                              <span className="text-gray-300">Verify & upload image</span>
+                              <span className="ml-auto text-blue-400">$0.50</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="w-5 h-5 flex items-center justify-center bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold">2</span>
+                              <span className="text-gray-300">Launch token</span>
+                              <span className="ml-auto text-purple-400">$5+</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Token Info */}
+                        <div className="p-3 bg-gray-800 border border-gray-700 rounded-lg space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-400">Starting MCap</span>
+                            <span className="text-white font-medium">~$10</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-400">Pool Fee</span>
+                            <span className="text-white font-medium">0.3% + 0.7% hook</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-400">Paired With</span>
+                            <span className="text-emerald-400 font-medium">WASS</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-700">
+                            <span className="text-gray-400">Payment</span>
+                            <span className="text-blue-400 font-medium">USDC on Base</span>
+                          </div>
+                        </div>
+
+                        {/* Art Style Requirement */}
+                        <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div>
+                              <p className="text-xs text-amber-400 font-medium mb-1">AppleSnakes Art Style</p>
+                              <p className="text-xs text-gray-400 leading-relaxed">
+                                Images must match AppleSnakes art style to pass AI verification.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Dev Buy Info */}
+                        <div className="p-3 bg-green-950/30 border border-green-500/30 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                              <p className="text-xs text-green-400 font-medium mb-1">Dev Buy Budget</p>
+                              <p className="text-xs text-gray-400 leading-relaxed">
+                                Launch payment ($5+ USDC) becomes your dev buy automatically.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  /* ===== NFT TABS SIDEBAR ===== */
+                  <>
+                    {/* Filter Header */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-white">Filters</h3>
+                      <button
+                        onClick={() => {
+                          setFilterType('all');
+                          setSearchQuery('');
+                        }}
+                        className="text-xs text-cyan-400 hover:text-cyan-300"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+
+                    {/* Type Filter */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">Type</h4>
+                      <div className="space-y-2">
+                        {(['all', 'human', 'snake', 'egg'] as FilterType[]).map((type) => {
+                          const labels: Record<FilterType, { label: string; emoji: string }> = {
+                            all: { label: 'All', emoji: '🎴' },
+                            human: { label: 'Human', emoji: '🧑' },
+                            snake: { label: 'Snake', emoji: '🐍' },
+                            egg: { label: 'Egg', emoji: '🥚' },
+                          };
+                          return (
+                            <button
+                              key={type}
+                              onClick={() => setFilterType(type)}
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
+                                filterType === type
+                                  ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-400'
+                                  : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-750 hover:border-gray-600'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span>{labels[type].emoji}</span>
+                                <span className="text-sm">{labels[type].label}</span>
+                              </span>
+                              <span className="text-xs text-gray-500">{typeCounts[type]}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Sort Options */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">Sort By</h4>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortOption)}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="id-asc">ID: Low to High</option>
+                        <option value="id-desc">ID: High to Low</option>
+                        {activeTab === 'listings' && (
+                          <>
+                            <option value="price-asc">Price: Low to High</option>
+                            <option value="price-desc">Price: High to Low</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Grid Size */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-400 mb-3">Grid Size</h4>
+                      <div className="flex gap-2">
+                        {(['small', 'medium', 'large'] as const).map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => setGridSize(size)}
+                            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                              gridSize === size
+                                ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-400'
+                                : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {size.charAt(0).toUpperCase() + size.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Pool Info - only show on listings and exchange tabs */}
+                    {(activeTab === 'listings' || activeTab === 'exchange') && (
+                      <div className="pt-4 border-t border-gray-800">
+                        <h4 className="text-sm font-medium text-gray-400 mb-3">Pool Info</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Pool Size</span>
+                            <span className="text-white font-medium">{poolNFTs.length} NFTs</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Wrap Fee</span>
+                            <span className="text-orange-400 font-medium">{wrapFeeFormatted} ETH</span>
+                          </div>
+                          {buyQuotePrice && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Buy Price</span>
+                              <span className="text-cyan-400 font-medium">~{parseFloat(buyQuotePrice).toFixed(4)} ETH</span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-
-                    {/* NFT Image and Info */}
-                    <div className="p-4 flex gap-4">
-                      <img
-                        src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${viewingNFT.imageUrl}`}
-                        alt={viewingNFT.name}
-                        className="w-24 h-24 rounded-xl object-cover border-2 border-cyan-500/30"
-                      />
-                      <div className="flex-1 space-y-1">
-                        <p className="text-white text-sm">Token ID: <span className="font-mono text-cyan-300">#{viewingNFT.tokenId}</span></p>
-                        <p className="text-white text-sm">Type: <span className="capitalize text-purple-300">{viewingNFT.nftType}</span></p>
-                        {viewingNFT.isStaked && (
-                          <p className="text-purple-400 text-sm flex items-center gap-1">⚡ Currently Staked</p>
-                        )}
-                        {viewingNFT.isJailed && (
-                          <p className="text-red-400 text-sm flex items-center gap-1">⛓️ Jailed</p>
-                        )}
-                        {viewingNFT.evolved && (
-                          <p className="text-yellow-400 text-sm flex items-center gap-1">⭐ Evolved</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="p-4 pt-0 space-y-2">
-                      {/* EGG Actions */}
-                      {viewingNFT.isEgg && (
-                        <button
-                          onClick={() => navigateAndClose('/?fastTravelHatch=true')}
-                          className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                            border: '2px solid rgba(168, 85, 247, 0.5)',
-                            color: 'rgb(168, 85, 247)',
-                            boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
-                          }}
-                        >
-                          <span className="text-xl">✨</span>
-                          <div className="text-left">
-                            <span className="block">Hatch Egg</span>
-                            <span className="text-xs opacity-70">Open the hatching interface</span>
-                          </div>
-                        </button>
-                      )}
-
-                      {/* HUMAN/WARDEN Actions */}
-                      {!viewingNFT.isSnake && !viewingNFT.isEgg && (
-                        <>
-                          {/* Wrap */}
-                          <button
-                            onClick={() => viewingNFT.canUnwrap && navigateAndClose('/?openShopWrap=true')}
-                            disabled={!viewingNFT.canUnwrap}
-                            className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                            style={{
-                              background: viewingNFT.canUnwrap
-                                ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                                : 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
-                              border: viewingNFT.canUnwrap
-                                ? '2px solid rgba(6, 182, 212, 0.5)'
-                                : '2px solid rgba(75, 85, 99, 0.5)',
-                              color: viewingNFT.canUnwrap ? 'rgb(6, 182, 212)' : 'rgb(156, 163, 175)',
-                              boxShadow: viewingNFT.canUnwrap ? '0 0 15px rgba(6, 182, 212, 0.2)' : 'none',
-                            }}
-                          >
-                            <span className="text-xl">🎁</span>
-                            <div className="text-left">
-                              <span className="block">Wrap NFT</span>
-                              <span className="text-xs opacity-70">
-                                {viewingNFT.canUnwrap ? 'Convert to fungible wNFT' : `Cooldown: ${cooldownRemaining}`}
-                              </span>
-                            </div>
-                          </button>
-
-                          {/* Sacrifice */}
-                          <button
-                            onClick={() => navigateAndClose('/?fastTravelBreed=true')}
-                            className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                              border: '2px solid rgba(168, 85, 247, 0.5)',
-                              color: 'rgb(168, 85, 247)',
-                              boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
-                            }}
-                          >
-                            <span className="text-xl">🔮</span>
-                            <div className="text-left">
-                              <span className="block">Sacrifice</span>
-                              <span className="text-xs opacity-70">Sacrifice 3 humans to get an applesnake egg</span>
-                            </div>
-                          </button>
-
-                          {/* Jail */}
-                          <button
-                            onClick={() => navigateAndClose('/?fastTravelJail=true')}
-                            className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(219, 39, 119, 0.3))',
-                              border: '2px solid rgba(236, 72, 153, 0.5)',
-                              color: 'rgb(236, 72, 153)',
-                              boxShadow: '0 0 15px rgba(236, 72, 153, 0.2)',
-                            }}
-                          >
-                            <span className="text-xl">⛓️</span>
-                            <div className="text-left">
-                              <span className="block">Jail</span>
-                              <span className="text-xs opacity-70">
-                                {viewingNFT.ownerIsWarden
-                                  ? "You're a warden - jail at no charge!"
-                                  : viewingNFT.isJailed
-                                  ? "This NFT can't be transferred while jailed"
-                                  : "Bribe the warden to jail whoever you want!"}
-                              </span>
-                            </div>
-                          </button>
-                        </>
-                      )}
-
-                      {/* SNAKE Actions */}
-                      {viewingNFT.isSnake && (
-                        <>
-                          {/* Wrap */}
-                          <button
-                            onClick={() => viewingNFT.canUnwrap && navigateAndClose('/?openShopWrap=true')}
-                            disabled={!viewingNFT.canUnwrap}
-                            className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                            style={{
-                              background: viewingNFT.canUnwrap
-                                ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                                : 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
-                              border: viewingNFT.canUnwrap
-                                ? '2px solid rgba(6, 182, 212, 0.5)'
-                                : '2px solid rgba(75, 85, 99, 0.5)',
-                              color: viewingNFT.canUnwrap ? 'rgb(6, 182, 212)' : 'rgb(156, 163, 175)',
-                              boxShadow: viewingNFT.canUnwrap ? '0 0 15px rgba(6, 182, 212, 0.2)' : 'none',
-                            }}
-                          >
-                            <span className="text-xl">🎁</span>
-                            <div className="text-left">
-                              <span className="block">Wrap NFT</span>
-                              <span className="text-xs opacity-70">
-                                {viewingNFT.canUnwrap ? 'Convert to fungible wNFT' : `Cooldown: ${cooldownRemaining}`}
-                              </span>
-                            </div>
-                          </button>
-
-                          {/* Stake/Unstake */}
-                          {viewingNFT.isStaked ? (
-                            <button
-                              onClick={handleSingleUnstake}
-                              disabled={isProcessing}
-                              className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                                border: '2px solid rgba(168, 85, 247, 0.5)',
-                                color: 'rgb(168, 85, 247)',
-                                boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
-                              }}
-                            >
-                              {isProcessing && currentOperation === 'unstake' ? (
-                                <span className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <span className="text-xl">🔓</span>
-                              )}
-                              <div className="text-left">
-                                <span className="block">{isProcessing && currentOperation === 'unstake' ? 'Unstaking...' : 'Unstake Snake'}</span>
-                                <span className="text-xs opacity-70">Remove from staking to use or transfer</span>
-                              </div>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={handleSingleStake}
-                              disabled={isProcessing}
-                              className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                              style={{
-                                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                                border: '2px solid rgba(168, 85, 247, 0.5)',
-                                color: 'rgb(168, 85, 247)',
-                                boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
-                              }}
-                            >
-                              {isProcessing && currentOperation === 'stake' ? (
-                                <span className="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <span className="text-xl">💎</span>
-                              )}
-                              <div className="text-left">
-                                <span className="block">
-                                  {isProcessing && currentOperation === 'stake'
-                                    ? 'Staking...'
-                                    : !isApproved && !supportsAtomicBatch
-                                      ? 'Approve & Stake'
-                                      : 'Stake Snake'}
-                                </span>
-                                <span className="text-xs opacity-70">Stake your snake to earn token rewards</span>
-                              </div>
-                            </button>
-                          )}
-
-                          {/* Jail - disabled for snakes */}
-                          <button
-                            disabled
-                            className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center gap-3 opacity-50 cursor-not-allowed"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
-                              border: '2px solid rgba(75, 85, 99, 0.5)',
-                              color: 'rgb(156, 163, 175)',
-                            }}
-                          >
-                            <span className="text-xl">⛓️</span>
-                            <div className="text-left">
-                              <span className="block">Jail</span>
-                              <span className="text-xs opacity-70">You can&apos;t fit a 120 foot snake in this jail cell...</span>
-                            </div>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Tab Toggle Header */}
-                  <div className="flex items-center justify-center mb-3 sm:mb-4">
-                    <div className="relative flex bg-gray-900/80 rounded-xl p-1 border border-gray-700/50">
-                      {/* Sliding Background */}
-                      <div
-                        className="absolute top-1 bottom-1 rounded-lg transition-all duration-300 ease-out"
-                        style={{
-                          width: 'calc(50% - 4px)',
-                          left: activeTab === 'collection' ? '4px' : 'calc(50%)',
-                          background: activeTab === 'collection'
-                            ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.4), rgba(59, 130, 246, 0.4))'
-                            : 'linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(236, 72, 153, 0.4))',
-                          boxShadow: activeTab === 'collection'
-                            ? '0 0 15px rgba(6, 182, 212, 0.3)'
-                            : '0 0 15px rgba(168, 85, 247, 0.3)',
-                        }}
-                      />
-
-                      {/* Collection Tab */}
-                      <button
-                        onClick={() => setActiveTab('collection')}
-                        className="relative z-10 px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-200"
-                        style={{
-                          minWidth: '110px',
-                          color: activeTab === 'collection' ? 'rgb(6, 182, 212)' : 'rgba(255, 255, 255, 0.5)',
-                        }}
-                      >
-                        Collection
-                        <span
-                          className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: activeTab === 'collection' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                            color: activeTab === 'collection' ? 'rgb(6, 182, 212)' : 'rgba(255, 255, 255, 0.4)',
-                          }}
-                        >
-                          {collectionNFTs.length}
-                        </span>
-                      </button>
-
-                      {/* Staked Tab */}
-                      <button
-                        onClick={() => setActiveTab('staked')}
-                        className="relative z-10 px-4 py-2 rounded-lg text-sm font-semibold transition-colors duration-200"
-                        style={{
-                          minWidth: '110px',
-                          color: activeTab === 'staked' ? 'rgb(168, 85, 247)' : 'rgba(255, 255, 255, 0.5)',
-                        }}
-                      >
-                        Staked
-                        <span
-                          className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: activeTab === 'staked' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                            color: activeTab === 'staked' ? 'rgb(168, 85, 247)' : 'rgba(255, 255, 255, 0.4)',
-                          }}
-                        >
-                          {stakedNFTs.length}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Empty State for Current Tab */}
-                  {displayedNFTs.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <div className="w-16 h-16 mb-4 rounded-full flex items-center justify-center" style={{
-                        background: activeTab === 'collection'
-                          ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2))'
-                          : 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2))',
-                        border: activeTab === 'collection'
-                          ? '1px solid rgba(6, 182, 212, 0.3)'
-                          : '1px solid rgba(168, 85, 247, 0.3)',
-                      }}>
-                        <span className="text-2xl">{activeTab === 'collection' ? '📦' : '⚡'}</span>
-                      </div>
-                      <p className="text-sm mb-4" style={{
-                        color: activeTab === 'collection' ? 'rgba(6, 182, 212, 0.8)' : 'rgba(168, 85, 247, 0.8)',
-                      }}>
-                        {activeTab === 'collection'
-                          ? 'No NFTs in your wallet'
-                          : 'No staked NFTs'}
-                      </p>
-                      {activeTab === 'collection' && (
-                        <button
-                          onClick={handleBuyNFT}
-                          className="px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:scale-105"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))',
-                            border: '1px solid rgba(6, 182, 212, 0.5)',
-                            color: 'rgb(6, 182, 212)',
-                            boxShadow: '0 0 15px rgba(6, 182, 212, 0.2)',
-                          }}
-                        >
-                          🛒 Get NFTs
-                        </button>
-                      )}
-                      {activeTab === 'staked' && collectionNFTs.length > 0 && (
-                        <p className="text-xs text-gray-400">
-                          Stake snakes to earn rewards!
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* NFT Grid */}
-                  {displayedNFTs.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3 pb-20">
-                    {displayedNFTs.map((nft) => {
-                      const isJailed = nft.isJailed;
-                      const isEgg = nft.isEgg;
-                      const isEvolved = nft.evolved;
-                      const isStaked = (nft as InventoryNFT).isStaked;
-                      const isSelected = selectedNFTs.has(nft.tokenId);
-
-                      return (
-                        <button
-                          key={nft.tokenId}
-                          onClick={(e) => handleNFTInteraction(nft, e)}
-                          className={`relative group rounded-xl overflow-hidden border-2 transition-all hover:scale-105 active:scale-95 bg-gradient-to-br from-gray-900 to-gray-950 ${
-                            isSelected
-                              ? isStaked
-                                ? 'border-purple-400 ring-2 ring-purple-400/50'
-                                : 'border-cyan-400 ring-2 ring-cyan-400/50'
-                              : 'border-cyan-500/20 hover:border-cyan-400/50'
-                          }`}
-                          style={{
-                            boxShadow: isSelected
-                              ? isStaked
-                                ? '0 0 20px rgba(168, 85, 247, 0.4)'
-                                : '0 0 20px rgba(6, 182, 212, 0.4)'
-                              : '0 0 10px rgba(6, 182, 212, 0.1)'
-                          }}
-                        >
-                          {/* NFT Image */}
-                          <div className="aspect-square relative bg-gray-950">
-                            <img
-                              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
-                              alt={nft.name}
-                              className={`w-full h-full object-cover transition-all ${isSelected ? 'brightness-110' : ''}`}
-                            />
-
-                            {/* Selection Checkbox */}
-                            {(isSelectionMode || isSelected) && (
-                              <div
-                                className={`absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${
-                                  isSelected
-                                    ? isStaked
-                                      ? 'bg-purple-500 border-purple-400'
-                                      : 'bg-cyan-500 border-cyan-400'
-                                    : 'bg-gray-800/80 border-gray-500/50'
-                                }`}
-                              >
-                                {isSelected && (
-                                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Status Badges */}
-                            <div className="absolute top-1 left-1 flex flex-col gap-1">
-                              {isStaked && (
-                                <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold border border-purple-400/30 shadow-lg">
-                                  ⚡
-                                </span>
-                              )}
-                              {isEvolved && (
-                                <span className="bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold border border-yellow-400/30 shadow-lg">
-                                  ⭐
-                                </span>
-                              )}
-                              {isEgg && (
-                                <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold border border-amber-400/30 shadow-lg">
-                                  🥚
-                                </span>
-                              )}
-                              {isJailed && (
-                                <span className="bg-gradient-to-r from-red-500 to-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold border border-red-400/30 shadow-lg">
-                                  🔒
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Hover overlay - only show when not in selection mode */}
-                            {!isSelectionMode && (
-                              <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/30 via-purple-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Token ID */}
-                          <div className={`px-2 py-1 backdrop-blur-sm border-t ${isStaked ? 'bg-gradient-to-r from-purple-900/90 to-pink-900/90 border-purple-500/20' : 'bg-gradient-to-r from-gray-900/90 to-gray-950/90 border-cyan-500/10'}`}>
-                            <p className={`text-xs font-semibold text-center truncate ${isStaked ? 'text-purple-100' : 'text-cyan-100'}`}>
-                              #{nft.tokenId} {isStaked && <span className="text-[9px] text-purple-300/80">• Staked</span>}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Action Footer - Shows when items are selected */}
-            {selectedNFTs.size > 0 && (
-              <div
-                className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-950 via-gray-900/95 to-gray-900/90 backdrop-blur-md border-t border-cyan-500/30 px-4 py-3"
-                style={{
-                  boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                {/* Selection Info */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-white">
-                      {selectedNFTs.size} NFT{selectedNFTs.size > 1 ? 's' : ''} selected
-                    </span>
-                    {selectedSnakes.length > 0 && selectedSnakes.length !== selectedNFTs.size && (
-                      <span className="text-xs text-cyan-400/80">
-                        ({selectedSnakes.length} snake{selectedSnakes.length > 1 ? 's' : ''})
-                      </span>
                     )}
-                  </div>
-                  <button
-                    onClick={clearSelections}
-                    className="text-sm text-gray-400 hover:text-white transition-colors"
-                  >
-                    Clear
-                  </button>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  {/* Collection Tab Actions */}
-                  {activeTab === 'collection' && selectedForStake.length > 0 && (
-                    <>
-                      {!isApproved ? (
-                        supportsAtomicBatch ? (
-                          <button
-                            onClick={handleApproveAndStake}
-                            disabled={isProcessing}
-                            className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.4), rgba(59, 130, 246, 0.4))',
-                              border: '2px solid rgba(6, 182, 212, 0.6)',
-                              color: 'rgb(6, 182, 212)',
-                              boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
-                            }}
-                          >
-                            {isProcessing && currentOperation === 'stake' ? (
-                              <span className="flex items-center justify-center gap-2">
-                                <span className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                                Processing...
-                              </span>
-                            ) : (
-                              `⚡ Stake ${selectedForStake.length} Snake${selectedForStake.length > 1 ? 's' : ''}`
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={handleApprove}
-                            disabled={isProcessing}
-                            className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.4), rgba(234, 88, 12, 0.4))',
-                              border: '2px solid rgba(249, 115, 22, 0.6)',
-                              color: 'rgb(249, 115, 22)',
-                              boxShadow: '0 0 20px rgba(249, 115, 22, 0.3)',
-                            }}
-                          >
-                            {isProcessing && currentOperation === 'approve' ? (
-                              <span className="flex items-center justify-center gap-2">
-                                <span className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                                Approving...
-                              </span>
-                            ) : (
-                              '🔓 Approve First'
-                            )}
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          onClick={handleStake}
-                          disabled={isProcessing}
-                          className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.4), rgba(59, 130, 246, 0.4))',
-                            border: '2px solid rgba(6, 182, 212, 0.6)',
-                            color: 'rgb(6, 182, 212)',
-                            boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
-                          }}
-                        >
-                          {isProcessing && currentOperation === 'stake' ? (
-                            <span className="flex items-center justify-center gap-2">
-                              <span className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                              Staking...
-                            </span>
-                          ) : (
-                            `⚡ Stake ${selectedForStake.length} Snake${selectedForStake.length > 1 ? 's' : ''}`
-                          )}
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {/* Staked Tab Actions */}
-                  {activeTab === 'staked' && selectedForUnstake.length > 0 && (
-                    <button
-                      onClick={handleUnstake}
-                      disabled={isProcessing}
-                      className="flex-1 py-2.5 px-4 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(139, 92, 246, 0.4))',
-                        border: '2px solid rgba(168, 85, 247, 0.6)',
-                        color: 'rgb(168, 85, 247)',
-                        boxShadow: '0 0 20px rgba(168, 85, 247, 0.3)',
-                      }}
-                    >
-                      {isProcessing && currentOperation === 'unstake' ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <span className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                          Unstaking...
-                        </span>
-                      ) : (
-                        `🔓 Unstake ${selectedForUnstake.length} Snake${selectedForUnstake.length > 1 ? 's' : ''}`
-                      )}
-                    </button>
-                  )}
-
-                  {/* Wrap Button - Always available when items selected */}
-                  {selectedNFTs.size > 0 && (
-                    <button
-                      onClick={handleWrap}
-                      className="py-2.5 px-4 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.4), rgba(22, 163, 74, 0.4))',
-                        border: '2px solid rgba(34, 197, 94, 0.6)',
-                        color: 'rgb(34, 197, 94)',
-                        boxShadow: '0 0 20px rgba(34, 197, 94, 0.3)',
-                      }}
-                    >
-                      🎁 Wrap
-                    </button>
-                  )}
-                </div>
-
-                {/* Info text for non-snake selections */}
-                {activeTab === 'collection' && selectedNFTs.size > 0 && selectedForStake.length === 0 && (
-                  <p className="text-xs text-gray-400 mt-2 text-center">
-                    Only snakes can be staked. Select snakes to enable staking.
-                  </p>
+                  </>
                 )}
               </div>
             )}
+          </aside>
+
+
+          {/* Toggle Sidebar Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-gray-800 border border-gray-700 rounded-r-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all hidden md:block`}
+            style={{ left: showFilters ? '256px' : '0' }}
+          >
+            <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          {/* Main Content Area */}
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 relative">
+            {/* ===== COLLECTION TAB ===== */}
+            {activeTab === 'collection' && (
+            <>
+            {!isWalletConnected ? (
+              /* Connect Wallet State */
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30 mb-6">
+                  <svg className="w-12 h-12 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Connect Your Wallet</h2>
+                <p className="text-gray-400 max-w-md">Connect your wallet to view and manage your NFT collection</p>
+              </div>
+            ) : isLoading || isLoadingStaked ? (
+              /* Loading State */
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+                </div>
+                <p className="mt-4 text-gray-400">Loading your collection...</p>
+              </div>
+            ) : displayedNFTs.length === 0 ? (
+              /* Empty State */
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30 mb-6">
+                  <span className="text-4xl">{searchQuery || filterType !== 'all' ? '🔍' : '🎁'}</span>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  {searchQuery || filterType !== 'all' ? 'No Results Found' : 'No NFTs Yet'}
+                </h2>
+                <p className="text-gray-400 max-w-md mb-6">
+                  {searchQuery || filterType !== 'all'
+                    ? 'Try adjusting your search or filters'
+                    : 'Start your collection today!'}
+                </p>
+                {!searchQuery && filterType === 'all' && (
+                  <button
+                    onClick={handleBuyNFT}
+                    className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400 transition-all hover:scale-105"
+                  >
+                    🛒 Get Your First NFT
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* NFT Grid - added padding for hover scaling */
+              <div className={`grid ${gridClasses[gridSize]} gap-4 p-2`}>
+                {displayedNFTs.map((nft) => {
+                  const isJailed = nft.isJailed;
+                  const isEgg = nft.isEgg;
+                  const isEvolved = nft.evolved;
+                  const isStaked = nft.isStaked;
+                  const isSelected = selectedNFTs.has(nft.tokenId);
+                  const typeConfig = getTypeConfig(nft);
+
+                  return (
+                    <button
+                      key={nft.tokenId}
+                      onClick={(e) => handleNFTInteraction(nft, e)}
+                      className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left ${
+                        isSelected
+                          ? isStaked
+                            ? 'border-purple-500 ring-2 ring-purple-500/30'
+                            : 'border-cyan-500 ring-2 ring-cyan-500/30'
+                          : isStaked
+                            ? 'border-purple-500/60 hover:border-purple-400'
+                            : 'border-gray-800 hover:border-gray-600'
+                      }`}
+                      style={{
+                        boxShadow: isSelected
+                          ? isStaked
+                            ? '0 8px 32px rgba(168, 85, 247, 0.4)'
+                            : '0 8px 32px rgba(6, 182, 212, 0.3)'
+                          : isStaked
+                            ? '0 0 20px rgba(168, 85, 247, 0.35), 0 0 40px rgba(168, 85, 247, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3)'
+                            : '0 4px 12px rgba(0, 0, 0, 0.3)',
+                        animation: isStaked && !isSelected ? 'stakedGlow 2s ease-in-out infinite alternate' : undefined,
+                      }}
+                    >
+                      {/* Image Container */}
+                      <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                        <img
+                          src={nft.imageUrl}
+                          alt={nft.name}
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        />
+
+                        {/* Gradient Overlay on Hover */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        {/* Selection Checkbox */}
+                        {(isSelectionMode || isSelected) && (
+                          <div
+                            className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center border-2 transition-all ${
+                              isSelected
+                                ? isStaked
+                                  ? 'bg-purple-500 border-purple-400'
+                                  : 'bg-cyan-500 border-cyan-400'
+                                : 'bg-gray-900/80 border-gray-500 backdrop-blur-sm'
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Status Badges */}
+                        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                          {isStaked && (
+                            <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                              <span>⚡</span>
+                              <span className="hidden sm:inline">Staked</span>
+                            </span>
+                          )}
+                          {isEvolved && (
+                            <span className="px-2 py-1 rounded-lg bg-yellow-500/90 text-white text-xs font-bold backdrop-blur-sm">
+                              ⭐
+                            </span>
+                          )}
+                          {isJailed && (
+                            <span className="px-2 py-1 rounded-lg bg-red-500/90 text-white text-xs font-bold backdrop-blur-sm">
+                              🔒
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Quick View Button */}
+                        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-md text-white text-xs font-medium border border-white/20">
+                            View Details
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Info */}
+                      <div className="p-3 space-y-2">
+                        {/* Name & Type */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-white truncate text-sm">{nft.name}</h3>
+                            <p className="text-xs text-gray-500">#{nft.tokenId}</p>
+                          </div>
+                          <span className={`flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${
+                            nft.nftType === 'snake' ? 'bg-green-500/20 text-green-400' :
+                            nft.nftType === 'egg' ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-cyan-500/20 text-cyan-400'
+                          }`}>
+                            {typeConfig.emoji} {typeConfig.title}
+                          </span>
+                        </div>
+
+                        {/* Status Row */}
+                        <div className="flex items-center justify-between text-xs">
+                          <span className={isStaked && nft.isSnake ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                            {nft.isSnake
+                              ? (isStaked ? 'Earning $wASS' : 'Ready to stake')
+                              : isEgg
+                                ? 'Ready to hatch'
+                                : (nft.canUnwrap ? 'Ready to wrap' : 'Cooldown active')
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            </>
+            )}
+
+            {/* ===== LISTINGS TAB - OpenSea Marketplace ===== */}
+            {activeTab === 'listings' && (
+              <>
+                {listingsLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <div className="relative">
+                      <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                    </div>
+                    <p className="mt-4 text-gray-400">Loading marketplace listings...</p>
+                  </div>
+                ) : openSeaListings.length === 0 && poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-green-500/20 via-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-green-500/30 mb-6">
+                      <span className="text-4xl">🏪</span>
+                    </div>
+                    <h2 className="text-2xl font-bold text-white mb-2">No Active Listings</h2>
+                    <p className="text-gray-400 max-w-md mb-6">
+                      No NFTs are currently listed for sale on OpenSea or in the pool. Check back later!
+                    </p>
+                    <a
+                      href="https://opensea.io/collection/applesnakes"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 transition-all hover:scale-105"
+                    >
+                      View on OpenSea
+                    </a>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Listings Header */}
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h2 className="text-xl font-bold text-white">Marketplace</h2>
+                        <p className="text-sm text-gray-400">
+                          {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0)} listings available {effectiveFloorPrice && `• Floor: ${effectiveFloorPrice} ETH${isPoolFloor ? ' (Pool)' : ''}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => refetchListings()}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 transition-all"
+                      >
+                        <span>↻</span>
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+
+                    {/* Listings Grid */}
+                    <div className={`grid ${gridClasses[gridSize]} gap-4`}>
+                      {/* Contract "Buy from Pool" Option - shows a human from wTokens pool */}
+                      {(() => {
+                        // Only show pool option if human filter is active or all filter
+                        if (filterType !== 'all' && filterType !== 'human') return null;
+
+                        // Find the first human NFT from the pool that matches search
+                        const poolHuman = poolNFTs.find(nft => {
+                          const localType = getLocalNFTType(nft.tokenId, nft.name);
+                          if (localType !== 'human') return false;
+                          // Apply search filter
+                          if (searchQuery) {
+                            const query = searchQuery.toLowerCase();
+                            if (!nft.name.toLowerCase().includes(query) && !nft.tokenId.toString().includes(query)) {
+                              return false;
+                            }
+                          }
+                          return true;
+                        });
+
+                        if (!poolHuman) return null;
+
+                        // Show real quote price from quoter, or loading state
+                        const contractPriceDisplay = isFetchingQuote
+                          ? '...'
+                          : buyQuotePrice
+                            ? parseFloat(buyQuotePrice).toFixed(4)
+                            : '~0.001';
+
+                        return (
+                          <button
+                            key="contract-buy"
+                            onClick={handleBuyNFT}
+                            className="group relative rounded-2xl bg-gray-900 border-2 border-cyan-500/50 hover:border-cyan-400 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left"
+                            style={{
+                              boxShadow: '0 4px 16px rgba(6, 182, 212, 0.2)',
+                            }}
+                          >
+                            {/* Image Container */}
+                            <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                              <img
+                                src={poolHuman.imageUrl}
+                                alt={poolHuman.name}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                              />
+
+                              {/* Gradient Overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-cyan-900/60 via-transparent to-transparent" />
+
+                              {/* Contract Badge */}
+                              <div className="absolute top-3 left-3">
+                                <span className="px-2.5 py-1.5 rounded-lg bg-cyan-500/90 text-white text-sm font-bold backdrop-blur-sm flex items-center gap-1.5">
+                                  <span>⚡</span>
+                                  <span>Instant</span>
+                                </span>
+                              </div>
+
+                              {/* "Featured" Badge */}
+                              <div className="absolute top-3 right-3">
+                                <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm">
+                                  🏆 Contract
+                                </span>
+                              </div>
+
+                              {/* Buy Button */}
+                              <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-xs font-bold">
+                                  Buy Instantly
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Card Info */}
+                            <div className="p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-white truncate text-sm">Buy from Pool</h3>
+                                  <p className="text-xs text-gray-400">{poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length} humans available</p>
+                                </div>
+                                <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-cyan-500/20 text-cyan-400">
+                                  Ξ {contractPriceDisplay}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                No gas fees for smart wallets • Instant delivery
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })()}
+
+                      {openSeaListings
+                        .filter((listing) => {
+                          // Apply type filter
+                          if (filterType !== 'all') {
+                            const listingType = getLocalNFTType(listing.tokenId, listing.name);
+                            if (listingType !== filterType) return false;
+                          }
+                          // Apply search filter
+                          if (searchQuery) {
+                            const query = searchQuery.toLowerCase();
+                            if (!listing.name.toLowerCase().includes(query) && !listing.tokenId.toString().includes(query)) {
+                              return false;
+                            }
+                          }
+                          return true;
+                        })
+                        .sort((a, b) => {
+                          // Apply sort
+                          switch (sortBy) {
+                            case 'price-asc':
+                              return parseFloat(a.price) - parseFloat(b.price);
+                            case 'price-desc':
+                              return parseFloat(b.price) - parseFloat(a.price);
+                            case 'id-asc':
+                              return a.tokenId - b.tokenId;
+                            case 'id-desc':
+                              return b.tokenId - a.tokenId;
+                            default:
+                              return 0;
+                          }
+                        })
+                        .map((listing) => (
+                        <a
+                          key={listing.orderHash}
+                          href={listing.openseaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group relative rounded-2xl bg-gray-900 border-2 border-gray-800 hover:border-green-500/50 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1"
+                          style={{
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                          }}
+                        >
+                          {/* Image Container */}
+                          <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                            <img
+                              src={listing.imageUrl}
+                              alt={listing.name}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                            />
+
+                            {/* Gradient Overlay on Hover */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                            {/* Price Badge */}
+                            <div className="absolute top-3 left-3">
+                              <span className="px-2.5 py-1.5 rounded-lg bg-green-500/90 text-white text-sm font-bold backdrop-blur-sm flex items-center gap-1.5">
+                                <span>Ξ</span>
+                                <span>{parseFloat(listing.price).toFixed(4)}</span>
+                              </span>
+                            </div>
+
+                            {/* Buy Button on Hover */}
+                            <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="px-3 py-1.5 rounded-lg bg-green-500 text-white text-xs font-bold">
+                                Buy on OpenSea
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Card Info */}
+                          <div className="p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
+                                <p className="text-xs text-gray-500">#{listing.tokenId}</p>
+                              </div>
+                              <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-green-500/20 text-green-400">
+                                For Sale
+                              </span>
+                            </div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ===== NFT EXCHANGE TAB ===== */}
+            {activeTab === 'exchange' && (
+              <div className="absolute inset-0 flex flex-col overflow-hidden">
+                {/* Swap NFT Interface - embedded swap-only mode, maximized - matches trading tab layout */}
+                <SwapWrapModal
+                  isOpen={true}
+                  onClose={() => setActiveTab('collection')}
+                  initialMode="wrap"
+                  embedded={true}
+                  swapOnly={true}
+                  filterType={filterType}
+                  searchQuery={searchQuery}
+                  gridSize={gridSize}
+                />
+              </div>
+            )}
+
+            {/* ===== TRADING TAB - Chart and Trading Interface OR Token Launcher ===== */}
+            {activeTab === 'trading' && (
+              <div className="absolute inset-0 flex flex-col overflow-hidden">
+                {tradingView === 'swap' ? (
+                  /* ===== SWAP VIEW - Chart and Trading Interface ===== */
+                  <ChartModal
+                    isOpen={true}
+                    onClose={() => setActiveTab('collection')}
+                    embedded={true}
+                    layout="horizontal"
+                    onPairChange={setCurrentPoolAddress}
+                    onSwapComplete={refetchTrades}
+                    trades={poolTrades}
+                    tradesLoading={tradesLoading}
+                    selectedPairId={selectedPairId}
+                  />
+                ) : (
+                  /* ===== LAUNCH VIEW - Token Launcher Form ===== */
+                  <div className="flex-1 flex items-start justify-center overflow-y-auto py-6 px-4">
+                    <div className="w-full max-w-lg">
+                      {/* Header */}
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold text-white">Launch a Token</h2>
+                          <p className="text-sm text-gray-400">Deploy your token paired with WASS on Uniswap V4</p>
+                        </div>
+                      </div>
+
+                      {/* Verified Token Launcher - 2-step x402 USDC Payment */}
+                      <VerifiedTokenLauncher />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* Selection Action Bar - shown when NFTs are selected */}
+        {selectedNFTs.size > 0 && (
+          <div className="flex-shrink-0 border-t border-gray-800 bg-gray-900/95 backdrop-blur-xl px-4 md:px-6 py-4">
+            <div className="flex items-center justify-between max-w-7xl mx-auto">
+              <div className="flex items-center gap-4">
+                <span className="text-white font-medium">
+                  {selectedNFTs.size} NFT{selectedNFTs.size > 1 ? 's' : ''} selected
+                </span>
+                {selectedSnakes.length > 0 && selectedSnakes.length !== selectedNFTs.size && (
+                  <span className="text-sm text-gray-400">
+                    ({selectedSnakes.length} snake{selectedSnakes.length > 1 ? 's' : ''})
+                  </span>
+                )}
+                <button
+                  onClick={clearSelections}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 hover:border-gray-600 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Clear</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Hatch Button - always visible, grayed out when no eggs selected */}
+                {activeTab === 'collection' && (
+                  <button
+                    onClick={selectedEggs.length > 0 ? handleHatch : undefined}
+                    disabled={isProcessing || selectedEggs.length === 0}
+                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                      selectedEggs.length === 0
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed'
+                    }`}
+                    title={selectedEggs.length === 0 ? 'Select eggs to hatch' : undefined}
+                  >
+                    {isProcessing && currentOperation === 'wrap' ? 'Hatching...' : `🥚 Hatch${selectedEggs.length > 0 ? ` ${selectedEggs.length}` : ''}`}
+                  </button>
+                )}
+
+                {/* Stake Button - grayed out if humans are selected, only enabled for snakes */}
+                {activeTab === 'collection' && (
+                  <button
+                    onClick={hasHumansSelected || selectedForStake.length === 0 ? undefined : (!isApproved && supportsAtomicBatch ? handleApproveAndStake : (!isApproved ? handleApprove : handleStake))}
+                    disabled={isProcessing || hasHumansSelected || selectedForStake.length === 0}
+                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                      hasHumansSelected || selectedForStake.length === 0
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-400 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed'
+                    }`}
+                    title={hasHumansSelected ? 'Cannot stake humans - only snakes can be staked' : selectedForStake.length === 0 ? 'Select snakes to stake' : undefined}
+                  >
+                    {isProcessing && currentOperation === 'stake' ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </span>
+                    ) : !isApproved && selectedForStake.length > 0 && !hasHumansSelected ? (
+                      '🔓 Approve & Stake'
+                    ) : (
+                      `⚡ Stake${selectedForStake.length > 0 ? ` ${selectedForStake.length}` : ''}`
+                    )}
+                  </button>
+                )}
+
+                {/* Unstake Actions (for staked NFTs in unified view) */}
+                {activeTab === 'collection' && selectedForUnstake.length > 0 && (
+                  <button
+                    onClick={handleUnstake}
+                    disabled={isProcessing}
+                    className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    {isProcessing && currentOperation === 'unstake' ? 'Unstaking...' : `🔓 Unstake ${selectedForUnstake.length} Snake${selectedForUnstake.length > 1 ? 's' : ''}`}
+                  </button>
+                )}
+
+                {/* Wrap Button - enabled when non-staked NFTs selected, warning for snakes */}
+                <div className="relative flex items-center gap-2">
+                  <button
+                    onClick={!isWrapperApproved && !supportsAtomicBatch ? handleApproveWrapper : handleWrap}
+                    disabled={isProcessing || selectedForWrap.length === 0}
+                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                      selectedForWrap.length === 0
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : selectedSnakes.length > 0
+                          ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white hover:from-red-500 hover:to-orange-400 ring-2 ring-red-500/50 disabled:opacity-50'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 disabled:opacity-50'
+                    }`}
+                    title={selectedSnakes.length > 0 ? 'Warning: AppleSnakes are rare NFTs!' : undefined}
+                  >
+                    {isProcessing && currentOperation === 'wrap' ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </span>
+                    ) : !isWrapperApproved && selectedForWrap.length > 0 && !supportsAtomicBatch ? (
+                      '🔓 Approve Wrap'
+                    ) : (
+                      <>
+                        {selectedSnakes.length > 0 ? '⚠️' : '🎁'} Wrap{selectedForWrap.length > 0 ? ` ${selectedForWrap.length}` : ''}
+                      </>
+                    )}
+                  </button>
+                  {/* Wrap Fee Display */}
+                  {selectedForWrap.length > 0 && (
+                    <span className="text-xs text-orange-400 whitespace-nowrap">
+                      Fee: {formatEther(wrapFee * BigInt(selectedForWrap.length))} ETH
+                    </span>
+                  )}
+                  {selectedSnakes.length > 0 && (
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-1 rounded bg-red-900/90 text-red-300 text-xs border border-red-500/50">
+                      Snakes are rare NFTs!
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </>
+        )}
+      </div>
+
+      {/* Transaction Overlay */}
+      {txOverlay && (
+        <div className="fixed bottom-6 right-6 z-[60] animate-slide-up">
+          <div
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg backdrop-blur-xl transition-all ${
+              txOverlay.status === 'pending'
+                ? 'bg-purple-900/90 border-purple-500/50 text-purple-100'
+                : txOverlay.status === 'success'
+                  ? 'bg-green-900/90 border-green-500/50 text-green-100'
+                  : 'bg-red-900/90 border-red-500/50 text-red-100'
+            }`}
+          >
+            {/* Status Icon */}
+            {txOverlay.status === 'pending' ? (
+              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+            ) : txOverlay.status === 'success' ? (
+              <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+
+            {/* Message */}
+            <div className="flex-1">
+              <p className="font-medium text-sm">{txOverlay.message}</p>
+              <p className="text-xs opacity-70">
+                {txOverlay.status === 'pending' ? 'Transaction pending...' : txOverlay.status === 'success' ? 'Transaction confirmed!' : 'Transaction failed'}
+              </p>
+            </div>
+
+            {/* Basescan Link */}
+            <a
+              href={getBasescanUrl(txOverlay.hash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`p-2 rounded-lg transition-all ${
+                txOverlay.status === 'pending'
+                  ? 'bg-purple-800 hover:bg-purple-700'
+                  : txOverlay.status === 'success'
+                    ? 'bg-green-800 hover:bg-green-700'
+                    : 'bg-red-800 hover:bg-red-700'
+              }`}
+              title="View on Basescan"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+
+            {/* Close Button */}
+            <button
+              onClick={() => setTxOverlay(null)}
+              className="p-1 rounded hover:bg-white/10 transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
       )}
 
-      <style jsx>{`
-        @keyframes slide-in-right {
-          from {
-            transform: translateX(100%);
-          }
-          to {
-            transform: translateX(0);
-          }
-        }
+      {/* Buy from Pool Modal Popup */}
+      <SwapWrapModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        initialMode="buy"
+        buyOnly={true}
+      />
 
+      <style jsx>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out;
+        }
+        @keyframes slide-in-right {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
         .animate-slide-in-right {
           animation: slide-in-right 0.3s ease-out;
         }
-
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        @keyframes slide-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
         }
       `}</style>
     </>

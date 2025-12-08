@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, useReadContract, usePublicClient } from 'wagmi';
-import { getContracts } from '@/config';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl, IPNS_GATEWAY, IPNS_KEY } from '@/config';
 import { base } from 'wagmi/chains';
 
 /**
@@ -388,183 +388,139 @@ export function useUserNFTs_Alchemy() {
 
         // console.log(`📊 Batch processing complete: ${tokenInfoMap.size} tokens have TokenInfo, ${tokenURIMap.size} have tokenURI`);
 
-        // Step 3: Fetch metadata JSON to extract image URLs (with rate limiting)
-        // console.log(`🖼️ Step 3: Fetching metadata JSON for ${allTokenIds.length} tokens...`);
+        // Step 3: PROGRESSIVE LOADING - Show NFTs immediately with basic info, then enrich with metadata
+        // First, show NFTs with placeholder data so user can see them right away
+        const getNFTType = (info: TokenInfo): NFTType => {
+          if (info.ownerIsWarden && !info.isSnake) return 'warden';
+          if (info.isEgg) return 'egg';
+          if (info.isSnake) return 'snake';
+          return 'human';
+        };
 
-        const metadataResults: (null | { tokenId: number; imageUrl: string; name: string; metadata: any })[] = [];
-        const METADATA_BATCH_SIZE = 20; // Process 20 metadata fetches at a time (IPFS is external)
+        // Create initial NFTs with basic info (from tokenInfo) - user sees these immediately
+        const initialNFTs: UserNFT[] = allTokenIds
+          .filter(tokenId => tokenInfoMap.has(tokenId))
+          .map(tokenId => {
+            const info = tokenInfoMap.get(tokenId)!;
+            const tokenIdNum = Number(info.tokenId);
+            return {
+              tokenId: tokenIdNum,
+              owner: info.owner,
+              exists: info.exists,
+              isSnake: info.isSnake,
+              isJailed: info.isJailed,
+              jailTime: Number(info.jailTime),
+              isEgg: info.isEgg,
+              mintTime: Number(info.mintTime),
+              forceHatched: info.forceHatched,
+              evolved: info.evolved,
+              ownerIsWarden: info.ownerIsWarden,
+              ownerIsJailExempt: info.ownerIsJailExempt,
+              swapMintTime: Number(info.swapMintTime),
+              canUnwrap: info.canUnwrap,
+              // Placeholder data until metadata loads
+              imageUrl: getNFTImageUrl(tokenIdNum),
+              name: `AppleSnake #${tokenIdNum}`,
+              nftType: getNFTType(info),
+              metadata: {
+                name: `AppleSnake #${tokenIdNum}`,
+                image: `${tokenIdNum}.png`,
+              },
+            };
+          });
+
+        // Show NFTs immediately with basic info!
+        setNfts(initialNFTs);
+        // console.log(`⚡ Progressive: Showing ${initialNFTs.length} NFTs with basic info`);
+
+        // Now fetch metadata progressively and update as each batch completes
+        const metadataMap = new Map<number, any>();
+        const imageUrlMap = new Map<number, string>();
+        const METADATA_BATCH_SIZE = 25; // Slightly larger batches for efficiency
         const metadataBatches = [];
 
         for (let i = 0; i < allTokenIds.length; i += METADATA_BATCH_SIZE) {
           metadataBatches.push(allTokenIds.slice(i, i + METADATA_BATCH_SIZE));
         }
 
-        // console.log(`  Splitting into ${metadataBatches.length} metadata batch${metadataBatches.length > 1 ? 'es' : ''} of up to ${METADATA_BATCH_SIZE} tokens each`);
-
         for (let batchIdx = 0; batchIdx < metadataBatches.length; batchIdx++) {
           const batch = metadataBatches[batchIdx];
-          // console.log(`  📦 Fetching metadata batch ${batchIdx + 1}/${metadataBatches.length}: ${batch.length} tokens`);
 
           const batchPromises = batch.map(async (tokenId) => {
             const tokenURI = tokenURIMap.get(tokenId);
-            if (!tokenURI) {
-              // console.warn(`❌ Token ${tokenId}: No tokenURI from contract`);
-              return null;
-            }
+            if (!tokenURI) return null;
 
             try {
-              // Convert IPFS URI to gateway URL
-              const metadataUrl = tokenURI.startsWith('ipfs://')
-                ? `https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${tokenURI.replace('ipfs://', '')}`
-                : tokenURI;
-
-              // Fetch metadata JSON with timeout
+              const metadataUrl = getNFTMetadataUrl(tokenId);
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+              const timeoutId = setTimeout(() => controller.abort(), 10000);
 
               const response = await fetch(metadataUrl, { signal: controller.signal });
               clearTimeout(timeoutId);
 
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-              }
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
               const metadata = await response.json();
+              const imageUrl = getNFTImageUrl(tokenId);
 
-              // Extract image from metadata (typically ipfs://xxx/123.png)
-              let imageUrl = metadata.image || '';
-
-              // Strip ipfs:// prefix (gateway will be added by NFTImage component)
-              if (imageUrl.startsWith('ipfs://')) {
-                imageUrl = imageUrl.replace('ipfs://', '');
-              }
-
-              return {
-                tokenId,
-                imageUrl,
-                name: metadata.name,
-                metadata // Store complete metadata
-              };
-            } catch (err) {
-              // console.error(`❌ Token ${tokenId}: Metadata fetch failed - ${err}`);
+              return { tokenId, imageUrl, name: metadata.name, metadata };
+            } catch {
               return null;
             }
           });
 
           const batchResults = await Promise.all(batchPromises);
-          metadataResults.push(...batchResults);
 
-          // console.log(`  ✅ Metadata batch ${batchIdx + 1}/${metadataBatches.length} complete`);
-
-          // Rate limit between metadata batches
-          if (batchIdx < metadataBatches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 150)); // 150ms delay between batches
-          }
-        }
-
-        // Count successes and failures
-        const successCount = metadataResults.filter(r => r !== null).length;
-        const failCount = metadataResults.filter(r => r === null).length;
-
-        // console.log(`📊 Metadata fetch complete: ${successCount} success, ${failCount} failed`);
-
-        // Build metadata map from results
-        const metadataMap = new Map<number, any>();
-        const imageUrlMap = new Map<number, string>();
-        metadataResults.forEach(result => {
-          if (result) {
-            metadataMap.set(result.tokenId, result.metadata);
-            imageUrlMap.set(result.tokenId, result.imageUrl);
-          }
-        });
-
-        // console.log(`📋 Maps populated - imageUrl: ${imageUrlMap.size}, metadata: ${metadataMap.size}, tokenInfo: ${tokenInfoMap.size}`);
-
-        // Determine NFT type from metadata name (types are dynamic and can change)
-        const getNFTType = (metadata: any, info: TokenInfo): NFTType => {
-          // Priority 1: Check if warden
-          if (info.ownerIsWarden && !info.isSnake) return 'warden';
-
-          // Priority 2: Check if egg
-          if (info.isEgg) return 'egg';
-
-          // Priority 3: Check if snake
-          if (info.isSnake) return 'snake';
-
-          // Priority 4: Default to human
-          return 'human';
-        };
-
-        // Build final NFT array with complete data from getTokenInfo
-        // console.log(`🔨 Step 4: Building final NFT array from ${allTokenIds.length} token IDs...`);
-
-        // Check which tokens will be filtered out and why
-        const missingData: { tokenId: number; missing: string[] }[] = [];
-        allTokenIds.forEach(tokenId => {
-          const missing: string[] = [];
-          if (!imageUrlMap.has(tokenId)) missing.push('imageUrl');
-          if (!metadataMap.has(tokenId)) missing.push('metadata');
-          if (!tokenInfoMap.has(tokenId)) missing.push('tokenInfo');
-          if (missing.length > 0) {
-            missingData.push({ tokenId, missing });
-          }
-        });
-
-        if (missingData.length > 0) {
-          // console.warn(`⚠️ ${missingData.length} tokens will be excluded due to missing data:`);
-          // missingData.slice(0, 10).forEach(({ tokenId, missing }) => {
-          //   console.warn(`  Token ${tokenId}: missing ${missing.join(', ')}`);
-          // });
-          // if (missingData.length > 10) {
-          //   console.warn(`  ... and ${missingData.length - 10} more tokens with missing data`);
-          // }
-        }
-
-        const userNFTs: UserNFT[] = allTokenIds
-          .filter(tokenId => {
-            const hasAllData = imageUrlMap.has(tokenId) && metadataMap.has(tokenId) && tokenInfoMap.has(tokenId);
-            return hasAllData;
-          })
-          .map(tokenId => {
-            const info = tokenInfoMap.get(tokenId)!;
-            const metadata = metadataMap.get(tokenId)!;
-            const nftType = getNFTType(metadata, info);
-
-            // Use tokenId from struct to be explicit
-            const tokenIdFromStruct = Number(info.tokenId);
-
-            // console.log(`🏷️ Token ${tokenIdFromStruct}: "${metadata.name}" → Type: ${nftType} (jailed: ${info.isJailed}, egg: ${info.isEgg}, snake: ${info.isSnake}, evolved: ${info.evolved}, canUnwrap: ${info.canUnwrap})`);
-
-            // Return complete TokenInfo struct data - ALL 14 fields
-            return {
-              // From TokenInfo struct
-              tokenId: tokenIdFromStruct,       // ✓ struct field 1
-              owner: info.owner,                // ✓ struct field 2
-              exists: info.exists,              // ✓ struct field 3
-              isSnake: info.isSnake,            // ✓ struct field 4
-              isJailed: info.isJailed,          // ✓ struct field 5
-              jailTime: Number(info.jailTime),  // ✓ struct field 6 (convert bigint)
-              isEgg: info.isEgg,                // ✓ struct field 7
-              mintTime: Number(info.mintTime),  // ✓ struct field 8 (convert bigint)
-              forceHatched: info.forceHatched,  // ✓ struct field 9
-              evolved: info.evolved,            // ✓ struct field 10
-              ownerIsWarden: info.ownerIsWarden,      // ✓ struct field 11
-              ownerIsJailExempt: info.ownerIsJailExempt, // ✓ struct field 12
-              swapMintTime: Number(info.swapMintTime), // ✓ struct field 13 (convert bigint)
-              canUnwrap: info.canUnwrap,        // ✓ struct field 14
-
-              // Additional UI data (not from struct)
-              imageUrl: imageUrlMap.get(tokenId)!,
-              name: metadata.name || `AppleSnake #${tokenIdFromStruct}`,
-              nftType,
-              metadata,
-            };
+          // Update maps with batch results
+          batchResults.forEach(result => {
+            if (result) {
+              metadataMap.set(result.tokenId, result.metadata);
+              imageUrlMap.set(result.tokenId, result.imageUrl);
+            }
           });
 
-        // console.log(`✅ SUCCESS: Loaded ${userNFTs.length} out of ${allTokenIds.length} NFTs (${((userNFTs.length / allTokenIds.length) * 100).toFixed(1)}% success rate)`);
-        // console.log(`📦 Final counts: ${userNFTs.filter(n => !n.isJailed).length} free, ${userNFTs.filter(n => n.isJailed).length} jailed`);
+          // PROGRESSIVE UPDATE: Rebuild NFT array with enriched metadata and update state
+          const enrichedNFTs: UserNFT[] = allTokenIds
+            .filter(tokenId => tokenInfoMap.has(tokenId))
+            .map(tokenId => {
+              const info = tokenInfoMap.get(tokenId)!;
+              const tokenIdNum = Number(info.tokenId);
+              const hasMetadata = metadataMap.has(tokenId);
+              const metadata = hasMetadata
+                ? metadataMap.get(tokenId)!
+                : { name: `AppleSnake #${tokenIdNum}`, image: `${tokenIdNum}.png` };
 
-        setNfts(userNFTs);
+              return {
+                tokenId: tokenIdNum,
+                owner: info.owner,
+                exists: info.exists,
+                isSnake: info.isSnake,
+                isJailed: info.isJailed,
+                jailTime: Number(info.jailTime),
+                isEgg: info.isEgg,
+                mintTime: Number(info.mintTime),
+                forceHatched: info.forceHatched,
+                evolved: info.evolved,
+                ownerIsWarden: info.ownerIsWarden,
+                ownerIsJailExempt: info.ownerIsJailExempt,
+                swapMintTime: Number(info.swapMintTime),
+                canUnwrap: info.canUnwrap,
+                imageUrl: imageUrlMap.get(tokenId) || getNFTImageUrl(tokenIdNum),
+                name: metadata.name || `AppleSnake #${tokenIdNum}`,
+                nftType: getNFTType(info),
+                metadata,
+              };
+            });
+
+          // Update UI after each batch - users see progress!
+          setNfts(enrichedNFTs);
+          // console.log(`⚡ Progressive: Batch ${batchIdx + 1}/${metadataBatches.length} - ${metadataMap.size}/${allTokenIds.length} enriched`);
+
+          // Small delay between batches to prevent rate limits
+          if (batchIdx < metadataBatches.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } catch (err) {
         console.error('Error fetching NFTs:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch NFTs');

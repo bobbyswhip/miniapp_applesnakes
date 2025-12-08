@@ -25,6 +25,7 @@ interface InventoryContextType {
   nftHubMode: 'buy' | 'wrap';
   setNFTHubMode: (mode: 'buy' | 'wrap') => void;
   openNFTHub: (mode?: 'buy' | 'wrap') => void;
+  openNFTHubOverlay: (mode?: 'buy' | 'wrap') => void; // Opens NFT Hub without closing inventory
   closeNFTHub: () => void;
   // Coordinated open functions that close other UIs
   openInventory: () => void;
@@ -140,6 +141,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowUnity(false);
   };
 
+  // Opens NFT Hub as overlay WITHOUT closing inventory (for marketplace actions)
+  const openNFTHubOverlay = (mode: 'buy' | 'wrap' = 'buy') => {
+    setNFTHubMode(mode);
+    setShowNFTHub(true);
+    // Don't close inventory - keep it open behind the NFT Hub
+  };
+
   const closeNFTHub = () => {
     setShowNFTHub(false);
   };
@@ -167,6 +175,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         nftHubMode,
         setNFTHubMode,
         openNFTHub,
+        openNFTHubOverlay,
         closeNFTHub,
         openInventory,
         openSwapMint,

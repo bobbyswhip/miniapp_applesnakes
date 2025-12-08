@@ -1,862 +1,1060 @@
-# Token Launcher API Implementation Guide
+# X402 Verified Token Launcher - Complete Frontend Implementation
 
 ## Overview
 
-The Token Launcher API allows you to deploy tokens on Base blockchain paired with WASS through Clanker. It supports:
-- Image upload to IPFS via Filebase
-- Token deployment with automatic WASS pairing
-- Real-time progress via Server-Sent Events (SSE)
-- Dev buy (initial token purchase)
+The verified token launcher uses a **simplified payment flow**:
+1. Your frontend makes a request
+2. Server returns `402 Payment Required` with payment details
+3. Your frontend sends USDC directly via `transfer()`
+4. Your frontend retries with payment proof headers
+5. Server verifies the tx hash and processes request
 
-## Endpoints
+**IMPORTANT**: This guide uses direct USDC transfer + proof headers (not the complex x402 EIP-3009 signature flow).
 
-### Status Check
-```
-GET /api/token-launcher
-```
+## Backend Endpoints
 
-Returns launcher status and configuration.
+| Endpoint | Method | Price | Description |
+|----------|--------|-------|-------------|
+| `/api/verified-launcher/verify` | GET | Free | Get requirements info |
+| `/api/verified-launcher/verify` | POST | $0.50 USDC | Verify image style |
+| `/api/verified-launcher/launch` | GET | Free | Get launch requirements |
+| `/api/verified-launcher/launch` | POST | $1.00+ USDC | Launch token |
 
-**Response:**
+**Base URL:** `http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3000`
+
+**Payment Recipient:** `0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098`
+
+**USDC Contract (Base):** `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+
+## The 402 Response
+
+When you POST without payment, you get:
+
 ```json
 {
-  "status": "ready",
-  "wallet": "0x...",
-  "capabilities": {
-    "uploadImage": true,
-    "launchToken": true,
-    "wassPariring": true,
-    "sseProgress": true
-  },
-  "config": {
-    "wassAddress": "0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6",
-    "startingTick": -276200,
-    "estimatedMcap": "~$10",
-    "devBuyDefault": "0.0001 ETH"
-  }
+  "x402Version": 1,
+  "error": "X-PAYMENT header is required",
+  "accepts": [{
+    "scheme": "exact",
+    "network": "base",
+    "maxAmountRequired": "500000",
+    "payTo": "0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098",
+    "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  }]
 }
 ```
 
----
+Key fields:
+- `maxAmountRequired`: Amount in USDC smallest units (500000 = $0.50)
+- `payTo`: Address to send USDC to
+- `asset`: USDC contract address
 
-### Launch Token
-```
-POST /api/token-launcher
-Content-Type: application/json
-```
+## Payment Headers (Simple Approach)
 
-**Request Body:**
-```json
-{
-  "action": "launch",
-  "name": "My Token",
-  "symbol": "MTK",
-  "description": "My awesome token description",
-  "image": "ipfs://Qm...",
-  "website": "https://mytoken.com",
-  "twitter": "@mytoken",
-  "initialBuyEth": 0.0001
-}
-```
-
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| action | string | Yes | - | Must be "launch" |
-| name | string | Yes | - | Token name (max 32 chars) |
-| symbol | string | Yes | - | Token symbol (max 10 chars) |
-| description | string | No | "Token launched via Jack AI" | Token description |
-| image | string | No | - | IPFS URL (`ipfs://...`) or gateway URL |
-| website | string | No | - | Project website |
-| twitter | string | No | - | Twitter handle |
-| initialBuyEth | number | No | 0.0001 | ETH amount for dev buy |
-
-**Response:**
-```json
-{
-  "success": true,
-  "txHash": "0x...",
-  "tokenAddress": "0x...",
-  "launchId": "launch-1701705600000-abc123"
-}
-```
-
----
-
-### Launch with Image Upload (Form Data)
-```
-POST /api/token-launcher
-Content-Type: multipart/form-data
-```
-
-Use this to upload an image file and launch in one request.
-
-**Form Fields:**
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| action | string | Yes | Must be "launch" |
-| name | string | Yes | Token name |
-| symbol | string | Yes | Token symbol |
-| file | File | No | Image file (PNG, JPG, GIF, WebP) |
-| description | string | No | Token description |
-| website | string | No | Project website |
-| twitter | string | No | Twitter handle |
-| initialBuyEth | string | No | ETH amount as string |
-
----
-
-### Upload Image Only
-```
-POST /api/token-launcher
-Content-Type: application/json
-```
-
-**Request (URL):**
-```json
-{
-  "action": "upload",
-  "imageUrl": "https://example.com/image.png",
-  "fileName": "mytoken.png"
-}
-```
-
-**Request (Base64):**
-```json
-{
-  "action": "upload",
-  "base64": "data:image/png;base64,iVBORw0KGgo...",
-  "fileName": "mytoken.png"
-}
-```
-
-**Request (Form Data):**
-```
-POST /api/token-launcher
-Content-Type: multipart/form-data
-
-action=upload
-file=[File]
-fileName=mytoken.png
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "cid": "QmXoypiz...",
-  "ipfsUrl": "ipfs://QmXoypiz...",
-  "gatewayUrl": "https://ipfs.filebase.io/ipfs/QmXoypiz...",
-  "launchId": "launch-1701705600000-abc123"
-}
-```
-
----
-
-### SSE Progress Stream
-```
-GET /api/token-launcher/stream?launchId=launch-xxx
-```
-
-Connect to this endpoint to receive real-time progress updates during token launch.
-
-**Events:**
-- `connected` - Initial connection established
-- `progress` - Progress update
-
-**Progress Data:**
-```json
-{
-  "launchId": "launch-xxx",
-  "status": "deploying",
-  "step": 2,
-  "totalSteps": 4,
-  "message": "Deploying token to Base...",
-  "data": { },
-  "timestamp": 1701705600000
-}
-```
-
-**Status Values:**
-| Status | Description |
-|--------|-------------|
-| pending | Launch initialized |
-| uploading | Uploading image to IPFS |
-| deploying | Deploying token contract |
-| confirming | Waiting for transaction confirmation |
-| complete | Launch successful |
-| error | Launch failed |
-
----
-
-## Frontend Implementation
-
-### React Hook with SSE Progress
+After sending USDC, retry your request with these headers:
 
 ```typescript
-import { useState, useCallback, useEffect, useRef } from 'react';
+headers: {
+  "Content-Type": "application/json",
+  "X-Payment-Amount": "0.50",        // Amount in USDC (human readable)
+  "X-Payment-Tx-Hash": "0x...",      // The USDC transfer tx hash
+  "X-Payment-From": "0x..."          // Your wallet address
+}
+```
 
-interface LaunchProgress {
-  status: 'idle' | 'pending' | 'uploading' | 'deploying' | 'confirming' | 'complete' | 'error';
-  step: number;
-  totalSteps: number;
-  message: string;
-  data?: {
-    cid?: string;
-    ipfsUrl?: string;
-    txHash?: string;
-    tokenAddress?: string;
-    dexscreener?: string;
-    basescan?: string;
-  };
-  error?: string;
+**Do NOT use the complex X-PAYMENT base64 header** - it requires EIP-3009 signature format that is hard to implement correctly.
+
+## Complete React Implementation
+
+### 1. Install Dependencies
+
+```bash
+npm install viem wagmi @tanstack/react-query
+```
+
+### 2. Constants File
+
+```typescript
+// lib/x402-constants.ts
+
+export const X402_CONFIG = {
+  // Backend API
+  API_BASE_URL: "http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3000",
+
+  // Payment recipient (AI Wallet)
+  PAYMENT_RECIPIENT: "0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098" as const,
+
+  // USDC on Base
+  USDC_ADDRESS: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const,
+  USDC_DECIMALS: 6,
+
+  // Prices
+  VERIFY_PRICE_USDC: 0.50,
+  MIN_LAUNCH_PRICE_USDC: 1.00,
+
+  // Chain
+  CHAIN_ID: 8453, // Base mainnet
+};
+
+export const USDC_ABI = [
+  {
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" }
+    ],
+    outputs: [{ type: "bool" }]
+  },
+  {
+    name: "balanceOf",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" }
+    ],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" }
+    ],
+    outputs: [{ type: "bool" }]
+  }
+] as const;
+```
+
+### 3. X402 Client Hook (Simple Version)
+
+```typescript
+// hooks/useX402Simple.ts
+
+import { useState, useCallback } from "react";
+import { useAccount, useWriteContract, usePublicClient } from "wagmi";
+import { parseUnits } from "viem";
+import { X402_CONFIG, USDC_ABI } from "@/lib/x402-constants";
+
+interface X402PaymentDetails {
+  payTo: string;
+  amount: string;
+  asset: string;
 }
 
-interface LaunchResult {
+interface X402Response<T> {
   success: boolean;
-  txHash?: string;
-  tokenAddress?: string;
-  launchId?: string;
+  data?: T;
   error?: string;
+  paymentRequired?: boolean;
+  paymentDetails?: X402PaymentDetails;
 }
 
-interface UseTokenLauncherReturn {
-  progress: LaunchProgress;
-  isLaunching: boolean;
-  launchToken: (params: LaunchParams) => Promise<LaunchResult>;
-  uploadImage: (file: File) => Promise<{ success: boolean; ipfsUrl?: string; error?: string }>;
-  reset: () => void;
-}
+export function useX402Simple() {
+  const { address, isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
 
-interface LaunchParams {
-  name: string;
-  symbol: string;
-  description?: string;
-  image?: File | string;
-  website?: string;
-  twitter?: string;
-  initialBuyEth?: number;
-}
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-export function useTokenLauncher(): UseTokenLauncherReturn {
-  const [progress, setProgress] = useState<LaunchProgress>({
-    status: 'idle',
-    step: 0,
-    totalSteps: 0,
-    message: '',
-  });
-  const [isLaunching, setIsLaunching] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  /**
+   * Parse the 402 response to extract payment details
+   */
+  const parse402Response = (responseData: any): X402PaymentDetails | null => {
+    try {
+      if (responseData.accepts && responseData.accepts.length > 0) {
+        const accept = responseData.accepts[0];
+        return {
+          payTo: accept.payTo,
+          amount: accept.maxAmountRequired,
+          asset: accept.asset
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
 
-  // Connect to SSE stream
-  const connectToStream = useCallback((launchId: string) => {
-    // Close existing connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
+  /**
+   * Pay USDC to the specified address via direct transfer
+   */
+  const payUsdc = async (to: string, amountRaw: string): Promise<string> => {
+    if (!address) throw new Error("Wallet not connected");
+
+    console.log(`[X402] Paying ${amountRaw} USDC units to ${to}`);
+
+    // Execute USDC transfer
+    const txHash = await writeContractAsync({
+      address: X402_CONFIG.USDC_ADDRESS,
+      abi: USDC_ABI,
+      functionName: "transfer",
+      args: [to as `0x${string}`, BigInt(amountRaw)]
+    });
+
+    console.log(`[X402] Payment tx: ${txHash}`);
+
+    // Wait for confirmation
+    if (publicClient) {
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      console.log(`[X402] Payment confirmed`);
     }
 
-    const eventSource = new EventSource(`/api/token-launcher/stream?launchId=${launchId}`);
-    eventSourceRef.current = eventSource;
+    return txHash;
+  };
 
-    eventSource.addEventListener('progress', (event) => {
-      const data = JSON.parse(event.data);
-      setProgress({
-        status: data.status,
-        step: data.step,
-        totalSteps: data.totalSteps,
-        message: data.message,
-        data: data.data,
-        error: data.error,
-      });
+  /**
+   * Make an x402-enabled request using simple payment headers
+   * Handles 402 responses, payment, and retry automatically
+   */
+  const x402Request = useCallback(async <T>(
+    endpoint: string,
+    options: {
+      method?: "GET" | "POST";
+      body?: any;
+      customAmount?: number; // For launch, allow custom amount in USDC
+    } = {}
+  ): Promise<X402Response<T>> => {
+    const { method = "POST", body, customAmount } = options;
 
-      // Close on completion or error
-      if (data.status === 'complete' || data.status === 'error') {
-        eventSource.close();
-        setIsLaunching(false);
-      }
-    });
+    if (!isConnected || !address) {
+      return { success: false, error: "Wallet not connected" };
+    }
 
-    eventSource.onerror = () => {
-      eventSource.close();
-      setIsLaunching(false);
-    };
-  }, []);
-
-  // Upload image only
-  const uploadImage = useCallback(async (file: File) => {
-    const formData = new FormData();
-    formData.append('action', 'upload');
-    formData.append('file', file);
-
-    const response = await fetch('/api/token-launcher', {
-      method: 'POST',
-      body: formData,
-    });
-
-    return response.json();
-  }, []);
-
-  // Launch token
-  const launchToken = useCallback(async (params: LaunchParams): Promise<LaunchResult> => {
-    setIsLaunching(true);
-    setProgress({
-      status: 'pending',
-      step: 0,
-      totalSteps: params.image instanceof File ? 4 : 3,
-      message: 'Starting token launch...',
-    });
+    setIsLoading(true);
+    setError(null);
 
     try {
-      let response: Response;
+      const url = `${X402_CONFIG.API_BASE_URL}${endpoint}`;
 
-      // Use FormData if image is a File
-      if (params.image instanceof File) {
-        const formData = new FormData();
-        formData.append('action', 'launch');
-        formData.append('name', params.name);
-        formData.append('symbol', params.symbol);
-        formData.append('file', params.image);
-        if (params.description) formData.append('description', params.description);
-        if (params.website) formData.append('website', params.website);
-        if (params.twitter) formData.append('twitter', params.twitter);
-        if (params.initialBuyEth) formData.append('initialBuyEth', String(params.initialBuyEth));
+      // Step 1: Make initial request
+      console.log(`[X402] Initial request to ${url}`);
 
-        response = await fetch('/api/token-launcher', {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        // Use JSON for string image URL or no image
-        response = await fetch('/api/token-launcher', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'launch',
-            name: params.name,
-            symbol: params.symbol,
-            description: params.description,
-            image: params.image,
-            website: params.website,
-            twitter: params.twitter,
-            initialBuyEth: params.initialBuyEth || 0.0001,
-          }),
-        });
-      }
-
-      const result = await response.json();
-
-      // Connect to SSE stream for progress updates
-      if (result.launchId) {
-        connectToStream(result.launchId);
-      }
-
-      if (!result.success) {
-        setProgress(prev => ({
-          ...prev,
-          status: 'error',
-          message: result.error || 'Launch failed',
-          error: result.error,
-        }));
-        setIsLaunching(false);
-      }
-
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setProgress({
-        status: 'error',
-        step: 0,
-        totalSteps: 0,
-        message: errorMessage,
-        error: errorMessage,
+      const initialResponse = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
       });
-      setIsLaunching(false);
-      return { success: false, error: errorMessage };
-    }
-  }, [connectToStream]);
 
-  // Reset state
-  const reset = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    setProgress({
-      status: 'idle',
-      step: 0,
-      totalSteps: 0,
-      message: '',
-    });
-    setIsLaunching(false);
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      // If not 402, return the response
+      if (initialResponse.status !== 402) {
+        const data = await initialResponse.json();
+        if (!initialResponse.ok) {
+          return { success: false, error: data.error || "Request failed" };
+        }
+        return { success: true, data };
       }
-    };
-  }, []);
+
+      // Step 2: Parse 402 response
+      console.log(`[X402] Got 402 Payment Required`);
+      const paymentResponse = await initialResponse.json();
+      const paymentDetails = parse402Response(paymentResponse);
+
+      if (!paymentDetails) {
+        return { success: false, error: "Could not parse payment details" };
+      }
+
+      console.log(`[X402] Payment details:`, paymentDetails);
+
+      // Step 3: Calculate payment amount
+      let paymentAmount = paymentDetails.amount;
+      let paymentAmountUsdc = parseInt(paymentAmount) / 1e6; // Convert to USDC
+
+      // If custom amount provided (for launch), use that instead
+      if (customAmount && customAmount > 0) {
+        paymentAmount = parseUnits(customAmount.toString(), X402_CONFIG.USDC_DECIMALS).toString();
+        paymentAmountUsdc = customAmount;
+        console.log(`[X402] Using custom amount: ${customAmount} USDC (${paymentAmount} units)`);
+      }
+
+      // Step 4: Execute payment (direct USDC transfer)
+      console.log(`[X402] Executing payment of ${paymentAmount} units...`);
+      const txHash = await payUsdc(paymentDetails.payTo, paymentAmount);
+
+      // Step 5: Retry with SIMPLE payment headers (not the complex X-PAYMENT format)
+      console.log(`[X402] Retrying request with payment proof headers...`);
+
+      const retryResponse = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          // Simple payment proof headers
+          "X-Payment-Amount": paymentAmountUsdc.toString(),
+          "X-Payment-Tx-Hash": txHash,
+          "X-Payment-From": address,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await retryResponse.json();
+
+      if (!retryResponse.ok) {
+        return { success: false, error: data.error || "Request failed after payment" };
+      }
+
+      return { success: true, data };
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(`[X402] Error:`, err);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [address, isConnected, payUsdc, publicClient]);
 
   return {
-    progress,
-    isLaunching,
-    launchToken,
-    uploadImage,
-    reset,
+    x402Request,
+    isLoading,
+    error,
+    isConnected,
+    address,
   };
 }
 ```
 
----
-
-### React Component Example
+### 4. Token Launcher Component
 
 ```tsx
-import { useState } from 'react';
-import { useTokenLauncher } from './useTokenLauncher';
+// components/TokenLauncher.tsx
 
-export function TokenLaunchForm() {
-  const { progress, isLaunching, launchToken, reset } = useTokenLauncher();
-  const [formData, setFormData] = useState({
-    name: '',
-    symbol: '',
-    description: '',
-    website: '',
-    twitter: '',
-    initialBuyEth: '0.0001',
-  });
+"use client";
+
+import { useState, useCallback } from "react";
+import { useAccount } from "wagmi";
+import { useX402Simple } from "@/hooks/useX402Simple";
+import { X402_CONFIG } from "@/lib/x402-constants";
+
+interface VerifyResponse {
+  success: boolean;
+  verified: boolean;
+  confidence: number;
+  reason: string;
+  verificationToken: string | null;
+  ipfsUrl: string | null;
+  imageCid: string | null;
+  hasCuteFace: boolean;
+  bonusApplied: boolean;
+}
+
+interface LaunchResponse {
+  success: boolean;
+  launchId: string;
+  message: string;
+  token: {
+    name: string;
+    symbol: string;
+    imageCid: string;
+    imageUrl: string;
+  };
+  result?: {
+    tokenAddress: string;
+  };
+}
+
+type Step = "upload" | "verifying" | "verified" | "launching" | "complete" | "error";
+
+export function TokenLauncher() {
+  const { address, isConnected } = useAccount();
+  const { x402Request, isLoading } = useX402Simple();
+
+  // State
+  const [step, setStep] = useState<Step>("upload");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [verifiedIpfsUrl, setVerifiedIpfsUrl] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResponse | null>(null);
+  const [launchResult, setLaunchResult] = useState<LaunchResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Form state
+  const [tokenName, setTokenName] = useState("");
+  const [tokenSymbol, setTokenSymbol] = useState("");
+  const [launchAmount, setLaunchAmount] = useState(5); // $5 default
+
+  /**
+   * Handle image selection
+   */
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      // Create preview
+    if (!file) return;
+
+    // Validate file size (1MB max)
+    if (file.size > 1024 * 1024) {
+      setError("Image must be less than 1MB");
+      return;
+    }
+
+    // Validate file type
+    if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type)) {
+      setError("Image must be PNG, JPG, GIF, or WebP");
+      return;
+    }
+
+    setImageFile(file);
+    setError(null);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * Convert file to base64 (without data URL prefix)
+   */
+  const fileToBase64 = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data:image/xxx;base64, prefix
+        const base64 = result.split(",")[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const result = await launchToken({
-      name: formData.name,
-      symbol: formData.symbol,
-      description: formData.description,
-      image: imageFile || undefined,
-      website: formData.website,
-      twitter: formData.twitter,
-      initialBuyEth: parseFloat(formData.initialBuyEth),
     });
+  };
 
-    if (result.success) {
-      console.log('Token launched:', result.tokenAddress);
+  /**
+   * Step 1: Verify image (pays $0.50 USDC)
+   */
+  const handleVerify = async () => {
+    if (!imageFile || !address) return;
+
+    setStep("verifying");
+    setError(null);
+
+    try {
+      const base64 = await fileToBase64(imageFile);
+
+      const result = await x402Request<VerifyResponse>("/api/verified-launcher/verify", {
+        method: "POST",
+        body: {
+          imageData: base64,
+          walletAddress: address,
+          contentType: imageFile.type
+        }
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Verification failed");
+      }
+
+      setVerifyResult(result.data!);
+
+      if (result.data!.verified) {
+        setVerifiedIpfsUrl(result.data!.ipfsUrl);
+        setStep("verified");
+      } else {
+        setError(`Verification failed: ${result.data!.reason}`);
+        setStep("upload");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed");
+      setStep("error");
     }
   };
+
+  /**
+   * Step 2: Launch token (pays custom USDC amount)
+   */
+  const handleLaunch = async () => {
+    if (!address || !tokenName || !tokenSymbol) return;
+
+    setStep("launching");
+    setError(null);
+
+    try {
+      const result = await x402Request<LaunchResponse>("/api/verified-launcher/launch", {
+        method: "POST",
+        body: {
+          name: tokenName,
+          symbol: tokenSymbol.toUpperCase(),
+          walletAddress: address
+        },
+        customAmount: launchAmount // Use custom amount for dev buy
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "Launch failed");
+      }
+
+      setLaunchResult(result.data!);
+      setStep("complete");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Launch failed");
+      setStep("error");
+    }
+  };
+
+  /**
+   * Reset to start over
+   */
+  const handleReset = () => {
+    setStep("upload");
+    setImageFile(null);
+    setImagePreview(null);
+    setVerifiedIpfsUrl(null);
+    setVerifyResult(null);
+    setLaunchResult(null);
+    setError(null);
+    setTokenName("");
+    setTokenSymbol("");
+  };
+
+  // Not connected state
+  if (!isConnected) {
+    return (
+      <div className="p-6 bg-gray-100 rounded-lg text-center">
+        <h2 className="text-xl font-bold mb-4">Connect Your Wallet</h2>
+        <p className="text-gray-600">
+          Please connect your wallet to use the token launcher.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="token-launch-form">
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label>Token Name *</label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="My Awesome Token"
-            required
-            maxLength={32}
-          />
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Token Launcher</h1>
+
+      {/* Error Display */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+          {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-2 text-red-500 hover:text-red-700"
+          >
+            Dismiss
+          </button>
         </div>
+      )}
 
-        <div className="form-group">
-          <label>Symbol *</label>
-          <input
-            type="text"
-            value={formData.symbol}
-            onChange={(e) => setFormData(prev => ({ ...prev, symbol: e.target.value.toUpperCase() }))}
-            placeholder="MAT"
-            required
-            maxLength={10}
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Description</label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="Describe your token..."
-            rows={3}
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Token Image</label>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            onChange={handleImageChange}
-          />
-          {imagePreview && (
-            <img src={imagePreview} alt="Preview" className="image-preview" />
-          )}
-        </div>
-
-        <div className="form-group">
-          <label>Website</label>
-          <input
-            type="url"
-            value={formData.website}
-            onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
-            placeholder="https://mytoken.com"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Twitter</label>
-          <input
-            type="text"
-            value={formData.twitter}
-            onChange={(e) => setFormData(prev => ({ ...prev, twitter: e.target.value }))}
-            placeholder="@mytoken"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Dev Buy Amount (ETH)</label>
-          <input
-            type="number"
-            value={formData.initialBuyEth}
-            onChange={(e) => setFormData(prev => ({ ...prev, initialBuyEth: e.target.value }))}
-            step="0.0001"
-            min="0"
-            max="1"
-          />
-          <small>Amount of ETH to swap for your token on launch</small>
-        </div>
-
-        <button type="submit" disabled={isLaunching}>
-          {isLaunching ? 'Launching...' : 'Launch Token'}
-        </button>
-      </form>
-
-      {/* Progress Display */}
-      {progress.status !== 'idle' && (
-        <div className={`progress-panel ${progress.status}`}>
-          <div className="progress-header">
-            <span className="status-badge">{progress.status.toUpperCase()}</span>
-            <span className="step-counter">Step {progress.step}/{progress.totalSteps}</span>
-          </div>
-
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${(progress.step / progress.totalSteps) * 100}%` }}
-            />
-          </div>
-
-          <p className="progress-message">{progress.message}</p>
-
-          {progress.error && (
-            <div className="error-message">{progress.error}</div>
-          )}
-
-          {progress.status === 'complete' && progress.data && (
-            <div className="success-links">
-              <h4>Token Launched!</h4>
-              <p>Address: <code>{progress.data.tokenAddress}</code></p>
-              <div className="links">
-                <a href={progress.data.dexscreener} target="_blank" rel="noopener noreferrer">
-                  View on Dexscreener
-                </a>
-                <a href={progress.data.basescan} target="_blank" rel="noopener noreferrer">
-                  View on Basescan
-                </a>
+      {/* Step 1: Upload & Verify */}
+      {step === "upload" && (
+        <div className="space-y-4">
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+            {imagePreview ? (
+              <div>
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-w-xs mx-auto mb-4 rounded"
+                />
+                <button
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  Remove Image
+                </button>
               </div>
+            ) : (
+              <div>
+                <p className="mb-2">Select an image for your token</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  PNG, JPG, GIF, or WebP (max 1MB)
+                </p>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                >
+                  Choose Image
+                </label>
+              </div>
+            )}
+          </div>
+
+          {imageFile && (
+            <button
+              onClick={handleVerify}
+              disabled={isLoading}
+              className="w-full bg-green-500 text-white px-4 py-3 rounded-lg hover:bg-green-600 disabled:bg-gray-400"
+            >
+              {isLoading ? "Processing..." : `Verify Image ($${X402_CONFIG.VERIFY_PRICE_USDC} USDC)`}
+            </button>
+          )}
+
+          <p className="text-sm text-gray-500 text-center">
+            Verification costs ${X402_CONFIG.VERIFY_PRICE_USDC} USDC. Your image will be
+            checked against the AppleSnakes art style.
+          </p>
+        </div>
+      )}
+
+      {/* Step 1b: Verifying */}
+      {step === "verifying" && (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-lg">Verifying your image...</p>
+          <p className="text-sm text-gray-500">Please confirm the transaction in your wallet</p>
+        </div>
+      )}
+
+      {/* Step 2: Verified - Enter Token Details */}
+      {step === "verified" && verifyResult && (
+        <div className="space-y-6">
+          {/* Verification Success */}
+          <div className="bg-green-100 border border-green-400 p-4 rounded">
+            <h3 className="font-bold text-green-700 mb-2">Image Verified!</h3>
+            <p className="text-green-600">
+              Confidence: {verifyResult.confidence}%
+            </p>
+            <p className="text-sm text-green-600">{verifyResult.reason}</p>
+            {verifyResult.hasCuteFace && (
+              <p className="text-sm text-green-600 mt-1">
+                Cute face bonus applied! (+10 points)
+              </p>
+            )}
+          </div>
+
+          {/* Show IPFS Image */}
+          {verifiedIpfsUrl && (
+            <div className="text-center">
+              <img
+                src={verifiedIpfsUrl}
+                alt="Verified"
+                className="max-w-xs mx-auto rounded shadow"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Stored on IPFS
+              </p>
             </div>
           )}
 
-          {(progress.status === 'complete' || progress.status === 'error') && (
-            <button onClick={reset} className="reset-button">
-              Launch Another Token
-            </button>
-          )}
+          {/* Token Details Form */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Token Name</label>
+              <input
+                type="text"
+                value={tokenName}
+                onChange={(e) => setTokenName(e.target.value)}
+                placeholder="My Awesome Token"
+                className="w-full border rounded px-3 py-2"
+                maxLength={50}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Token Symbol</label>
+              <input
+                type="text"
+                value={tokenSymbol}
+                onChange={(e) => setTokenSymbol(e.target.value.toUpperCase())}
+                placeholder="MYTKN"
+                className="w-full border rounded px-3 py-2"
+                maxLength={10}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                2-10 characters, letters and numbers only
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Dev Buy Amount: ${launchAmount} USDC
+              </label>
+              <input
+                type="range"
+                min={1}
+                max={100}
+                value={launchAmount}
+                onChange={(e) => setLaunchAmount(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>$1 (minimum)</span>
+                <span>$100</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                This amount becomes your dev buy (minus 1% admin fee).
+                Higher amount = larger initial position.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleLaunch}
+            disabled={isLoading || !tokenName || !tokenSymbol || tokenSymbol.length < 2}
+            className="w-full bg-purple-500 text-white px-4 py-3 rounded-lg hover:bg-purple-600 disabled:bg-gray-400"
+          >
+            {isLoading ? "Processing..." : `Launch Token ($${launchAmount} USDC)`}
+          </button>
         </div>
       )}
+
+      {/* Step 2b: Launching */}
+      {step === "launching" && (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-lg">Launching your token...</p>
+          <p className="text-sm text-gray-500">This may take a minute</p>
+        </div>
+      )}
+
+      {/* Step 3: Complete */}
+      {step === "complete" && launchResult && (
+        <div className="space-y-4">
+          <div className="bg-green-100 border border-green-400 p-6 rounded text-center">
+            <h3 className="font-bold text-green-700 text-xl mb-2">
+              Token Launched!
+            </h3>
+            <p className="text-green-600 mb-4">{launchResult.message}</p>
+
+            {launchResult.result?.tokenAddress && (
+              <div className="bg-white p-3 rounded mb-4">
+                <p className="text-sm text-gray-500">Token Address:</p>
+                <p className="font-mono text-sm break-all">
+                  {launchResult.result.tokenAddress}
+                </p>
+                <a
+                  href={`https://basescan.org/token/${launchResult.result.tokenAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:underline text-sm"
+                >
+                  View on BaseScan
+                </a>
+              </div>
+            )}
+
+            {launchResult.token.imageUrl && (
+              <img
+                src={launchResult.token.imageUrl}
+                alt={launchResult.token.name}
+                className="max-w-32 mx-auto rounded"
+              />
+            )}
+          </div>
+
+          <button
+            onClick={handleReset}
+            className="w-full bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+          >
+            Launch Another Token
+          </button>
+        </div>
+      )}
+
+      {/* Error State */}
+      {step === "error" && (
+        <div className="text-center py-8">
+          <div className="text-red-500 text-4xl mb-4">!</div>
+          <p className="text-lg text-red-600 mb-4">{error || "Something went wrong"}</p>
+          <button
+            onClick={handleReset}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Footer Info */}
+      <div className="mt-8 p-4 bg-gray-100 rounded text-sm text-gray-600">
+        <h4 className="font-bold mb-2">How it works:</h4>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Upload an image and pay $0.50 USDC to verify it matches the art style</li>
+          <li>If verified, enter your token name and symbol</li>
+          <li>Pay $1-100 USDC - this becomes your dev buy budget</li>
+          <li>Your token is launched on Base via Clanker, paired with WASS</li>
+        </ol>
+      </div>
     </div>
   );
 }
 ```
 
----
-
-### CSS Styles
-
-```css
-.token-launch-form {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 4px;
-  font-weight: 600;
-  color: #e0e0e0;
-}
-
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #333;
-  border-radius: 8px;
-  background: #1a1a2e;
-  color: white;
-  font-size: 14px;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #6366f1;
-}
-
-.form-group small {
-  display: block;
-  margin-top: 4px;
-  color: #888;
-  font-size: 12px;
-}
-
-.image-preview {
-  width: 100px;
-  height: 100px;
-  object-fit: cover;
-  border-radius: 8px;
-  margin-top: 8px;
-}
-
-button[type="submit"] {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-button[type="submit"]:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-button[type="submit"]:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-/* Progress Panel */
-.progress-panel {
-  margin-top: 24px;
-  padding: 20px;
-  background: #1a1a2e;
-  border-radius: 12px;
-  border: 1px solid #333;
-}
-
-.progress-panel.complete {
-  border-color: #22c55e;
-}
-
-.progress-panel.error {
-  border-color: #ef4444;
-}
-
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.progress-panel.pending .status-badge { background: #333; color: #888; }
-.progress-panel.uploading .status-badge { background: #3b82f620; color: #3b82f6; }
-.progress-panel.deploying .status-badge { background: #8b5cf620; color: #8b5cf6; }
-.progress-panel.confirming .status-badge { background: #eab30820; color: #eab308; }
-.progress-panel.complete .status-badge { background: #22c55e20; color: #22c55e; }
-.progress-panel.error .status-badge { background: #ef444420; color: #ef4444; }
-
-.step-counter {
-  color: #888;
-  font-size: 14px;
-}
-
-.progress-bar {
-  height: 8px;
-  background: #333;
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  transition: width 0.3s ease;
-}
-
-.progress-message {
-  color: #e0e0e0;
-  margin: 0;
-}
-
-.error-message {
-  margin-top: 12px;
-  padding: 12px;
-  background: #ef444420;
-  border-radius: 8px;
-  color: #ef4444;
-}
-
-.success-links {
-  margin-top: 16px;
-}
-
-.success-links h4 {
-  color: #22c55e;
-  margin: 0 0 8px 0;
-}
-
-.success-links code {
-  display: block;
-  padding: 8px;
-  background: #333;
-  border-radius: 4px;
-  font-size: 12px;
-  word-break: break-all;
-  margin-bottom: 12px;
-}
-
-.success-links .links {
-  display: flex;
-  gap: 12px;
-}
-
-.success-links a {
-  flex: 1;
-  padding: 10px;
-  background: #333;
-  color: #6366f1;
-  text-decoration: none;
-  text-align: center;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.success-links a:hover {
-  background: #444;
-}
-
-.reset-button {
-  width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  background: transparent;
-  border: 1px solid #333;
-  color: #888;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.reset-button:hover {
-  border-color: #666;
-  color: #e0e0e0;
-}
-```
-
----
-
-## Error Handling
-
-### Common Errors
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| "Token name and symbol required" | Missing required fields | Ensure name and symbol are provided |
-| "No file provided" | Upload action without file | Include file in FormData |
-| "Filebase credentials not configured" | Missing env vars | Set `FILEBASE_ROOTKEY_KEY` and `FILEBASE_ROOTKEY_SECRET` |
-| "Private key required" | Missing wallet key | Set `ADMIN_WALLET` environment variable |
-| "Insufficient ETH" | Wallet lacks funds | Fund the launcher wallet |
-
-### Retry Strategy
+### 5. Wagmi Configuration
 
 ```typescript
-async function launchWithRetry(params: LaunchParams, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await launchToken(params);
-      if (result.success) return result;
+// lib/wagmi-config.ts
 
-      // Don't retry on validation errors
-      if (result.error?.includes('required')) throw new Error(result.error);
+import { http, createConfig } from "wagmi";
+import { base } from "wagmi/chains";
+import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
 
-      console.log(`Attempt ${attempt} failed, retrying...`);
-      await new Promise(r => setTimeout(r, 2000 * attempt));
-    } catch (error) {
-      if (attempt === maxRetries) throw error;
-    }
-  }
+export const config = createConfig({
+  chains: [base],
+  connectors: [
+    injected(),
+    coinbaseWallet({ appName: "Token Launcher" }),
+    walletConnect({ projectId: "YOUR_WALLETCONNECT_PROJECT_ID" }),
+  ],
+  transports: {
+    [base.id]: http(),
+  },
+});
+```
+
+### 6. App Provider Setup
+
+```tsx
+// app/providers.tsx
+
+"use client";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { config } from "@/lib/wagmi-config";
+
+const queryClient = new QueryClient();
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
 }
 ```
 
----
+### 7. Layout Setup
 
-## Best Practices
+```tsx
+// app/layout.tsx
 
-1. **Validate inputs client-side** before sending to API
-2. **Show progress feedback** using SSE stream for better UX
-3. **Handle all error states** gracefully with clear messages
-4. **Use FormData** for file uploads (not base64 for large images)
-5. **Set reasonable dev buy amounts** (0.0001-0.01 ETH recommended)
-6. **Preview images** before upload to catch issues early
-7. **Test with small amounts** before launching production tokens
+import { Providers } from "./providers";
 
----
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+```
 
-## Configuration Reference
+### 8. Page
 
-### Token Launch Defaults
-| Setting | Value | Description |
-|---------|-------|-------------|
-| Pair Token | WASS | All tokens pair with WASS |
-| Starting Tick | -276200 | ~$10 market cap |
-| Dev Buy | 0.0001 ETH | Default initial purchase |
-| Pool Fee | 0.3% + 0.7% hook | Standard Clanker + wASSBLASTER fees |
+```tsx
+// app/launcher/page.tsx
 
-### Image Requirements
-| Setting | Value |
-|---------|-------|
-| Max Size | 5MB recommended |
-| Formats | PNG, JPG, GIF, WebP |
-| Recommended Size | 512x512 or 1024x1024 |
-| Storage | IPFS via Filebase |
+import { TokenLauncher } from "@/components/TokenLauncher";
+
+export default function LauncherPage() {
+  return (
+    <main className="min-h-screen py-8">
+      <TokenLauncher />
+    </main>
+  );
+}
+```
+
+## Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SIMPLE PAYMENT FLOW                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  1. USER SELECTS IMAGE                                          │
+│     └── Frontend validates size/type                            │
+│                                                                  │
+│  2. CLICK "VERIFY IMAGE ($0.50)"                                │
+│     ├── POST /verify with image data                            │
+│     ├── Server returns 402 Payment Required                     │
+│     │   {                                                        │
+│     │     "accepts": [{                                          │
+│     │       "payTo": "0xE5E9108B...",                           │
+│     │       "maxAmountRequired": "500000"                        │
+│     │     }]                                                     │
+│     │   }                                                        │
+│     ├── Frontend calls USDC.transfer(payTo, 500000)             │
+│     ├── User confirms tx in wallet                               │
+│     ├── Frontend waits for tx confirmation                       │
+│     └── Frontend retries POST with payment headers:              │
+│         X-Payment-Amount: "0.50"                                 │
+│         X-Payment-Tx-Hash: "0x..."                               │
+│         X-Payment-From: "0x..."                                  │
+│                                                                  │
+│  3. SERVER VERIFIES IMAGE                                       │
+│     ├── Checks payment headers                                   │
+│     ├── AI checks image against AppleSnakes style               │
+│     ├── If confidence >= 70%: uploads to temp storage           │
+│     └── Returns ipfsUrl for preview                             │
+│                                                                  │
+│  4. USER ENTERS TOKEN DETAILS                                   │
+│     ├── Token name                                               │
+│     ├── Token symbol                                             │
+│     └── Dev buy amount ($1-100 USDC)                            │
+│                                                                  │
+│  5. CLICK "LAUNCH TOKEN ($X)"                                   │
+│     ├── Same 402 → pay → retry flow                             │
+│     └── Server launches token via Clanker                       │
+│                                                                  │
+│  6. TOKEN LAUNCHED!                                             │
+│     └── Returns token address, IPFS image URL                   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Testing Checklist
+
+1. **Wallet Connection**
+   - [ ] Can connect with MetaMask
+   - [ ] Can connect with Coinbase Wallet
+   - [ ] Shows correct address
+
+2. **Image Upload**
+   - [ ] Rejects files > 1MB
+   - [ ] Rejects non-image files
+   - [ ] Shows preview correctly
+
+3. **Verification Flow**
+   - [ ] 402 response received
+   - [ ] Wallet prompts for USDC payment
+   - [ ] Payment succeeds on Base
+   - [ ] Retry request with headers succeeds
+   - [ ] IPFS URL displayed
+
+4. **Launch Flow**
+   - [ ] Can enter token name/symbol
+   - [ ] Slider changes amount correctly
+   - [ ] Payment executes
+   - [ ] Token address returned
+
+## Common Issues
+
+### "X-PAYMENT header is required"
+This is expected on the first request! It means the 402 flow is working.
+Your code should then:
+1. Pay USDC via `transfer()`
+2. Retry with `X-Payment-*` headers
+
+### "Invalid payment amount"
+- The X-Payment-Amount header is missing or zero
+- Make sure it's a positive number string like "0.50" or "5.00"
+
+### "Address is invalid" (viem error)
+- The payTo address has wrong checksum
+- Use exactly: `0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098`
+
+### "Failed to fetch"
+- CORS issue or network error
+- Check browser console for details
+- Ensure API_BASE_URL is correct
+
+### "Insufficient USDC balance"
+- User doesn't have enough USDC on Base
+- Need at least $0.50 for verify, $1+ for launch
+
+### "nonce validation error"
+**DO NOT use the X-PAYMENT base64 header format** - it requires a complex EIP-3009 signature.
+Instead, use the simple `X-Payment-*` headers:
+- `X-Payment-Amount`: "0.50"
+- `X-Payment-Tx-Hash`: "0x..."
+- `X-Payment-From`: "0x..."
+
+## Alternative: Minimal Implementation
+
+If the hook is too complex, here's the absolute minimum:
+
+```typescript
+async function verifyImageSimple(imageFile: File, walletAddress: string, walletClient: any) {
+  const API = "http://ec2-34-217-202-250.us-west-2.compute.amazonaws.com:3000";
+  const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const PAY_TO = "0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098";
+
+  // 1. Convert image to base64
+  const base64 = await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.readAsDataURL(imageFile);
+  });
+
+  // 2. Make initial request (will get 402)
+  const initial = await fetch(`${API}/api/verified-launcher/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ imageData: base64, walletAddress, contentType: imageFile.type })
+  });
+
+  if (initial.status !== 402) {
+    return initial.json();
+  }
+
+  // 3. Pay 0.50 USDC (500000 units) via direct transfer
+  const txHash = await walletClient.writeContract({
+    address: USDC,
+    abi: [{
+      name: "transfer",
+      type: "function",
+      stateMutability: "nonpayable",
+      inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+      outputs: [{ type: "bool" }]
+    }],
+    functionName: "transfer",
+    args: [PAY_TO, BigInt(500000)]
+  });
+
+  // 4. Wait for confirmation
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+  // 5. Retry with SIMPLE payment headers (NOT X-PAYMENT base64!)
+  const retry = await fetch(`${API}/api/verified-launcher/verify`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Payment-Amount": "0.50",
+      "X-Payment-Tx-Hash": txHash,
+      "X-Payment-From": walletAddress
+    },
+    body: JSON.stringify({ imageData: base64, walletAddress, contentType: imageFile.type })
+  });
+
+  return retry.json();
+}
+```
+
+## Why Not Use X-PAYMENT Header?
+
+The X-PAYMENT header uses EIP-3009 `TransferWithAuthorization` which requires:
+1. A 32-byte hex nonce (e.g., `0x1234...5678` with 64 hex chars)
+2. EIP-712 typed data signature
+3. Specific field formats validated by regex
+
+This is complex to implement correctly. The simple approach with `X-Payment-*` headers:
+- Uses a direct USDC `transfer()`
+- Passes proof via simple string headers
+- Works with the backend's fallback verification
+
+**Use the simple approach unless you have a specific need for EIP-3009.**

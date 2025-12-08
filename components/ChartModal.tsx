@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance, useSendCalls, useCallsStatus } from 'wagmi';
 import { parseEther, formatEther, formatUnits, parseUnits, encodeFunctionData, maxUint160 } from 'viem';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, UNIVERSAL_ROUTER_ADDRESS, PERMIT2_ADDRESS, TOKEN_PAIRS, getDefaultPair, getAllTokenAddresses, ETH_ADDRESS, TokenPairConfig, WASS_TOKEN_ADDRESS, HOOK_ADDRESS, POOL_CONFIG, STATE_VIEW_ADDRESS } from '@/config';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, UNIVERSAL_ROUTER_ADDRESS, PERMIT2_ADDRESS, TOKEN_PAIRS, getDefaultPair, getTokenPairById, getAllTokenAddresses, ETH_ADDRESS, TokenPairConfig, WASS_TOKEN_ADDRESS, HOOK_ADDRESS, POOL_CONFIG, STATE_VIEW_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useMultipleTokenInfo, TokenInfo } from '@/hooks/useTokenInfo';
+import { PoolTrade, formatRelativeTime, truncateAddress } from '@/hooks/usePoolTrades';
 
 // V4 Command constants for Universal Router
 const V4_SWAP = 0x10; // V4_SWAP command
@@ -65,6 +66,13 @@ interface ChartModalProps {
   isOpen: boolean;
   onClose: () => void;
   tokenPrice?: string;
+  embedded?: boolean;
+  layout?: 'vertical' | 'horizontal';
+  onPairChange?: (poolAddress: string) => void;
+  onSwapComplete?: () => void;
+  trades?: PoolTrade[];
+  tradesLoading?: boolean;
+  selectedPairId?: string; // External control of selected pair
 }
 
 type TimeFrame = '5m' | '15m' | '1h' | '4h' | '1d';
@@ -79,7 +87,7 @@ interface OHLCVData {
   volume: number;
 }
 
-export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
+export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layout = 'vertical', onPairChange, onSwapComplete, trades = [], tradesLoading = false, selectedPairId }: ChartModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
   const contracts = getContracts(base.id);
@@ -134,6 +142,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
   const [timeFrame, setTimeFrame] = useState<TimeFrame>('1h');
   const [priceChange, setPriceChange] = useState<{ value: number; percent: number } | null>(null);
 
+  // Fast polling mode - increased refresh rate after swaps for faster chart updates
+  const [fastPollingUntil, setFastPollingUntil] = useState<number>(0);
+  const lastSwapPriceRef = useRef<number | null>(null);
+  // Track if initial chart data has been loaded (for incremental updates)
+  const hasInitialDataRef = useRef<boolean>(false);
+  const lastDataRef = useRef<OHLCVData[]>([]);
+
   // Price changes for all pairs (for dropdown sorting and display)
   const [allPairChanges, setAllPairChanges] = useState<Map<string, number>>(new Map());
 
@@ -173,9 +188,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
   // Reset to default pair when modal opens
   useEffect(() => {
     if (isOpen) {
-      setSelectedPair(getDefaultPair());
+      const defaultPair = getDefaultPair();
+      setSelectedPair(defaultPair);
       setIsPairDropdownOpen(false);
+      // Notify parent of initial pool for trade history
+      if (defaultPair.geckoPoolAddress) {
+        onPairChange?.(defaultPair.geckoPoolAddress);
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Detect smart wallet (contract account) for batched transactions
@@ -271,6 +292,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
     setSelectedPair(pair);
     setIsPairDropdownOpen(false);
     setPriceChange(null);
+    // Notify parent of pool change for trade history
+    if (pair.geckoPoolAddress) {
+      onPairChange?.(pair.geckoPoolAddress);
+    }
     setInputAmount('');
     setOutputAmount('');
     // Reset approval state when switching pairs (force re-check)
@@ -286,6 +311,17 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
       chartRef.current.timeScale().resetTimeScale();
     }
   };
+
+  // Watch for external pair selection changes (from sidebar)
+  useEffect(() => {
+    if (selectedPairId && selectedPairId !== selectedPair.id) {
+      const pair = getTokenPairById(selectedPairId);
+      if (pair) {
+        handlePairSelect(pair);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPairId]);
 
   // Get ETH balance
   const { data: ethBalanceData } = useBalance({
@@ -361,7 +397,16 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
       setOutputAmount('');
       setBatchCallId(null);
       setApprovalStep('none');
+      // Enable fast polling mode for faster chart updates after swap
+      enableFastPolling();
+      // Apply optimistic chart update with last known price
+      if (lastSwapPriceRef.current) {
+        applyOptimisticUpdate(lastSwapPriceRef.current);
+      }
+      // Notify parent to refresh trade history
+      onSwapComplete?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callsStatus, batchCallId, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance]);
 
   // Fetch pool key on mount
@@ -510,6 +555,36 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
     })).reverse();
   }, []);
 
+  // Apply optimistic update to chart after swap - immediately shows trade impact
+  const applyOptimisticUpdate = useCallback((swapPrice: number | null) => {
+    if (!seriesRef.current || !swapPrice) return;
+
+    // Get current data from series
+    const series = seriesRef.current as ISeriesApi<'Candlestick'>;
+
+    // Use series.update() to modify the last candle with the new price
+    // This creates an instant visual update while waiting for GeckoTerminal to index
+    const now = Math.floor(Date.now() / 1000);
+    const lastCandleTime = now - (now % 3600); // Round to current hour
+
+    // Update the current candle to show price impact
+    series.update({
+      time: lastCandleTime as Time,
+      open: swapPrice,
+      high: swapPrice,
+      low: swapPrice,
+      close: swapPrice,
+    });
+
+    // Scroll to show the update
+    chartRef.current?.timeScale().scrollToRealTime();
+  }, []);
+
+  // Enable fast polling mode for 30 seconds after a swap
+  const enableFastPolling = useCallback(() => {
+    setFastPollingUntil(Date.now() + 30000); // 30 seconds of fast polling
+  }, []);
+
   // Initialize chart
   useEffect(() => {
     if (!isOpen || !chartContainerRef.current) return;
@@ -586,15 +661,21 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
     };
   }, [isOpen]);
 
+  // Reset initial data flag when pair or timeframe changes
+  useEffect(() => {
+    hasInitialDataRef.current = false;
+    lastDataRef.current = [];
+  }, [selectedPair.geckoPoolAddress, timeFrame]);
+
   // Fetch and update data when timeframe or selected pair changes
   useEffect(() => {
     if (!isOpen || !seriesRef.current) return;
 
-    const loadData = async () => {
+    // Initial load - full data replacement with loading state
+    const loadInitialData = async () => {
       setIsLoading(true);
       setError(null);
 
-      // Check if pool has chart data available
       if (!selectedPair.geckoPoolAddress) {
         setError('Chart data not yet available for this pair');
         setIsLoading(false);
@@ -607,6 +688,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
 
         if (data.length === 0) {
           setError('No data available');
+          setIsLoading(false);
           return;
         }
 
@@ -620,6 +702,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
 
         seriesRef.current?.setData(chartData);
         chartRef.current?.timeScale().fitContent();
+        hasInitialDataRef.current = true;
+        lastDataRef.current = data;
 
         if (data.length >= 2) {
           const firstPrice = data[0].open;
@@ -627,6 +711,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
           const change = lastPrice - firstPrice;
           const percentChange = (change / firstPrice) * 100;
           setPriceChange({ value: change, percent: percentChange });
+          lastSwapPriceRef.current = lastPrice;
         }
       } catch (err) {
         console.error('Error fetching chart data:', err);
@@ -636,10 +721,79 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
       }
     };
 
-    loadData();
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
-  }, [isOpen, timeFrame, selectedPair, fetchOHLCVData]);
+    // Incremental update - use series.update() to avoid flicker
+    // Per TradingView docs: https://tradingview.github.io/lightweight-charts/tutorials/demos/realtime-updates
+    const updateData = async () => {
+      if (!selectedPair.geckoPoolAddress || !hasInitialDataRef.current) return;
+
+      try {
+        const data = await fetchOHLCVData(timeFrame, selectedPair.geckoPoolAddress);
+        if (data.length === 0) return;
+
+        const series = seriesRef.current as ISeriesApi<'Candlestick'>;
+        if (!series) return;
+
+        // Compare with last data to find new/updated candles
+        const lastData = lastDataRef.current;
+
+        // Find candles that are new or updated (same time but different values)
+        for (const item of data) {
+          const existingCandle = lastData.find(d => d.time === item.time);
+
+          if (!existingCandle ||
+              existingCandle.close !== item.close ||
+              existingCandle.high !== item.high ||
+              existingCandle.low !== item.low) {
+            // Use series.update() for incremental updates - no flicker!
+            series.update({
+              time: item.time as Time,
+              open: item.open,
+              high: item.high,
+              low: item.low,
+              close: item.close,
+            });
+          }
+        }
+
+        // Store for next comparison
+        lastDataRef.current = data;
+
+        // Update price change display
+        if (data.length >= 2) {
+          const firstPrice = data[0].open;
+          const lastPrice = data[data.length - 1].close;
+          const change = lastPrice - firstPrice;
+          const percentChange = (change / firstPrice) * 100;
+          setPriceChange({ value: change, percent: percentChange });
+          lastSwapPriceRef.current = lastPrice;
+        }
+      } catch (err) {
+        // Silent fail for background updates - don't disrupt UI
+        console.warn('Background chart update failed:', err);
+      }
+    };
+
+    // Load initial data
+    loadInitialData();
+
+    // Dynamic polling interval: 2s when fast polling (after swap), 5s normally
+    const getPollingInterval = () => {
+      const isFastPolling = Date.now() < fastPollingUntil;
+      return isFastPolling ? 2000 : 5000;
+    };
+
+    // Use incremental updates for polling (no flicker)
+    let timeoutId: NodeJS.Timeout;
+    const scheduleNext = () => {
+      timeoutId = setTimeout(() => {
+        updateData(); // Use incremental update, not full reload
+        scheduleNext();
+      }, getPollingInterval());
+    };
+    scheduleNext();
+
+    return () => clearTimeout(timeoutId);
+  }, [isOpen, timeFrame, selectedPair, fetchOHLCVData, fastPollingUntil]);
 
   // Fetch quote when input changes
   useEffect(() => {
@@ -957,7 +1111,16 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
       setInputAmount('');
       setOutputAmount('');
       setTimeout(() => resetWrite(), 2000);
+      // Enable fast polling mode for faster chart updates after swap
+      enableFastPolling();
+      // Apply optimistic chart update with last known price
+      if (lastSwapPriceRef.current) {
+        applyOptimisticUpdate(lastSwapPriceRef.current);
+      }
+      // Notify parent to refresh trade history
+      onSwapComplete?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSuccess, txHash, updateTransaction, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance, resetWrite]);
 
   // Reset on transaction error/cancel to allow retry immediately
@@ -1693,7 +1856,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
     }
   };
 
-  if (!isOpen) return null;
+  // In embedded mode, always render (not controlled by isOpen)
+  if (!isOpen && !embedded) return null;
 
   const timeFrameButtons: { value: TimeFrame; label: string }[] = [
     { value: '5m', label: '5M' },
@@ -1707,32 +1871,731 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
   const canBuy = address && inputAmount && parseFloat(inputAmount) > 0 && parseFloat(inputAmount) <= parseFloat(ethBalance);
   const canSell = address && inputAmount && parseFloat(inputAmount) > 0 && parseFloat(inputAmount) <= parseFloat(sellBalance);
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
+  // Determine if using horizontal layout (swap left, chart right)
+  const isHorizontal = layout === 'horizontal' && embedded;
 
-      {/* Modal Container */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+  // Content wrapper - different styles for embedded vs modal
+  const contentDiv = (
+    <div
+      className={embedded ? "h-full w-full flex" : "pointer-events-auto w-full flex flex-col"}
+      style={{
+        ...(embedded ? {} : { maxWidth: '500px', maxHeight: '90vh' }),
+        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.03), rgba(17, 24, 39, 0.98), rgba(16, 185, 129, 0.03))',
+        backgroundColor: 'rgba(10, 15, 20, 0.98)',
+        ...(embedded ? {} : {
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: '12px',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 0 40px rgba(16, 185, 129, 0.15)',
+        }),
+        overflow: 'hidden',
+        flexDirection: isHorizontal ? 'row' : 'column',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Horizontal Layout: Swap Panel (LEFT) */}
+      {isHorizontal && (
         <div
-          className="pointer-events-auto w-full flex flex-col"
-          style={{
-            maxWidth: '500px',
-            maxHeight: '90vh',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.03), rgba(17, 24, 39, 0.98), rgba(16, 185, 129, 0.03))',
-            backgroundColor: 'rgba(10, 15, 20, 0.98)',
-            border: '1px solid rgba(16, 185, 129, 0.25)',
-            borderRadius: '12px',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 0 40px rgba(16, 185, 129, 0.15)',
-            overflow: 'hidden',
-          }}
-          onClick={(e) => e.stopPropagation()}
+          className="flex-shrink-0 flex flex-col border-r border-emerald-900/30 overflow-y-auto overflow-x-hidden"
+          style={{ width: '340px', maxWidth: '40%' }}
         >
-          {/* Header */}
+          {/* Swap Header */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              borderBottom: '1px solid rgba(16, 185, 129, 0.15)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Token Pair Dropdown */}
+              <div ref={pairDropdownRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setIsPairDropdownOpen(!isPairDropdownOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    background: isPairDropdownOpen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{getPairDisplayName(selectedPair)}</span>
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="rgba(16, 185, 129, 0.8)"
+                    strokeWidth="2"
+                    style={{
+                      transform: isPairDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.15s ease',
+                    }}
+                  >
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+
+                {/* Dropdown Menu */}
+                {isPairDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: 4,
+                      minWidth: 160,
+                      background: 'rgba(15, 20, 25, 0.98)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: 8,
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                      zIndex: 100,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {[...TOKEN_PAIRS]
+                      .sort((a, b) => {
+                        if (a.isDefault && !b.isDefault) return -1;
+                        if (!a.isDefault && b.isDefault) return 1;
+                        const aChange = allPairChanges.get(a.id) || 0;
+                        const bChange = allPairChanges.get(b.id) || 0;
+                        return bChange - aChange;
+                      })
+                      .map((pair) => {
+                        const pairChange = allPairChanges.get(pair.id);
+                        return (
+                          <button
+                            key={pair.id}
+                            onClick={() => handlePairSelect(pair)}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '10px 12px',
+                              background: selectedPair.id === pair.id ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s ease',
+                            }}
+                          >
+                            <span style={{ fontSize: 13, fontWeight: 600, color: selectedPair.id === pair.id ? '#10b981' : '#fff' }}>
+                              {getPairDisplayName(pair)}
+                            </span>
+                            {pairChange !== undefined && (
+                              <span style={{ fontSize: 11, fontWeight: 500, color: pairChange >= 0 ? '#10b981' : '#ef4444' }}>
+                                {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>Swap</span>
+          </div>
+
+          {/* Swap Section - in horizontal left panel */}
+          <div style={{ padding: '16px', flex: 1, overflow: 'hidden' }}>
+            {/* Buy/Sell Tabs */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+              <button
+                onClick={() => { setSwapTab('buy'); setInputAmount(''); setOutputAmount(''); }}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: swapTab === 'buy' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                  color: swapTab === 'buy' ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                }}
+              >
+                Buy
+              </button>
+              <button
+                onClick={() => { setSwapTab('sell'); setInputAmount(''); setOutputAmount(''); }}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: swapTab === 'sell' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                  color: swapTab === 'sell' ? '#ef4444' : 'rgba(255, 255, 255, 0.5)',
+                }}
+              >
+                Sell
+              </button>
+            </div>
+
+            {/* Input */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+                <span>You Pay</span>
+                <span>
+                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)} {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 10,
+              }}>
+                <input
+                  type="number"
+                  value={inputAmount}
+                  onChange={(e) => setInputAmount(e.target.value)}
+                  placeholder="0.0"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: '#fff',
+                    fontSize: 18,
+                    fontWeight: 500,
+                  }}
+                />
+                <button
+                  onClick={handleMaxInput}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: 'none',
+                    borderRadius: 4,
+                    color: '#10b981',
+                    cursor: 'pointer',
+                  }}
+                >
+                  MAX
+                </button>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
+                  {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                </span>
+              </div>
+            </div>
+
+            {/* Arrow */}
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
+              <div style={{ padding: 6, background: 'rgba(255, 255, 255, 0.05)', borderRadius: '50%' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                  <path d="M12 5v14M19 12l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Output */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+                <span>You Receive</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 10,
+              }}>
+                <span style={{
+                  flex: 1,
+                  color: isQuoting ? 'rgba(255, 255, 255, 0.4)' : '#fff',
+                  fontSize: 18,
+                  fontWeight: 500,
+                }}>
+                  {isQuoting ? 'Loading...' : outputAmount || '0.0'}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
+                  {swapTab === 'buy' ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS') : (isTokenPair ? 'wASS' : 'ETH')}
+                </span>
+              </div>
+            </div>
+
+            {/* Error */}
+            {(swapError || writeError) && (
+              <div style={{
+                marginBottom: 12,
+                padding: 10,
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#ef4444',
+                textAlign: 'center',
+              }}>
+                {swapError || (writeError?.message?.includes('User rejected') ? 'Transaction cancelled' : 'Transaction failed')}
+              </div>
+            )}
+
+            {/* Action Button */}
+            {swapTab === 'buy' ? (
+              !address ? (
+                <div style={{
+                  padding: 14,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderRadius: 10,
+                  fontSize: 14,
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  textAlign: 'center',
+                }}>
+                  Connect wallet to buy
+                </div>
+              ) : (
+                <button
+                  onClick={handleBuy}
+                  disabled={isBusy || isQuoting || !canBuy}
+                  style={{
+                    width: '100%',
+                    padding: 14,
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    border: 'none',
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
+                    opacity: !canBuy ? 0.5 : 1,
+                  }}
+                >
+                  {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+                </button>
+              )
+            ) : !address ? (
+              <div style={{
+                padding: 14,
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 10,
+                fontSize: 14,
+                color: 'rgba(255, 255, 255, 0.5)',
+                textAlign: 'center',
+              }}>
+                Connect wallet to sell
+              </div>
+            ) : isCheckingApproval ? (
+              <button
+                disabled
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: 'rgba(107, 114, 128, 0.5)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: 'not-allowed',
+                }}
+              >
+                Checking approvals...
+              </button>
+            ) : (approvalStep === 'permit2' || approvalStep === 'router') && isSmartWallet ? (
+              <button
+                onClick={handleBatchedApproveAndSell}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0 || !canSell}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'linear-gradient(135deg, rgba(251, 191, 36, 0.9), rgba(239, 68, 68, 0.9))',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy || !canSell ? 'not-allowed' : 'pointer',
+                  opacity: !canSell ? 0.5 : 1,
+                }}
+              >
+                {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+              </button>
+            ) : approvalStep === 'permit2' ? (
+              <button
+                onClick={handleApprovePermit2}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : 'Step 1: Approve Token'}
+              </button>
+            ) : approvalStep === 'router' ? (
+              <button
+                onClick={handleApproveRouter}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : 'Step 2: Approve Router'}
+              </button>
+            ) : (
+              <button
+                onClick={handleSell}
+                disabled={isBusy || isQuoting || !canSell || approvalStep !== 'ready'}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(239, 68, 68, 0.8)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy || isQuoting || !canSell ? 'not-allowed' : 'pointer',
+                  opacity: !canSell ? 0.5 : 1,
+                }}
+              >
+                {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+              </button>
+            )}
+          </div>
+
+          {/* Footer for horizontal swap panel */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '10px 16px',
+              borderTop: '1px solid rgba(16, 185, 129, 0.1)',
+              fontSize: 11,
+              color: 'rgba(255, 255, 255, 0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span>Base</span>
+              <span style={{ color: 'rgba(16, 185, 129, 0.4)' }}>•</span>
+              <code
+                style={{
+                  padding: '2px 5px',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  borderRadius: 3,
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  color: 'rgba(16, 185, 129, 0.6)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => navigator.clipboard.writeText(contracts.token.address)}
+                title="Click to copy"
+              >
+                {contracts.token.address.slice(0, 6)}...{contracts.token.address.slice(-4)}
+              </code>
+            </div>
+            <a
+              href={`https://basescan.org/token/${contracts.token.address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'rgba(16, 185, 129, 0.6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
+            >
+              BaseScan
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Horizontal Layout: Chart Panel (RIGHT) */}
+      {isHorizontal && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Timeframe selector */}
+          <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid rgba(16, 185, 129, 0.1)', flexShrink: 0 }}>
+            {timeFrameButtons.map((tf) => (
+              <button
+                key={tf.value}
+                onClick={() => setTimeFrame(tf.value)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: timeFrame === tf.value ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                  color: timeFrame === tf.value ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                }}
+              >
+                {tf.label}
+              </button>
+            ))}
+            {/* Price display in header */}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {priceChange !== null && (
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: priceChange.percent >= 0 ? '#10b981' : '#ef4444'
+                }}>
+                  {priceChange.percent >= 0 ? '+' : ''}{priceChange.percent.toFixed(2)}%
+                </span>
+              )}
+              {tokenPrice && parseFloat(tokenPrice) > 0 && (
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                  ${parseFloat(tokenPrice).toFixed(6)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Chart Container - takes 2/3 of remaining vertical space */}
+          <div
+            ref={chartContainerRef}
+            style={{
+              flex: 2,
+              minHeight: 0,
+              position: 'relative',
+            }}
+          >
+            {isLoading && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  background: 'rgba(10, 15, 20, 0.9)',
+                  zIndex: 10,
+                }}
+              >
+                <div
+                  className="animate-spin"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    border: '3px solid rgba(16, 185, 129, 0.2)',
+                    borderTopColor: '#10b981',
+                    borderRadius: '50%',
+                  }}
+                />
+                <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 13 }}>Loading chart...</span>
+              </div>
+            )}
+            {error && !isLoading && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  background: 'rgba(10, 15, 20, 0.9)',
+                }}
+              >
+                <span style={{ color: '#ef4444', fontSize: 14 }}>{error}</span>
+                <button
+                  onClick={() => setTimeFrame(timeFrame)}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: 6,
+                    color: '#10b981',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Transaction History Section - takes 1/3 of remaining vertical space */}
+          <div
+            style={{
+              borderTop: '1px solid rgba(16, 185, 129, 0.2)',
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'linear-gradient(180deg, rgba(10, 15, 20, 0.95) 0%, rgba(5, 10, 15, 0.98) 100%)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header - compact */}
+            <div
+              style={{
+                padding: '6px 10px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(16, 185, 129, 0.05)',
+                borderBottom: '1px solid rgba(16, 185, 129, 0.1)',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)',
+                  animation: 'pulse 2s infinite',
+                }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Live Trades</span>
+              </div>
+              <span style={{
+                fontSize: 9,
+                color: 'rgba(255, 255, 255, 0.5)',
+              }}>
+                {trades.length}
+              </span>
+            </div>
+
+            {/* Scrollable content */}
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+              {tradesLoading ? (
+                <div style={{ padding: 32, textAlign: 'center' }}>
+                  <div
+                    className="animate-spin"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      margin: '0 auto 12px',
+                      border: '2px solid rgba(16, 185, 129, 0.2)',
+                      borderTopColor: '#10b981',
+                      borderRadius: '50%',
+                    }}
+                  />
+                  <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 12 }}>Loading trades...</span>
+                </div>
+              ) : trades.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: 12 }}>No recent trades</span>
+                </div>
+              ) : (
+                <div style={{ padding: '2px 0' }}>
+                  {trades.slice(0, 50).map((trade, idx) => (
+                    <a
+                      key={`${trade.txHash}-${idx}`}
+                      href={`https://basescan.org/tx/${trade.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '4px 10px',
+                        margin: '0 4px 1px',
+                        borderRadius: 4,
+                        textDecoration: 'none',
+                        transition: 'all 0.1s ease',
+                        background: trade.type === 'buy'
+                          ? 'rgba(16, 185, 129, 0.03)'
+                          : 'rgba(239, 68, 68, 0.03)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = trade.type === 'buy'
+                          ? 'rgba(16, 185, 129, 0.1)'
+                          : 'rgba(239, 68, 68, 0.1)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = trade.type === 'buy'
+                          ? 'rgba(16, 185, 129, 0.03)'
+                          : 'rgba(239, 68, 68, 0.03)';
+                      }}
+                    >
+                      {/* Type badge - compact */}
+                      <div style={{
+                        width: 34,
+                        padding: '2px 0',
+                        borderRadius: 3,
+                        textAlign: 'center',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        background: trade.type === 'buy'
+                          ? 'rgba(16, 185, 129, 0.2)'
+                          : 'rgba(239, 68, 68, 0.2)',
+                        color: trade.type === 'buy' ? '#34d399' : '#f87171',
+                        marginRight: 8,
+                        flexShrink: 0,
+                      }}>
+                        {trade.type === 'buy' ? 'BUY' : 'SELL'}
+                      </div>
+
+                      {/* Amount + USD - single line */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>
+                          {parseFloat(trade.type === 'buy' ? trade.amountOut : trade.amountIn).toLocaleString(undefined, {
+                            maximumFractionDigits: 2,
+                            minimumFractionDigits: 0
+                          })}
+                        </span>
+                        {trade.volumeUsd && parseFloat(trade.volumeUsd) > 0 && (
+                          <span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(16, 185, 129, 0.7)' }}>
+                            ${parseFloat(trade.volumeUsd).toFixed(2)}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 9, color: 'rgba(255, 255, 255, 0.4)' }}>
+                          {truncateAddress(trade.wallet)}
+                        </span>
+                      </div>
+
+                      {/* Time - compact */}
+                      <div style={{
+                        fontSize: 9,
+                        color: 'rgba(255, 255, 255, 0.35)',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                      }}>
+                        {formatRelativeTime(trade.timestamp)}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Vertical Layout: Original structure (for modal mode) */}
+      {!isHorizontal && (
+        <>
+      {/* Header */}
           <div
             style={{
               display: 'flex',
@@ -1956,13 +2819,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
                 }}
               >
                 <div
+                  className="animate-spin"
                   style={{
                     width: 24,
                     height: 24,
                     border: '2px solid rgba(16, 185, 129, 0.2)',
                     borderTopColor: '#10b981',
                     borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
                   }}
                 />
                 <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 11 }}>Loading...</span>
@@ -2330,14 +3193,29 @@ export function ChartModal({ isOpen, onClose, tokenPrice }: ChartModalProps) {
               </svg>
             </a>
           </div>
-        </div>
-      </div>
+        </>
+      )}
+    </div>
+  );
 
-      <style jsx>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+  // Embedded mode: render content directly without modal wrapper
+  if (embedded) {
+    return contentDiv;
+  }
+
+  // Modal mode: render with backdrop and centered container
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+        onClick={onClose}
+      />
+
+      {/* Modal Container */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+        {contentDiv}
+      </div>
     </>
   );
 }

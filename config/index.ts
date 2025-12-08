@@ -30,6 +30,13 @@ export {
   getDefaultPair,
   getTokenPairById,
   getAllTokenAddresses,
+  // IPNS/IPFS configuration for NFT images
+  IPNS_KEY,
+  IPNS_GATEWAY,
+  LEGACY_IPFS_GATEWAY,
+  getNFTMetadataUrl,
+  getNFTImageUrl,
+  resolveIPFSUrl,
 } from './contracts';
 
 export type { ContractConfig, ChainContracts, AppContracts } from './types';

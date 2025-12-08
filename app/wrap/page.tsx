@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, usePublicClient } from 'wagmi';
 import { formatEther, parseEther, formatUnits } from 'viem';
 import { base } from 'wagmi/chains';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI } from '@/config';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, getNFTMetadataUrl, getNFTImageUrl } from '@/config';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
@@ -143,17 +143,13 @@ export default function WrapPage() {
           }) as string;
 
           if (tokenURI) {
-            const ipfsUrl = tokenURI.replace('ipfs://', 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/');
-            const response = await fetch(ipfsUrl);
+            // Use IPNS for metadata - always gets latest version
+            const metadataUrl = getNFTMetadataUrl(nextTokenId);
+            const response = await fetch(metadataUrl);
             const metadata = await response.json();
 
-            let imageUrl = metadata.image || '';
-            if (imageUrl.startsWith('ipfs://')) {
-              imageUrl = imageUrl.replace('ipfs://', '');
-            } else if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
-              const ipfsMatch = imageUrl.match(/\/ipfs\/([^/]+)/);
-              if (ipfsMatch) imageUrl = ipfsMatch[1];
-            }
+            // Use IPNS image URL - always gets latest version
+            const imageUrl = getNFTImageUrl(nextTokenId);
 
             setFallbackImageUrl(imageUrl);
           }
@@ -757,7 +753,7 @@ export default function WrapPage() {
                 >
                   {finalNFTImageUrl ? (
                     <img
-                      src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                      src={finalNFTImageUrl}
                       alt=""
                       className="w-5 h-5 rounded-full object-cover"
                     />
@@ -894,7 +890,7 @@ export default function WrapPage() {
                           {finalNFTImageUrl ? (
                             <div className="w-20 h-20 rounded-xl overflow-hidden border-2 border-green-500/50 shadow-lg shadow-green-500/20 flex-shrink-0">
                               <img
-                                src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                                src={finalNFTImageUrl}
                                 alt={nextTokenId ? `Human #${nextTokenId}` : 'NFT Preview'}
                                 className="w-full h-full object-cover"
                               />
@@ -938,7 +934,7 @@ export default function WrapPage() {
                           <div className="flex justify-center my-4">
                             <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-green-500 shadow-lg shadow-green-500/30">
                               <img
-                                src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                                src={finalNFTImageUrl}
                                 alt={nextTokenId ? `Human #${nextTokenId}` : 'Your NFT'}
                                 className="w-full h-full object-cover"
                               />
@@ -1062,7 +1058,7 @@ export default function WrapPage() {
                         {finalNFTImageUrl ? (
                           <div className="w-32 h-32 rounded-xl overflow-hidden border-2 border-green-500/50 shadow-lg shadow-green-500/20">
                             <img
-                              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                              src={finalNFTImageUrl}
                               alt={nextTokenId ? `Human #${nextTokenId}` : 'NFT Preview'}
                               className="w-full h-full object-cover"
                             />
@@ -1138,7 +1134,7 @@ export default function WrapPage() {
                         <div className="flex justify-center my-4">
                           <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-green-500 shadow-lg shadow-green-500/30">
                             <img
-                              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                              src={finalNFTImageUrl}
                               alt={nextTokenId ? `Human #${nextTokenId}` : 'Your NFT'}
                               className="w-full h-full object-cover"
                             />
@@ -1265,7 +1261,7 @@ export default function WrapPage() {
                       {finalNFTImageUrl ? (
                         <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-gray-600 mx-auto">
                           <img
-                            src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${finalNFTImageUrl}`}
+                            src={finalNFTImageUrl}
                             alt="NFT Preview"
                             className="w-full h-full object-cover opacity-50"
                           />
@@ -1312,7 +1308,7 @@ export default function WrapPage() {
                             {/* NFT Image */}
                             <div className="aspect-square relative">
                               <img
-                                src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+                                src={nft.imageUrl}
                                 alt={nft.name}
                                 className="w-full h-full object-cover"
                               />

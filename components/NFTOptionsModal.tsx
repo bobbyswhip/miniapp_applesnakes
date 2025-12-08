@@ -229,7 +229,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
             }}
           >
             <img
-              src={`https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${nft.imageUrl}`}
+              src={nft.imageUrl}
               alt={nft.name}
               className="rounded-lg object-cover"
               style={{

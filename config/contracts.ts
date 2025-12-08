@@ -31,6 +31,72 @@ export const STATE_VIEW_ADDRESS = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71' a
 // External links
 export const OPENSEA_COLLECTION_URL = 'https://opensea.io/collection/applesnakes' as const;
 
+// ============================================================================
+// IPNS/IPFS Configuration for NFT Metadata and Images
+// ============================================================================
+// IPNS provides mutable addresses - metadata always points to latest version
+// This allows updating metadata without changing tokenURI on-chain
+// ============================================================================
+
+// IPNS key for AppleSnakes metadata (points to latest metadata folder)
+export const IPNS_KEY = 'k51qzi5uqu5diqasdnw3fydh31emy8lksdygkl4ycimvxqaj22oeekiclww6mc' as const;
+
+// Primary gateway for IPNS resolution
+export const IPNS_GATEWAY = 'https://applesnakes.myfilebase.com' as const;
+
+// Legacy IPFS gateway (for backwards compatibility with cached data)
+export const LEGACY_IPFS_GATEWAY = 'https://surrounding-amaranth-catshark.myfilebase.com' as const;
+
+/**
+ * Get NFT metadata URL via IPNS (always returns latest version)
+ * @param tokenId - The token ID
+ * @returns Full URL to the metadata JSON
+ */
+export const getNFTMetadataUrl = (tokenId: number): string => {
+  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.json`;
+};
+
+/**
+ * Get NFT image URL via IPNS (always returns latest version)
+ * @param tokenId - The token ID
+ * @returns Full URL to the image
+ */
+export const getNFTImageUrl = (tokenId: number): string => {
+  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.png`;
+};
+
+/**
+ * Convert any IPFS/IPNS URL to use our gateway
+ * Handles:
+ * - ipfs://CID/path → gateway URL
+ * - ipns://key/path → gateway URL
+ * - Already full URLs → returns as-is
+ * - Bare paths (e.g., "QmHash/1.png") → prepends gateway
+ * @param url - The URL or path to convert
+ * @returns Full gateway URL
+ */
+export const resolveIPFSUrl = (url: string): string => {
+  if (!url) return '';
+
+  // Already a full HTTP URL - return as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  // IPNS URL
+  if (url.startsWith('ipns://')) {
+    return `${IPNS_GATEWAY}/ipns/${url.replace('ipns://', '')}`;
+  }
+
+  // IPFS URL
+  if (url.startsWith('ipfs://')) {
+    return `${IPNS_GATEWAY}/ipfs/${url.replace('ipfs://', '')}`;
+  }
+
+  // Bare path (assume IPFS CID/path format)
+  return `${IPNS_GATEWAY}/ipfs/${url}`;
+};
+
 // Pool configuration for ETH/Token swap
 export const POOL_CONFIG = {
   currency0: '0x0000000000000000000000000000000000000000', // ETH

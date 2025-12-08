@@ -2,12 +2,13 @@
 
 import Image from 'next/image';
 import { useState, useEffect, memo } from 'react';
+import { IPNS_GATEWAY, IPNS_KEY } from '@/config';
 
 /**
  * NFTImage Component
  *
  * Optimized for rendering IPFS-hosted NFT images with:
- * - Dynamic base URI from contract
+ * - IPNS support for always-latest metadata
  * - Multiple gateway fallbacks for reliability
  * - Automatic retry on failure
  * - Loading states and placeholders
@@ -15,9 +16,10 @@ import { useState, useEffect, memo } from 'react';
  * - Next.js automatic optimization
  */
 
-// Multiple IPFS gateways for redundancy and speed
+// Multiple gateways for redundancy - IPNS first (always latest), then IPFS fallbacks
 const IPFS_GATEWAYS = [
-  'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/', // Project-specific gateway
+  `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/`, // IPNS gateway (always latest) - for tokenId.png format
+  `${IPNS_GATEWAY}/ipfs/`, // Project IPFS gateway
   'https://cloudflare-ipfs.com/ipfs/', // Usually fastest
   'https://ipfs.io/ipfs/',              // Most reliable
   'https://gateway.pinata.cloud/ipfs/', // Good CDN

@@ -335,7 +335,8 @@ export function useWTokensNFTsCache(
  */
 export function getWTokensImageUrl(imageUrl: string): string {
   if (!imageUrl) return '';
+  // Already a full URL - return as-is
   if (imageUrl.startsWith('http')) return imageUrl;
-  // Prepend IPFS gateway for hash-only URLs
-  return `https://surrounding-amaranth-catshark.myfilebase.com/ipfs/${imageUrl}`;
+  // Fallback to IPNS gateway for bare paths
+  return `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5diqasdnw3fydh31emy8lksdygkl4ycimvxqaj22oeekiclww6mc/${imageUrl}`;
 }

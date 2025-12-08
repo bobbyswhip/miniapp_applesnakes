@@ -163,3 +163,13 @@ body {
 .animate-chat-float {
   animation: chatFloat 3s ease-in-out infinite;
 }
+
+/* Staked NFT glowing effect */
+@keyframes stakedGlow {
+  0% {
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.3), 0 0 30px rgba(168, 85, 247, 0.1), 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(168, 85, 247, 0.5), 0 0 50px rgba(168, 85, 247, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}

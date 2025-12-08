@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useReadContract, usePublicClient } from 'wagmi';
-import { getContracts } from '@/config';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl } from '@/config';
 import { base } from 'wagmi/chains';
 import type { UserNFT } from './useUserNFTs';
 
@@ -154,14 +154,14 @@ export function useWTokensNFTs(startAfterUserLoad = true, userNFTsLoading = fals
               }
             });
 
-            // Fetch metadata from IPFS in parallel
+            // Fetch metadata from IPNS in parallel (always gets latest version)
             const batchPromises = batch.map(async (tokenInfo) => {
               try {
-                const tokenURI = tokenURIMap.get(Number(tokenInfo.tokenId));
-                if (!tokenURI) return null;
+                const tokenId = Number(tokenInfo.tokenId);
 
-                const ipfsUrl = tokenURI.replace('ipfs://', 'https://surrounding-amaranth-catshark.myfilebase.com/ipfs/');
-                const response = await fetch(ipfsUrl);
+                // Use IPNS for metadata - always gets latest version
+                const metadataUrl = getNFTMetadataUrl(tokenId);
+                const response = await fetch(metadataUrl);
                 const metadata = await response.json();
 
                 let nftType: 'human' | 'snake' | 'warden' | 'egg' = 'human';
@@ -169,18 +169,13 @@ export function useWTokensNFTs(startAfterUserLoad = true, userNFTsLoading = fals
                 else if (tokenInfo.isSnake) nftType = 'snake';
                 else if (tokenInfo.ownerIsWarden) nftType = 'warden';
 
-                let imageUrl = metadata.image || '';
-                if (imageUrl.startsWith('ipfs://')) {
-                  imageUrl = imageUrl.replace('ipfs://', '');
-                } else if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
-                  const ipfsMatch = imageUrl.match(/\/ipfs\/([^/]+)/);
-                  if (ipfsMatch) imageUrl = ipfsMatch[1];
-                }
+                // Use IPNS image URL - always gets latest version
+                const imageUrl = getNFTImageUrl(tokenId);
 
                 return {
-                  tokenId: Number(tokenInfo.tokenId),
+                  tokenId,
                   imageUrl,
-                  name: metadata.name || `#${tokenInfo.tokenId}`,
+                  name: metadata.name || `#${tokenId}`,
                   nftType,
                   owner: tokenInfo.owner,
                   exists: tokenInfo.exists,
