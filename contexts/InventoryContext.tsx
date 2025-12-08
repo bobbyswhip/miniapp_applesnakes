@@ -2,10 +2,16 @@
 
 import { createContext, useContext, useState, ReactNode } from 'react';
 
+// Tab types for the inventory
+export type InventoryTab = 'collection' | 'listings' | 'exchange' | 'trading';
+
 interface InventoryContextType {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   toggleInventory: () => void;
+  // Initial tab for when inventory opens
+  initialTab: InventoryTab | null;
+  clearInitialTab: () => void;
   // UI coordination
   showSwapMint: boolean;
   setShowSwapMint: (open: boolean) => void;
@@ -28,7 +34,7 @@ interface InventoryContextType {
   openNFTHubOverlay: (mode?: 'buy' | 'wrap') => void; // Opens NFT Hub without closing inventory
   closeNFTHub: () => void;
   // Coordinated open functions that close other UIs
-  openInventory: () => void;
+  openInventory: (tab?: InventoryTab) => void;
   openSwapMint: () => void;
   openChat: () => void;
   openHatch: () => void;
@@ -42,6 +48,7 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<InventoryTab | null>(null);
   const [showSwapMint, setShowSwapMint] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showHatch, setShowHatch] = useState(false);
@@ -52,9 +59,13 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [nftHubMode, setNFTHubMode] = useState<'buy' | 'wrap'>('buy');
 
   const toggleInventory = () => setIsOpen(prev => !prev);
+  const clearInitialTab = () => setInitialTab(null);
 
   // Coordinated open functions that close other UIs
-  const openInventory = () => {
+  const openInventory = (tab?: InventoryTab) => {
+    if (tab) {
+      setInitialTab(tab);
+    }
     setIsOpen(true);
     setShowSwapMint(false);
     setShowChat(false);
@@ -158,6 +169,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         isOpen,
         setIsOpen,
         toggleInventory,
+        initialTab,
+        clearInitialTab,
         showSwapMint,
         setShowSwapMint,
         showChat,

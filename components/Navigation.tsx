@@ -12,14 +12,13 @@ import { useBasename } from '@/hooks/useBasename';
 import { useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { SwapWrapModal } from './SwapWrapModal';
-import { ChartModal } from './ChartModal';
 
 export function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { nfts: _nfts } = useNFTContext();
-  const { toggleInventory, openUnity, showUnity, closeUnity, showNFTHub, nftHubMode, openNFTHub, closeNFTHub } = useInventory();
+  const { toggleInventory, openInventory, openUnity, showUnity, closeUnity, showNFTHub, nftHubMode, openNFTHub, closeNFTHub } = useInventory();
   const { displayName, hasBasename } = useBasename(address);
   const contracts = getContracts(base.id);
   const publicClient = usePublicClient({ chainId: base.id });
@@ -28,9 +27,6 @@ export function Navigation() {
   const [tokenPrice, setTokenPrice] = useState<string>('0');
   const [ethPrice, setEthPrice] = useState<number>(0);
 
-
-  // Chart modal state
-  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // Make token price available globally via window for PredictionJack
   useEffect(() => {
@@ -240,7 +236,7 @@ export function Navigation() {
                   ? 'bg-gradient-to-r from-cyan-950/40 via-purple-950/40 to-pink-950/40 border-cyan-500/30 hover:border-cyan-400/50 cursor-pointer'
                   : 'bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 cursor-pointer'
               } backdrop-blur-sm transition-all duration-300`}
-              onClick={mintIsLive ? handleFastTravelMint : () => openNFTHub('buy')}
+              onClick={mintIsLive ? handleFastTravelMint : () => openInventory('listings')}
               style={{
                 boxShadow: mintIsLive
                   ? '0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 15px rgba(168, 85, 247, 0.03)'
@@ -318,9 +314,9 @@ export function Navigation() {
               )}
             </div>
 
-            {/* Chart Button */}
+            {/* Chart Button - Opens marketplace trading tab */}
             <button
-              onClick={() => setIsChartModalOpen(true)}
+              onClick={() => openInventory('trading')}
               className="relative overflow-hidden border bg-gradient-to-r from-green-950/40 via-emerald-950/40 to-teal-950/40 border-green-500/30 hover:border-green-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer flex items-center rounded-md sm:rounded-lg flex-shrink min-w-0"
               style={{
                 boxShadow: '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 10px rgba(16, 185, 129, 0.03)',
@@ -606,12 +602,6 @@ export function Navigation() {
       initialMode={nftHubMode}
     />
 
-    {/* Chart Modal */}
-    <ChartModal
-      isOpen={isChartModalOpen}
-      onClose={() => setIsChartModalOpen(false)}
-      tokenPrice={tokenPrice}
-    />
     </>
   );
 }

@@ -8,7 +8,7 @@ import { formatEther, formatUnits } from 'viem';
 import { getContracts, getNFTMetadataUrl, getNFTImageUrl, QUOTER_ADDRESS, QUOTER_ABI, TOKEN_PAIRS, getDefaultPair, TokenPairConfig, ETH_ADDRESS, WASS_TOKEN_ADDRESS, getAllTokenAddresses } from '@/config';
 import { useMultipleTokenInfo } from '@/hooks/useTokenInfo';
 import { useNFTContext } from '@/contexts/NFTContext';
-import { useInventory } from '@/contexts/InventoryContext';
+import { useInventory, InventoryTab } from '@/contexts/InventoryContext';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { getBasescanUrl } from '@/contexts/TransactionContext';
 
@@ -51,7 +51,6 @@ const getLocalNFTType = (tokenId: number, name: string): 'snake' | 'egg' | 'huma
   return 'human';
 };
 
-type InventoryTab = 'collection' | 'listings' | 'exchange' | 'trading';
 type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'price-desc';
 type FilterType = 'all' | 'human' | 'snake' | 'egg';
 type TradingView = 'swap' | 'launch';
@@ -74,7 +73,7 @@ export function InventorySack() {
   const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [showBuyModal, setShowBuyModal] = useState(false);
 
-  const { isOpen, setIsOpen } = useInventory();
+  const { isOpen, setIsOpen, initialTab, clearInitialTab } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
@@ -687,11 +686,16 @@ export function InventorySack() {
 
   useEffect(() => {
     if (!isLoading && !isLoadingStaked && !hasSetInitialTab) {
-      // Always start on collection tab (unified view)
-      setActiveTab('collection');
+      // Use initialTab from context if provided, otherwise default to collection
+      const tabToSet = initialTab || 'collection';
+      setActiveTab(tabToSet);
       setHasSetInitialTab(true);
+      // Clear the initialTab after using it
+      if (initialTab) {
+        clearInitialTab();
+      }
     }
-  }, [isLoading, isLoadingStaked, hasSetInitialTab]);
+  }, [isLoading, isLoadingStaked, hasSetInitialTab, initialTab, clearInitialTab]);
 
   useEffect(() => {
     if (!isOpen) {
