@@ -224,9 +224,9 @@ export function Navigation() {
 
   return (
     <>
-    <nav className="w-full bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-40">
-      <div className="w-full px-0.5 xs:px-1.5 sm:px-3 md:px-4 py-0.5 xs:py-1 sm:py-2">
-        <div className="flex items-center justify-between gap-0.5 xs:gap-1 sm:gap-2 md:gap-3">
+    <nav className="w-full h-16 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-40">
+      <div className="w-full h-full px-0.5 xs:px-1.5 sm:px-3 md:px-4">
+        <div className="flex items-center justify-between gap-0.5 xs:gap-1 sm:gap-2 md:gap-3 h-full">
           {/* Left Side: Mint Counter and Chart locked to left */}
           <div className="flex items-center gap-0.5 xs:gap-0.5 sm:gap-1.5 md:gap-2 min-w-0 flex-1 overflow-hidden">
             {/* Futuristic Mint Counter with Integrated Button */}

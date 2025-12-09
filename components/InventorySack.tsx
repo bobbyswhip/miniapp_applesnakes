@@ -101,6 +101,9 @@ export function InventorySack() {
   // Trading tab view mode - 'swap' for trading interface, 'launch' for token launcher
   const [tradingView, setTradingView] = useState<TradingView>('swap');
 
+  // Viewport dimensions for responsive scaling
+  const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
   // Price changes for all pairs (for sidebar display)
   const [allPairChanges, setAllPairChanges] = useState<Map<string, number>>(new Map());
 
@@ -121,6 +124,29 @@ export function InventorySack() {
     const symbol1 = getTokenSymbol(pair.token1);
     return `${symbol0}/${symbol1}`;
   }, [getTokenSymbol]);
+
+  // Track viewport width for responsive scaling
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    handleResize(); // Set initial value on mount
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Always scale to fit viewport - modal designed at 900px for better mobile scaling
+  // MIN_SCALE of 0.35 allows scaling down to ~315px screens (smallest phones)
+  const DESIGN_WIDTH = 900;
+  const MIN_SCALE = 0.35;
+  const scaleFactor = Math.max(MIN_SCALE, Math.min(1, viewportWidth / DESIGN_WIDTH));
+
+  // On first load, recommend small grid for narrow viewports (only once)
+  const [hasSetInitialGridSize, setHasSetInitialGridSize] = useState(false);
+  useEffect(() => {
+    if (!hasSetInitialGridSize && viewportWidth < 500) {
+      setGridSize('small');
+      setHasSetInitialGridSize(true);
+    }
+  }, [viewportWidth, hasSetInitialGridSize]);
 
   // Fetch price changes for all pairs (24h)
   useEffect(() => {
@@ -1067,24 +1093,32 @@ export function InventorySack() {
     return { title: 'Human', emoji: '🧑', color: 'cyan' };
   };
 
-  // Grid size classes
+  // Grid size classes - fewer columns to ensure NFTs stay at least 128px
+  // With 900px design width and sidebar (~256px), content area is ~600px
+  // So max 4 cols for 150px each minimum
   const gridClasses = {
-    small: 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10',
-    medium: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7',
-    large: 'grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6',
+    small: 'grid-cols-4',   // 4 items per row (~150px each)
+    medium: 'grid-cols-3',  // 3 items per row (~200px each)
+    large: 'grid-cols-2',   // 2 items per row (~300px each)
   };
 
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Full-Screen OpenSea-Style Modal */}
-      <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col animate-fade-in">
+      {/* Full-Screen OpenSea-Style Modal - always scales to fit viewport */}
+      <div
+        className="fixed inset-0 z-50 bg-gray-950 flex flex-col animate-fade-in origin-top-left"
+        style={{
+          transform: `scale(${scaleFactor})`,
+          width: `${100 / scaleFactor}%`,
+          height: `${100 / scaleFactor}%`,
+        }}>
         {/* Header */}
         <header className="flex-shrink-0 border-b border-gray-800 bg-gray-900/95 backdrop-blur-xl">
-          <div className="flex items-center justify-between px-4 md:px-6 py-3">
+          <div className="flex items-center justify-between px-6 py-3">
             {/* Logo & Title */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center">
                   <span className="text-xl">🐍</span>
@@ -1097,7 +1131,7 @@ export function InventorySack() {
             </div>
 
             {/* Search Bar */}
-            <div className="hidden md:flex flex-1 max-w-xl mx-8">
+            <div className="flex flex-1 max-w-xl mx-8">
               <div className="relative w-full">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1116,7 +1150,7 @@ export function InventorySack() {
             <div className="flex items-center gap-3">
               {/* Balance Pills */}
               {isWalletConnected && (
-                <div className="hidden lg:flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
                     <span className="text-orange-400 text-sm">🎁</span>
                     <span className="text-white text-sm font-medium">{wTokenBalanceFormatted.toFixed(2)}</span>
@@ -1142,24 +1176,8 @@ export function InventorySack() {
             </div>
           </div>
 
-          {/* Mobile Search */}
-          <div className="md:hidden px-4 pb-3">
-            <div className="relative w-full">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search by name or ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Tab Bar - responsive with horizontal scroll on mobile */}
-          <div className="flex items-center gap-2 sm:gap-4 md:gap-6 px-3 md:px-6 border-t border-gray-800 overflow-x-auto scrollbar-hide">
+          {/* Tab Bar */}
+          <div className="flex items-center gap-6 px-6 border-t border-gray-800 overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => handleTabChange('collection')}
                 className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
@@ -1171,7 +1189,7 @@ export function InventorySack() {
                 <span className="font-medium text-sm sm:text-base">My NFTs</span>
                 <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{collectionNFTs.length}</span>
                 {stakedCount > 0 && (
-                  <span className="hidden sm:inline ml-1 px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
+                  <span className="inline ml-1 px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
                     +{stakedCount} staked
                   </span>
                 )}
@@ -1189,7 +1207,7 @@ export function InventorySack() {
                   <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListings}</span>
                 )}
                 {effectiveFloorPrice && (
-                  <span className={`hidden md:inline ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
+                  <span className={`inline ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
                     {effectiveFloorPrice} ETH
                   </span>
                 )}
@@ -1221,43 +1239,28 @@ export function InventorySack() {
                 </span>
               </button>
 
-              {/* Staking Rewards Badge + Quick Actions - hidden on mobile, shown on larger screens */}
-              <div className="ml-auto hidden lg:flex items-center gap-3 text-sm flex-shrink-0">
-                {/* Total staked count */}
-                <div className="flex items-center gap-1.5 text-gray-400">
-                  <span>🏦</span>
-                  <span>{totalStakedCount} total</span>
-                </div>
-                {stakedCount > 0 ? (
+              {/* Staking Rewards - Compact display with claim button */}
+              <div className="ml-auto flex items-center gap-2 text-sm flex-shrink-0">
+                {stakedCount > 0 && hasPendingRewards ? (
                   <>
-                    <div className="w-px h-4 bg-gray-700" />
-                    <div className="flex items-center gap-1.5 text-purple-400">
-                      <span>🐍</span>
-                      <span>{stakedCount}</span>
-                    </div>
                     <div className="flex items-center gap-1.5 text-green-400">
                       <span>💰</span>
                       <span>{pendingRewardsFormatted}</span>
                     </div>
-                    {hasPendingRewards && (
-                      <button
-                        onClick={handleClaimRewards}
-                        disabled={isProcessing}
-                        className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30 transition-all disabled:opacity-50"
-                      >
-                        Claim
-                      </button>
-                    )}
+                    <button
+                      onClick={handleClaimRewards}
+                      disabled={isProcessing}
+                      className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30 transition-all disabled:opacity-50"
+                    >
+                      Claim
+                    </button>
                   </>
-                ) : (
-                  <>
-                    <div className="w-px h-4 bg-gray-700" />
-                    <div className="flex items-center gap-1.5 text-orange-400">
-                      <span>🐍</span>
-                      <span>Stake to earn</span>
-                    </div>
-                  </>
-                )}
+                ) : stakedCount > 0 ? (
+                  <div className="flex items-center gap-1.5 text-gray-400">
+                    <span>💰</span>
+                    <span>0.00</span>
+                  </div>
+                ) : null}
               </div>
             </div>
         </header>
@@ -1265,7 +1268,7 @@ export function InventorySack() {
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar - shows filters for NFT tabs, token pairs for trading tab */}
-          <aside className={`flex-shrink-0 border-r border-gray-800 bg-gray-900/50 transition-all overflow-y-auto ${showFilters ? 'hidden md:block md:w-56 lg:w-64' : 'w-0'}`}>
+          <aside className={`flex-shrink-0 border-r border-gray-800 bg-gray-900/50 transition-all overflow-y-auto ${showFilters ? 'block w-64' : 'w-0'}`}>
             {showFilters && (
               <div className="p-4 space-y-6">
                 {activeTab === 'trading' ? (
@@ -1564,7 +1567,7 @@ export function InventorySack() {
           {/* Toggle Sidebar Button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-gray-800 border border-gray-700 rounded-r-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all hidden md:block`}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-gray-800 border border-gray-700 rounded-r-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all"
             style={{ left: showFilters ? '256px' : '0' }}
           >
             <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1573,7 +1576,7 @@ export function InventorySack() {
           </button>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 relative">
+          <main className="flex-1 overflow-y-auto p-6 relative">
             {/* ===== COLLECTION TAB ===== */}
             {activeTab === 'collection' && (
             <>
@@ -1644,6 +1647,7 @@ export function InventorySack() {
                             : 'border-gray-800 hover:border-gray-600'
                       }`}
                       style={{
+                        minWidth: '128px',
                         boxShadow: isSelected
                           ? isStaked
                             ? '0 8px 32px rgba(168, 85, 247, 0.4)'
@@ -1689,7 +1693,7 @@ export function InventorySack() {
                           {isStaked && (
                             <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                               <span>⚡</span>
-                              <span className="hidden sm:inline">Staked</span>
+                              <span className="inline">Staked</span>
                             </span>
                           )}
                           {isEvolved && (
@@ -1832,6 +1836,7 @@ export function InventorySack() {
                             onClick={handleBuyNFT}
                             className="group relative rounded-2xl bg-gray-900 border-2 border-cyan-500/50 hover:border-cyan-400 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left"
                             style={{
+                              minWidth: '128px',
                               boxShadow: '0 4px 16px rgba(6, 182, 212, 0.2)',
                             }}
                           >
@@ -1927,6 +1932,7 @@ export function InventorySack() {
                           rel="noopener noreferrer"
                           className="group relative rounded-2xl bg-gray-900 border-2 border-gray-800 hover:border-green-500/50 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1"
                           style={{
+                            minWidth: '128px',
                             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
                           }}
                         >
