@@ -209,7 +209,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
   });
   const selectedCount = selectedNFTs.size;
   const totalWrapFee = wrapFee * BigInt(selectedCount);
-  const totalWrapFeeFormatted = formatEther(totalWrapFee);
+  const totalWrapFeeFormatted = parseFloat(formatEther(totalWrapFee)).toFixed(4);
   const hasEnoughEthForWrapFee = parseFloat(ethBalance) >= parseFloat(totalWrapFeeFormatted);
 
   // Set initial estimate immediately when count changes
@@ -625,14 +625,14 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
 
   // Unwrap calculations
   const unwrapFee = wrapFee * BigInt(unwrapCount);
-  const unwrapFeeFormatted = formatEther(unwrapFee);
+  const unwrapFeeFormatted = parseFloat(formatEther(unwrapFee)).toFixed(4);
   const hasEnoughEthForUnwrap = parseFloat(ethBalance) >= parseFloat(unwrapFeeFormatted);
   const hasEnoughTokensForUnwrap = tokenBalance >= unwrapCount;
 
   // ===== SWAP MODE: Swap user NFT for pool NFT =====
   // Get actual swap fee from contract (not calculated from wrap fee)
   const swapFee = swapFeeData ? BigInt(swapFeeData as bigint) : 0n;
-  const swapFeeFormatted = formatEther(swapFee);
+  const swapFeeFormatted = parseFloat(formatEther(swapFee)).toFixed(4);
 
   const handleSwapNFTs = async () => {
     if (selectedPoolNFT === null || selectedUserNFTForSwap === null) return;
@@ -1132,7 +1132,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h2 className="text-xl font-bold text-white">Swap NFT ↔ Pool</h2>
-                          <p className="text-sm text-gray-400">Select one of yours, then one from pool • Fee: {swapFeeFormatted} ETH</p>
+                          <p className="text-sm text-gray-400 flex items-center gap-1 flex-wrap">Select one of yours, then one from pool • Fee: {swapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5 inline" /></p>
                         </div>
 
                         {/* Selection Preview & Action */}
@@ -1338,7 +1338,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                               +
                             </button>
                           </div>
-                          <span className="text-xs text-gray-400">({unwrapFeeFormatted} ETH fee)</span>
+                          <span className="text-xs text-gray-400 flex items-center gap-1">({unwrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3 inline" /> fee)</span>
                           <button
                             onClick={handleUnwrapNFTs}
                             disabled={isBusy || !hasEnoughTokensForUnwrap || !hasEnoughEthForUnwrap}
@@ -1360,8 +1360,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         <span className="text-lg">📦</span>
                         <div>
                           <span className="text-white font-bold">Wrap NFTs → Tokens</span>
-                          <span className="text-gray-400 ml-3">
-                            {selectedCount} selected = {selectedCount} wASS • Fee: {totalWrapFeeFormatted} ETH
+                          <span className="text-gray-400 ml-3 inline-flex items-center gap-1">
+                            {selectedCount} selected = {selectedCount} wASS • Fee: {totalWrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                           </span>
                         </div>
                       </div>
@@ -1724,8 +1724,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
                     {selectedCount} NFT{selectedCount !== 1 ? 's' : ''} selected
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
-                    Fee: {totalWrapFeeFormatted} ETH
+                  <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.5)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Fee: {totalWrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" style={{ width: 12, height: 12 }} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -2022,8 +2022,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           </div>
                         )}
                         {!unwrapError && (
-                          <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', marginTop: 6 }}>
-                            Fee: {unwrapFeeFormatted} ETH
+                          <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            Fee: {unwrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" style={{ width: 11, height: 11 }} />
                           </div>
                         )}
                       </div>
@@ -2335,9 +2335,9 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             <div style={{ fontSize: 20, fontWeight: 700, color: 'rgba(34, 197, 94, 1)' }}>#{selectedPoolNFT}</div>
                           </div>
                         </div>
-                        <div style={{ textAlign: 'center', paddingTop: 12, borderTop: '1px solid rgba(75, 85, 99, 0.4)' }}>
+                        <div style={{ textAlign: 'center', paddingTop: 12, borderTop: '1px solid rgba(75, 85, 99, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                           <span style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.6)' }}>Swap fee: </span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{swapFeeFormatted} ETH</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}>{swapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" style={{ width: 12, height: 12 }} /></span>
                         </div>
                       </div>
 
@@ -2636,8 +2636,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       <span style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)' }}>
                         Wrap Fee
                       </span>
-                      <span style={{ fontSize: 13, color: '#fff', fontWeight: 500 }}>
-                        {totalBuyWrapFee.toFixed(6)} ETH
+                      <span style={{ fontSize: 13, color: '#fff', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {totalBuyWrapFee.toFixed(4)} <img src="/Images/Ether.png" alt="ETH" style={{ width: 13, height: 13 }} />
                       </span>
                     </div>
                     <div
@@ -2649,8 +2649,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Total</span>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(34, 197, 94, 1)' }}>
-                          {totalWassCost} wASS + {totalBuyWrapFee.toFixed(6)} ETH
+                        <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(34, 197, 94, 1)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {totalWassCost} wASS + {totalBuyWrapFee.toFixed(4)} <img src="/Images/Ether.png" alt="ETH" style={{ width: 14, height: 14 }} />
                         </span>
                       </div>
                     </div>
@@ -2705,7 +2705,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   }}
                 >
                   <span style={{ color: 'rgba(239, 68, 68, 1)', fontSize: 12 }}>
-                    Insufficient ETH for wrap fee. Need {totalBuyWrapFee.toFixed(6)} ETH
+                    Insufficient ETH for wrap fee. Need {totalBuyWrapFee.toFixed(4)} ETH
                   </span>
                 </div>
               )}

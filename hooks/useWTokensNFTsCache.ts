@@ -6,6 +6,27 @@ import type { UserNFT, NFTType } from './useUserNFTs';
 // Direct API URL for wTokens status
 const WTOKENS_API_URL = 'https://api.applesnakes.com/api/wtokens-status';
 
+// Module-level cache to persist data across component unmounts
+// This prevents refetching when switching tabs
+interface ModuleLevelCache {
+  nfts: UserNFT[];
+  totalHeld: number;
+  cacheStatus: CacheStatus | null;
+  fetchedAt: number;
+  hasFetched: boolean;
+}
+
+const moduleCache: ModuleLevelCache = {
+  nfts: [],
+  totalHeld: 0,
+  cacheStatus: null,
+  fetchedAt: 0,
+  hasFetched: false,
+};
+
+// Cache is valid for 5 minutes (300000ms)
+const CACHE_TTL = 5 * 60 * 1000;
+
 /**
  * NFT data from the wtokens-status API endpoint
  */
@@ -106,14 +127,15 @@ export function useWTokensNFTsCache(
   startAfterUserLoad = true,
   userNFTsLoading = false
 ): UseWTokensNFTsCacheResult {
-  const [nfts, setNfts] = useState<UserNFT[]>([]);
+  // Initialize state from module cache if available
+  const [nfts, setNfts] = useState<UserNFT[]>(moduleCache.nfts);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [totalHeld, setTotalHeld] = useState(0);
-  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null);
+  const [totalHeld, setTotalHeld] = useState(moduleCache.totalHeld);
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(moduleCache.cacheStatus);
   const [rateLimitRemaining, setRateLimitRemaining] = useState(1);
   const [rateLimitResetIn, setRateLimitResetIn] = useState(60);
-  const [fromCache, setFromCache] = useState(false);
+  const [fromCache, setFromCache] = useState(moduleCache.hasFetched);
 
   // Manual trigger to refetch
   const [refetchTrigger, setRefetchTrigger] = useState(0);
@@ -220,19 +242,27 @@ export function useWTokensNFTsCache(
       if (data.success && data.nfts) {
         // Convert wTokens NFTs to UserNFT format
         const userNFTs = data.nfts.map(convertWTokensNFTToUserNFT);
-
-        setNfts(userNFTs);
-        setTotalHeld(userNFTs.length);
-        setCacheStatus({
+        const newCacheStatus = {
           lastFeesCollected: '',
           lastUpdated: Date.now(),
           totalCached: userNFTs.length,
           isRefreshing: false,
-        });
+        };
+
+        // Update module-level cache
+        moduleCache.nfts = userNFTs;
+        moduleCache.totalHeld = userNFTs.length;
+        moduleCache.cacheStatus = newCacheStatus;
+        moduleCache.fetchedAt = Date.now();
+        moduleCache.hasFetched = true;
+
+        setNfts(userNFTs);
+        setTotalHeld(userNFTs.length);
+        setCacheStatus(newCacheStatus);
         setFromCache(true);
 
         const elapsed = Date.now() - startTime;
-        console.log(`✅ wTokens API loaded ${userNFTs.length} NFTs in ${elapsed}ms`);
+        console.log(`✅ wTokens API loaded ${userNFTs.length} NFTs in ${elapsed}ms (cached for ${CACHE_TTL / 1000}s)`);
       } else {
         throw new Error('No NFTs returned from wtokens-status API');
       }
@@ -260,6 +290,14 @@ export function useWTokensNFTsCache(
 
         if (fallbackData.success && fallbackData.data) {
           const userNFTs = fallbackData.data.nfts.map(convertToUserNFT);
+
+          // Update module-level cache
+          moduleCache.nfts = userNFTs;
+          moduleCache.totalHeld = fallbackData.data.totalHeld;
+          moduleCache.cacheStatus = fallbackData.data.cacheStatus;
+          moduleCache.fetchedAt = Date.now();
+          moduleCache.hasFetched = true;
+
           setNfts(userNFTs);
           setTotalHeld(fallbackData.data.totalHeld);
           setCacheStatus(fallbackData.data.cacheStatus);
@@ -270,7 +308,7 @@ export function useWTokensNFTsCache(
             setRateLimitResetIn(fallbackData.rateLimit.resetIn);
           }
 
-          console.log(`✅ Fallback loaded ${userNFTs.length} NFTs`);
+          console.log(`✅ Fallback loaded ${userNFTs.length} NFTs (cached for ${CACHE_TTL / 1000}s)`);
         } else {
           throw new Error('No data from fallback');
         }
@@ -285,7 +323,26 @@ export function useWTokensNFTsCache(
   }, [convertWTokensNFTToUserNFT, convertToUserNFT]);
 
   // Fetch NFTs when ready (after user NFTs load if configured)
+  // Uses module-level cache to avoid refetching when switching tabs
   useEffect(() => {
+    // Check if we have valid cached data (not expired)
+    const cacheIsValid = moduleCache.hasFetched &&
+      (Date.now() - moduleCache.fetchedAt) < CACHE_TTL;
+
+    // If manual refetch triggered, always fetch fresh data
+    if (refetchTrigger > 0) {
+      console.log('🔄 Manual refetch triggered, fetching fresh data...');
+      fetchCachedNFTs();
+      return;
+    }
+
+    // If cache is valid, use cached data (already loaded via useState initializers)
+    if (cacheIsValid) {
+      console.log(`📦 Using cached wTokens data (${moduleCache.nfts.length} NFTs, cached ${Math.round((Date.now() - moduleCache.fetchedAt) / 1000)}s ago)`);
+      return;
+    }
+
+    // Otherwise fetch fresh data
     if (!startAfterUserLoad || !userNFTsLoading) {
       fetchCachedNFTs();
     }

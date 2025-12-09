@@ -5166,6 +5166,97 @@ function HomeContent() {
             )}
           </div>
 
+          {/* Action Bar - Breed button with requirement indicator */}
+          {!showBreedSuccess && (
+            <div
+              style={{
+                backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                borderRadius: 'clamp(8px, 1.6vw, 12px)',
+                padding: 'clamp(10px, 2vw, 14px)',
+                marginBottom: 'clamp(6px, 1.2vw, 10px)',
+                border: `clamp(1.5px, 0.3vw, 2px) solid ${selectedHumans.size === 3 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(75, 85, 99, 0.4)'}`,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'clamp(8px, 1.5vw, 12px)',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              {/* Requirement Note */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'clamp(6px, 1.2vw, 8px)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 'clamp(16px, 3.2vw, 20px)',
+                  }}
+                >
+                  {selectedHumans.size === 3 ? '✅' : '👥'}
+                </span>
+                <span
+                  style={{
+                    fontSize: 'clamp(11px, 2.2vw, 13px)',
+                    fontWeight: 600,
+                    color: selectedHumans.size === 3
+                      ? 'rgba(34, 197, 94, 1)'
+                      : 'rgba(156, 163, 175, 1)',
+                    transition: 'color 0.3s ease',
+                  }}
+                >
+                  {selectedHumans.size === 3
+                    ? '3 humans selected!'
+                    : `3 humans required (${selectedHumans.size}/3)`}
+                </span>
+              </div>
+
+              {/* Breed Button */}
+              <button
+                onClick={handleBreed}
+                disabled={!isWalletConnected || selectedHumans.size !== 3 || isConfirming}
+                style={{
+                  padding: 'clamp(8px, 1.6vw, 12px) clamp(16px, 3.2vw, 24px)',
+                  fontSize: 'clamp(12px, 2.4vw, 14px)',
+                  fontWeight: 700,
+                  color: selectedHumans.size === 3 ? '#FFFFFF' : 'rgba(156, 163, 175, 1)',
+                  background: selectedHumans.size === 3
+                    ? isConfirming
+                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.7), rgba(139, 92, 246, 0.7))'
+                      : 'linear-gradient(135deg, rgba(168, 85, 247, 1), rgba(139, 92, 246, 1))'
+                    : 'rgba(75, 85, 99, 0.5)',
+                  border: 'none',
+                  borderRadius: 'clamp(8px, 1.5vw, 10px)',
+                  cursor: (!isWalletConnected || selectedHumans.size !== 3 || isConfirming)
+                    ? 'not-allowed'
+                    : 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: selectedHumans.size === 3 && !isConfirming
+                    ? '0 0 15px rgba(168, 85, 247, 0.5)'
+                    : 'none',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.7)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.5)';
+                  }
+                }}
+              >
+                {isConfirming ? '⏳ Breeding...' : '🥚 Breed'}
+              </button>
+            </div>
+          )}
+
           {/* Wilfred's Fee Information */}
           {!showBreedSuccess && (
             <div

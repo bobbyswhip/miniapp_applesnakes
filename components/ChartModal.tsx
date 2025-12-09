@@ -2044,10 +2044,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
             {/* Input */}
             <div style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
                 <span>You Pay</span>
-                <span>
-                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)} {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)}
+                  <img
+                    src={swapTab === 'buy' ? '/Images/Ether.png' : '/Images/Token.png'}
+                    alt={swapTab === 'buy' ? 'ETH' : 'wASS'}
+                    style={{ width: 14, height: 14 }}
+                  />
                 </span>
               </div>
               <div style={{
@@ -2558,6 +2563,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
                       {/* Amount + USD - single line */}
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <img
+                          src="/Images/Token.png"
+                          alt="wASS"
+                          style={{ width: 12, height: 12, flexShrink: 0 }}
+                        />
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>
                           {parseFloat(trade.type === 'buy' ? trade.amountOut : trade.amountIn).toLocaleString(undefined, {
                             maximumFractionDigits: 2,
@@ -2903,10 +2913,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
             {/* Input */}
             <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
                 <span>You Pay</span>
-                <span>
-                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)} {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)}
+                  <img
+                    src={swapTab === 'buy' ? '/Images/Ether.png' : '/Images/Token.png'}
+                    alt={swapTab === 'buy' ? 'ETH' : 'wASS'}
+                    style={{ width: 12, height: 12 }}
+                  />
                 </span>
               </div>
               <div style={{

@@ -73,7 +73,7 @@ export function InventorySack() {
   const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [showBuyModal, setShowBuyModal] = useState(false);
 
-  const { isOpen, setIsOpen, initialTab, clearInitialTab } = useInventory();
+  const { isOpen, setIsOpen, initialTab, clearInitialTab, openBreed, setShowBreed } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
@@ -118,7 +118,14 @@ export function InventorySack() {
     return info?.symbol || `${address.slice(0, 6)}...`;
   }, [tokenInfos]);
 
-  // Helper to get display name for a pair
+  // Helper to get token image - returns image path or null if no known image
+  const getTokenImage = useCallback((address: `0x${string}`): string | null => {
+    if (address === ETH_ADDRESS) return '/Images/Ether.png';
+    if (address.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) return '/Images/Token.png';
+    return null; // Unknown token, no image
+  }, []);
+
+  // Helper to get display name for a pair (text only)
   const getPairDisplayName = useCallback((pair: TokenPairConfig): string => {
     const symbol0 = getTokenSymbol(pair.token0);
     const symbol1 = getTokenSymbol(pair.token1);
@@ -148,7 +155,38 @@ export function InventorySack() {
     }
   }, [viewportWidth, hasSetInitialGridSize]);
 
-  // Fetch price changes for all pairs (24h)
+  // Fetch wASS/ETH price change on mount (for Trading tab header display)
+  useEffect(() => {
+    const fetchWassPrice = async () => {
+      const wassEthPair = TOKEN_PAIRS.find(p => p.id === 'wass-eth');
+      if (!wassEthPair?.geckoPoolAddress) return;
+
+      try {
+        const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${wassEthPair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
+        const response = await fetch(url);
+
+        if (!response.ok) return;
+
+        const json = await response.json();
+        const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+
+        if (ohlcvList.length >= 2) {
+          const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0;
+          const newestPrice = ohlcvList[0]?.[4] || 0;
+          if (oldestPrice > 0) {
+            const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
+            setAllPairChanges(prev => new Map(prev).set('wass-eth', percentChange));
+          }
+        }
+      } catch {
+        // Silent fail - will show 0%
+      }
+    };
+
+    fetchWassPrice();
+  }, []);
+
+  // Fetch price changes for all pairs (24h) when on trading tab
   useEffect(() => {
     if (activeTab !== 'trading') return;
 
@@ -710,6 +748,7 @@ export function InventorySack() {
     return counts;
   }, [unifiedNFTs]);
 
+  // Handle initial tab setting on first load
   useEffect(() => {
     if (!isLoading && !isLoadingStaked && !hasSetInitialTab) {
       // Use initialTab from context if provided, otherwise default to collection
@@ -722,6 +761,14 @@ export function InventorySack() {
       }
     }
   }, [isLoading, isLoadingStaked, hasSetInitialTab, initialTab, clearInitialTab]);
+
+  // Handle tab changes when navigating from header buttons (even if already open)
+  useEffect(() => {
+    if (initialTab && isOpen) {
+      setActiveTab(initialTab);
+      clearInitialTab();
+    }
+  }, [initialTab, isOpen, clearInitialTab]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -1124,8 +1171,8 @@ export function InventorySack() {
                   <span className="text-xl">🐍</span>
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">NFT Hub</h1>
-                  <p className="text-xs text-gray-400">{allNFTs.length} items • All-in-One</p>
+                  <h1 className="text-lg font-bold text-white">Applesnakes</h1>
+                  <p className="text-xs text-gray-400">Marketplace Hub</p>
                 </div>
               </div>
             </div>
@@ -1152,14 +1199,13 @@ export function InventorySack() {
               {isWalletConnected && (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
-                    <span className="text-orange-400 text-sm">🎁</span>
+                    <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
                     <span className="text-white text-sm font-medium">{wTokenBalanceFormatted.toFixed(2)}</span>
-                    <span className="text-gray-400 text-xs">wNFT</span>
+                    <span className="text-gray-400 text-xs">$wASS</span>
                   </div>
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
-                    <span className="text-blue-400 text-sm">⚡</span>
+                    <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
                     <span className="text-white text-sm font-medium">{ethBalanceFormatted.toFixed(4)}</span>
-                    <span className="text-gray-400 text-xs">ETH</span>
                   </div>
                 </div>
               )}
@@ -1207,8 +1253,9 @@ export function InventorySack() {
                   <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListings}</span>
                 )}
                 {effectiveFloorPrice && (
-                  <span className={`inline ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
-                    {effectiveFloorPrice} ETH
+                  <span className={`inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
+                    {effectiveFloorPrice}
+                    <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                   </span>
                 )}
               </button>
@@ -1234,8 +1281,13 @@ export function InventorySack() {
                 }`}
               >
                 <span className="font-medium text-sm sm:text-base">Trading</span>
-                <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded bg-yellow-500/20 text-yellow-400">
-                  📈
+                <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded inline-flex items-center gap-1 ${
+                  (allPairChanges.get('wass-eth') || 0) >= 0
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}>
+                  <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
+                  {(allPairChanges.get('wass-eth') || 0) >= 0 ? '+' : ''}{(allPairChanges.get('wass-eth') || 0).toFixed(2)}%
                 </span>
               </button>
 
@@ -1244,7 +1296,7 @@ export function InventorySack() {
                 {stakedCount > 0 && hasPendingRewards ? (
                   <>
                     <div className="flex items-center gap-1.5 text-green-400">
-                      <span>💰</span>
+                      <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
                       <span>{pendingRewardsFormatted}</span>
                     </div>
                     <button
@@ -1257,7 +1309,7 @@ export function InventorySack() {
                   </>
                 ) : stakedCount > 0 ? (
                   <div className="flex items-center gap-1.5 text-gray-400">
-                    <span>💰</span>
+                    <img src="/Images/Token.png" alt="wASS" className="w-4 h-4 opacity-50" />
                     <span>0.00</span>
                   </div>
                 ) : null}
@@ -1339,8 +1391,28 @@ export function InventorySack() {
                                     }`}
                                   >
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className={`font-medium ${isSelected ? 'text-emerald-400' : 'text-white'}`}>
-                                        {getPairDisplayName(pair)}
+                                      <span className={`font-medium flex items-center gap-1 ${isSelected ? 'text-emerald-400' : 'text-white'}`}>
+                                        {(() => {
+                                          const img0 = getTokenImage(pair.token0);
+                                          const img1 = getTokenImage(pair.token1);
+                                          const symbol0 = getTokenSymbol(pair.token0);
+                                          const symbol1 = getTokenSymbol(pair.token1);
+                                          return (
+                                            <>
+                                              {img0 ? (
+                                                <img src={img0} alt={symbol0} className="w-4 h-4" />
+                                              ) : (
+                                                <span className="text-xs">{symbol0}</span>
+                                              )}
+                                              <span className="text-gray-500">/</span>
+                                              {img1 ? (
+                                                <img src={img1} alt={symbol1} className="w-4 h-4" />
+                                              ) : (
+                                                <span className="text-xs">{symbol1}</span>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
                                       </span>
                                       {pairChange !== undefined && (
                                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
@@ -1354,7 +1426,7 @@ export function InventorySack() {
                                     </div>
                                     <div className="flex items-center justify-between text-xs text-gray-400">
                                       <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
-                                      <span>{(pair.fee / 10000).toFixed(1)}% fee</span>
+                                      <span>1% fee</span>
                                     </div>
                                   </button>
                                 );
@@ -1540,18 +1612,27 @@ export function InventorySack() {
                       <div className="pt-4 border-t border-gray-800">
                         <h4 className="text-sm font-medium text-gray-400 mb-3">Pool Info</h4>
                         <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
+                          <div className="flex justify-between items-center">
                             <span className="text-gray-400">Pool Size</span>
-                            <span className="text-white font-medium">{poolNFTs.length} NFTs</span>
+                            <span className="text-white font-medium flex items-center gap-1">
+                              {poolNFTs.length}
+                              <img src="/Images/MountianGuyHead.png" alt="NFTs" className="w-4 h-4" />
+                            </span>
                           </div>
-                          <div className="flex justify-between">
+                          <div className="flex justify-between items-center">
                             <span className="text-gray-400">Wrap Fee</span>
-                            <span className="text-orange-400 font-medium">{wrapFeeFormatted} ETH</span>
+                            <span className="text-orange-400 font-medium flex items-center gap-1">
+                              {parseFloat(wrapFeeFormatted).toFixed(4)}
+                              <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                            </span>
                           </div>
                           {buyQuotePrice && (
-                            <div className="flex justify-between">
+                            <div className="flex justify-between items-center">
                               <span className="text-gray-400">Buy Price</span>
-                              <span className="text-cyan-400 font-medium">~{parseFloat(buyQuotePrice).toFixed(4)} ETH</span>
+                              <span className="text-cyan-400 font-medium flex items-center gap-1">
+                                ~{parseFloat(buyQuotePrice).toFixed(4)}
+                                <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                              </span>
                             </div>
                           )}
                         </div>
@@ -1692,7 +1773,7 @@ export function InventorySack() {
                         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                           {isStaked && (
                             <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
-                              <span>⚡</span>
+                              <img src="/Images/Token.png" alt="Staked" className="w-3 h-3" />
                               <span className="inline">Staked</span>
                             </span>
                           )}
@@ -1787,8 +1868,14 @@ export function InventorySack() {
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h2 className="text-xl font-bold text-white">Marketplace</h2>
-                        <p className="text-sm text-gray-400">
-                          {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0)} listings available {effectiveFloorPrice && `• Floor: ${effectiveFloorPrice} ETH${isPoolFloor ? ' (Pool)' : ''}`}
+                        <p className="text-sm text-gray-400 flex items-center gap-1">
+                          {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0)} listings available
+                          {effectiveFloorPrice && (
+                            <span className="flex items-center gap-1 ml-1">
+                              • Floor: {effectiveFloorPrice}
+                              <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5 inline" />
+                            </span>
+                          )}
                         </p>
                       </div>
                       <button
@@ -1854,7 +1941,7 @@ export function InventorySack() {
                               {/* Contract Badge */}
                               <div className="absolute top-3 left-3">
                                 <span className="px-2.5 py-1.5 rounded-lg bg-cyan-500/90 text-white text-sm font-bold backdrop-blur-sm flex items-center gap-1.5">
-                                  <span>⚡</span>
+                                  <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
                                   <span>Instant</span>
                                 </span>
                               </div>
@@ -2068,20 +2155,41 @@ export function InventorySack() {
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Hatch Button - always visible, grayed out when no eggs selected */}
-                {activeTab === 'collection' && (
+                {/* Hatch Button - only visible when user has eggs */}
+                {activeTab === 'collection' && selectedEggs.length > 0 && (
                   <button
-                    onClick={selectedEggs.length > 0 ? handleHatch : undefined}
-                    disabled={isProcessing || selectedEggs.length === 0}
-                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                      selectedEggs.length === 0
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed'
-                    }`}
-                    title={selectedEggs.length === 0 ? 'Select eggs to hatch' : undefined}
+                    onClick={handleHatch}
+                    disabled={isProcessing}
+                    className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isProcessing && currentOperation === 'wrap' ? 'Hatching...' : `🥚 Hatch${selectedEggs.length > 0 ? ` ${selectedEggs.length}` : ''}`}
+                    {isProcessing && currentOperation === 'wrap' ? 'Hatching...' : `🥚 Hatch ${selectedEggs.length}`}
                   </button>
+                )}
+
+                {/* Breed Button - requires exactly 3 humans */}
+                {activeTab === 'collection' && (
+                  <div className="relative flex items-center gap-2">
+                    <button
+                      onClick={selectedHumans.length === 3 ? () => {
+                        openBreed();
+                        setIsOpen(false);
+                      } : undefined}
+                      disabled={isProcessing || selectedHumans.length !== 3}
+                      className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                        selectedHumans.length !== 3
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-400 hover:to-rose-400 disabled:opacity-50 disabled:cursor-not-allowed'
+                      }`}
+                      title={selectedHumans.length !== 3 ? `Select exactly 3 humans to breed (${selectedHumans.length}/3)` : 'Breed 3 humans into an AppleSnake egg'}
+                    >
+                      🧬 Breed
+                    </button>
+                    <span className={`text-xs whitespace-nowrap ${
+                      selectedHumans.length === 3 ? 'text-green-400' : 'text-gray-400'
+                    }`}>
+                      {selectedHumans.length}/3 humans
+                    </span>
+                  </div>
                 )}
 
                 {/* Stake Button - grayed out if humans are selected, only enabled for snakes */}
@@ -2149,8 +2257,9 @@ export function InventorySack() {
                   </button>
                   {/* Wrap Fee Display */}
                   {selectedForWrap.length > 0 && (
-                    <span className="text-xs text-orange-400 whitespace-nowrap">
-                      Fee: {formatEther(wrapFee * BigInt(selectedForWrap.length))} ETH
+                    <span className="text-xs text-orange-400 whitespace-nowrap flex items-center gap-1">
+                      Fee: {parseFloat(formatEther(wrapFee * BigInt(selectedForWrap.length))).toFixed(4)}
+                      <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                     </span>
                   )}
                   {selectedSnakes.length > 0 && (
