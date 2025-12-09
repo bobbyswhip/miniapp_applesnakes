@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useWriteContract, usePublicClient, useReadContract } from 'wagmi';
+import { useAccount, useWriteContract, usePublicClient, useBalance } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { formatUnits, parseUnits } from 'viem';
 import { base } from 'viem/chains';
@@ -13,9 +13,6 @@ import { base } from 'viem/chains';
 const X402_CONFIG = {
   // Use local proxy routes which forward to https://api.applesnakes.com
   API_BASE_URL: '',
-
-  // Payment recipient (AI Wallet) - checksummed
-  PAYMENT_RECIPIENT: '0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098' as const,
 
   // USDC on Base
   USDC_ADDRESS: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const,
@@ -108,36 +105,49 @@ export function VerifiedTokenLauncher() {
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
-  // Get USDC balance
-  const { data: balanceData } = useReadContract({
-    address: X402_CONFIG.USDC_ADDRESS,
-    abi: USDC_ABI,
-    functionName: 'balanceOf',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address }
+  // Get USDC balance on Base using useBalance hook
+  const { data: balanceData, refetch: refetchBalance } = useBalance({
+    address: address,
+    token: X402_CONFIG.USDC_ADDRESS,
+    chainId: base.id,
+    query: {
+      enabled: !!address && isConnected,
+      refetchInterval: 10000,
+    }
   });
 
+  // Update balance when data changes
   useEffect(() => {
+    console.log('[USDC Balance] useBalance data:', balanceData, 'Address:', address, 'Connected:', isConnected, 'Chain:', chain?.id);
     if (balanceData) {
-      setUsdcBalance(formatUnits(balanceData, X402_CONFIG.USDC_DECIMALS));
+      console.log('[USDC Balance] Formatted:', balanceData.formatted, 'Value:', balanceData.value.toString());
+      setUsdcBalance(balanceData.formatted);
     }
-  }, [balanceData]);
+  }, [balanceData, address, isConnected, chain]);
+
+  // Refetch balance when address changes or on mount
+  useEffect(() => {
+    if (address && isConnected) {
+      console.log('[USDC Balance] Triggering refetch for:', address);
+      refetchBalance();
+    }
+  }, [address, isConnected, refetchBalance]);
 
   // ============================================================================
   // Payment Helper - Direct USDC transfer
   // ============================================================================
 
-  const payUsdc = useCallback(async (amountUsdc: number): Promise<string> => {
+  const payUsdc = useCallback(async (amountUsdc: number, recipient: `0x${string}`): Promise<string> => {
     if (!address) throw new Error('Wallet not connected');
 
     const amountRaw = parseUnits(amountUsdc.toString(), X402_CONFIG.USDC_DECIMALS);
-    console.log(`[X402] Paying ${amountUsdc} USDC (${amountRaw} units) to ${X402_CONFIG.PAYMENT_RECIPIENT}`);
+    console.log(`[X402] Paying ${amountUsdc} USDC (${amountRaw} units) to ${recipient}`);
 
     const txHash = await writeContractAsync({
       address: X402_CONFIG.USDC_ADDRESS,
       abi: USDC_ABI,
       functionName: 'transfer',
-      args: [X402_CONFIG.PAYMENT_RECIPIENT, amountRaw]
+      args: [recipient, amountRaw]
     });
 
     console.log(`[X402] Payment tx: ${txHash}`);
@@ -202,6 +212,16 @@ export function VerifiedTokenLauncher() {
   const handleVerify = async () => {
     if (!imageFile || !address) return;
 
+    // Refetch balance and check
+    const { data: freshBalance } = await refetchBalance();
+    const currentBalance = freshBalance ? parseFloat(freshBalance.formatted) : (usdcBalance ? parseFloat(usdcBalance) : 0);
+    console.log('[handleVerify] Fresh balance:', freshBalance?.formatted, 'Current state:', usdcBalance, 'Using:', currentBalance);
+
+    if (currentBalance < X402_CONFIG.VERIFY_PRICE_USDC) {
+      setError(`Insufficient USDC balance. Have: $${currentBalance.toFixed(2)}, Need: $${X402_CONFIG.VERIFY_PRICE_USDC.toFixed(2)}`);
+      return;
+    }
+
     setStatus('verifying');
     setError(null);
     setStatusMessage('Preparing verification...');
@@ -238,16 +258,23 @@ export function VerifiedTokenLauncher() {
         return;
       }
 
-      // Step 2: Got 402, parse payment details
+      // Step 2: Got 402, parse payment details and extract payTo address
       console.log('[X402] Got 402, parsing payment details...');
       const paymentInfo = await initialResponse.json();
       console.log('[X402] Payment info:', paymentInfo);
 
-      // Step 3: Pay USDC
+      // Extract payTo from 402 response
+      const payTo = paymentInfo?.accepts?.[0]?.payTo as `0x${string}` | undefined;
+      if (!payTo) {
+        throw new Error('No payment address in 402 response');
+      }
+      console.log('[X402] Paying to address from 402:', payTo);
+
+      // Step 3: Pay USDC to the address from 402
       setStatusMessage('Please confirm USDC payment in your wallet...');
       setStatus('paying');
 
-      const txHash = await payUsdc(X402_CONFIG.VERIFY_PRICE_USDC);
+      const txHash = await payUsdc(X402_CONFIG.VERIFY_PRICE_USDC, payTo);
 
       // Step 4: Retry with simple payment headers
       console.log('[X402] Retrying with payment headers...');
@@ -302,6 +329,16 @@ export function VerifiedTokenLauncher() {
   const handleLaunch = async () => {
     if (!address || !tokenName || !tokenSymbol) return;
 
+    // Refetch balance and check fresh data
+    const { data: freshBalance } = await refetchBalance();
+    const currentBalance = freshBalance ? parseFloat(freshBalance.formatted) : (usdcBalance ? parseFloat(usdcBalance) : 0);
+    console.log('[handleLaunch] Fresh balance:', freshBalance?.formatted, 'Current state:', usdcBalance, 'Using:', currentBalance);
+
+    if (currentBalance < devBuyBudget) {
+      setError(`Insufficient USDC balance. Have: $${currentBalance.toFixed(2)}, Need: $${devBuyBudget}`);
+      return;
+    }
+
     setStatus('launching');
     setError(null);
     setStatusMessage('Preparing launch...');
@@ -335,14 +372,25 @@ export function VerifiedTokenLauncher() {
         return;
       }
 
-      // Step 2: Got 402, pay USDC
-      console.log('[X402] Got 402, paying for launch...');
+      // Step 2: Got 402, parse payment details and extract payTo address
+      console.log('[X402] Got 402, parsing payment details...');
+      const paymentInfo = await initialResponse.json();
+      console.log('[X402] Payment info:', paymentInfo);
+
+      // Extract payTo from 402 response
+      const payTo = paymentInfo?.accepts?.[0]?.payTo as `0x${string}` | undefined;
+      if (!payTo) {
+        throw new Error('No payment address in 402 response');
+      }
+      console.log('[X402] Paying to address from 402:', payTo);
+
+      // Step 3: Pay USDC to the address from 402
       setStatusMessage('Please confirm USDC payment in your wallet...');
       setStatus('paying');
 
-      const txHash = await payUsdc(devBuyBudget);
+      const txHash = await payUsdc(devBuyBudget, payTo);
 
-      // Step 3: Retry with simple payment headers
+      // Step 4: Retry with simple payment headers
       console.log('[X402] Retrying with payment headers...');
       setStatusMessage('Launching token (this may take a minute)...');
       setStatus('launching');
@@ -429,11 +477,9 @@ export function VerifiedTokenLauncher() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-amber-100">Token Launcher</h2>
-        {usdcBalance && (
-          <div className="text-sm text-amber-200/70">
-            USDC Balance: <span className="text-amber-100 font-mono">${parseFloat(usdcBalance).toFixed(2)}</span>
-          </div>
-        )}
+        <div className="text-sm text-amber-200/70">
+          USDC Balance: <span className="text-amber-100 font-mono">${usdcBalance ? parseFloat(usdcBalance).toFixed(2) : 'Loading...'}</span>
+        </div>
       </div>
 
       {/* Error Display */}

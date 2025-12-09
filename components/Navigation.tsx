@@ -236,7 +236,7 @@ export function Navigation() {
                   ? 'bg-gradient-to-r from-cyan-950/40 via-purple-950/40 to-pink-950/40 border-cyan-500/30 hover:border-cyan-400/50 cursor-pointer'
                   : 'bg-gradient-to-r from-purple-950/40 via-pink-950/40 to-rose-950/40 border-purple-500/30 hover:border-purple-400/50 cursor-pointer'
               } backdrop-blur-sm transition-all duration-300`}
-              onClick={mintIsLive ? handleFastTravelMint : () => openInventory('listings')}
+              onClick={mintIsLive ? handleFastTravelMint : () => openInventory('trading')}
               style={{
                 boxShadow: mintIsLive
                   ? '0 0 15px rgba(6, 182, 212, 0.1), inset 0 0 15px rgba(168, 85, 247, 0.03)'
@@ -314,9 +314,9 @@ export function Navigation() {
               )}
             </div>
 
-            {/* Chart Button - Opens marketplace trading tab */}
+            {/* Chart Button - Opens marketplace listings tab */}
             <button
-              onClick={() => openInventory('trading')}
+              onClick={() => openInventory('listings')}
               className="relative overflow-hidden border bg-gradient-to-r from-green-950/40 via-emerald-950/40 to-teal-950/40 border-green-500/30 hover:border-green-400/50 backdrop-blur-sm transition-all duration-300 cursor-pointer flex items-center rounded-md sm:rounded-lg flex-shrink min-w-0"
               style={{
                 boxShadow: '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 10px rgba(16, 185, 129, 0.03)',
