@@ -27,6 +27,7 @@ import { parseEther } from 'viem';
 import { SwapWrapModal } from './SwapWrapModal';
 import { ChartModal } from './ChartModal';
 import { VerifiedTokenLauncher } from './VerifiedTokenLauncher';
+import { Clankerdome } from './Clankerdome';
 import { usePoolTrades, formatRelativeTime, truncateAddress } from '@/hooks/usePoolTrades';
 
 // Extended NFT type to include staking status
@@ -54,6 +55,7 @@ const getLocalNFTType = (tokenId: number, name: string): 'snake' | 'egg' | 'huma
 type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'price-desc';
 type FilterType = 'all' | 'human' | 'snake' | 'egg';
 type TradingView = 'swap' | 'launch';
+type LaunchTab = 'instant' | 'clankerdome';
 
 export function InventorySack() {
   const router = useRouter();
@@ -100,6 +102,9 @@ export function InventorySack() {
 
   // Trading tab view mode - 'swap' for trading interface, 'launch' for token launcher
   const [tradingView, setTradingView] = useState<TradingView>('swap');
+
+  // Launch tab view - 'instant' for VerifiedTokenLauncher, 'clankerdome' for 24-hour presale parties
+  const [launchTab, setLaunchTab] = useState<LaunchTab>('instant');
 
   // Viewport dimensions for responsive scaling
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -2104,24 +2109,71 @@ export function InventorySack() {
                     selectedPairId={selectedPairId}
                   />
                 ) : (
-                  /* ===== LAUNCH VIEW - Token Launcher Form ===== */
-                  <div className="flex-1 flex items-start justify-center overflow-y-auto py-6 px-4">
-                    <div className="w-full max-w-lg">
-                      {/* Header */}
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="text-xl font-bold text-white">Launch a Token</h2>
-                          <p className="text-sm text-gray-400">Deploy your token paired with WASS on Uniswap V4</p>
-                        </div>
+                  /* ===== LAUNCH VIEW - Two Tab Experience ===== */
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Tab Navigation */}
+                    <div className="flex-shrink-0 border-b border-gray-700 px-4">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setLaunchTab('instant')}
+                          className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                            launchTab === 'instant'
+                              ? 'border-purple-500 text-purple-400'
+                              : 'border-transparent text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Instant Launch
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setLaunchTab('clankerdome')}
+                          className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                            launchTab === 'clankerdome'
+                              ? 'border-pink-500 text-pink-400'
+                              : 'border-transparent text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="text-base">🎪</span>
+                            Clankerdome
+                          </span>
+                        </button>
                       </div>
+                    </div>
 
-                      {/* Verified Token Launcher - 2-step x402 USDC Payment */}
-                      <VerifiedTokenLauncher />
+                    {/* Tab Content */}
+                    <div className="flex-1 overflow-y-auto">
+                      {launchTab === 'instant' ? (
+                        /* ===== INSTANT LAUNCH - Token Launcher Form ===== */
+                        <div className="flex items-start justify-center py-6 px-4">
+                          <div className="w-full max-w-lg">
+                            {/* Header */}
+                            <div className="flex items-center gap-3 mb-6">
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <h2 className="text-xl font-bold text-white">Launch a Token</h2>
+                                <p className="text-sm text-gray-400">Deploy your token paired with WASS on Uniswap V4</p>
+                              </div>
+                            </div>
+
+                            {/* Verified Token Launcher - 2-step x402 USDC Payment */}
+                            <VerifiedTokenLauncher />
+                          </div>
+                        </div>
+                      ) : (
+                        /* ===== CLANKERDOME - 24-hour Presale Parties ===== */
+                        <div className="p-4">
+                          <Clankerdome />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

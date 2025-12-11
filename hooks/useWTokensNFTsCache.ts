@@ -127,9 +127,15 @@ export function useWTokensNFTsCache(
   startAfterUserLoad = true,
   userNFTsLoading = false
 ): UseWTokensNFTsCacheResult {
+  // Check if cache is valid on initial render
+  const cacheIsValidOnMount = moduleCache.hasFetched &&
+    (Date.now() - moduleCache.fetchedAt) < CACHE_TTL;
+
   // Initialize state from module cache if available
   const [nfts, setNfts] = useState<UserNFT[]>(moduleCache.nfts);
-  const [isLoading, setIsLoading] = useState(false);
+  // Start in loading state if cache is not valid (need to fetch)
+  // This ensures spinner shows immediately instead of "No NFTs" flash
+  const [isLoading, setIsLoading] = useState(!cacheIsValidOnMount);
   const [error, setError] = useState<string | null>(null);
   const [totalHeld, setTotalHeld] = useState(moduleCache.totalHeld);
   const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(moduleCache.cacheStatus);
@@ -324,6 +330,7 @@ export function useWTokensNFTsCache(
 
   // Fetch NFTs when ready (after user NFTs load if configured)
   // Uses module-level cache to avoid refetching when switching tabs
+  // DEFERRED: Fetch is delayed to allow UI to render first on slow devices
   useEffect(() => {
     // Check if we have valid cached data (not expired)
     const cacheIsValid = moduleCache.hasFetched &&
@@ -339,12 +346,30 @@ export function useWTokensNFTsCache(
     // If cache is valid, use cached data (already loaded via useState initializers)
     if (cacheIsValid) {
       console.log(`📦 Using cached wTokens data (${moduleCache.nfts.length} NFTs, cached ${Math.round((Date.now() - moduleCache.fetchedAt) / 1000)}s ago)`);
+      // Ensure loading is false when using cache
+      setIsLoading(false);
       return;
     }
 
-    // Otherwise fetch fresh data
+    // Otherwise fetch fresh data - DEFERRED to let UI render first
     if (!startAfterUserLoad || !userNFTsLoading) {
-      fetchCachedNFTs();
+      // Use requestIdleCallback if available, otherwise setTimeout
+      // This allows the main thread to handle UI rendering first
+      const deferFetch = () => {
+        console.log('⏳ Deferred fetch starting after UI render...');
+        fetchCachedNFTs();
+      };
+
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        const idleId = (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(deferFetch, { timeout: 500 });
+        return () => {
+          (window as Window & { cancelIdleCallback: (id: number) => void }).cancelIdleCallback(idleId);
+        };
+      } else {
+        // Fallback: defer with setTimeout to allow UI to render first
+        const timeoutId = setTimeout(deferFetch, 100);
+        return () => clearTimeout(timeoutId);
+      }
     }
   }, [userNFTsLoading, startAfterUserLoad, refetchTrigger, fetchCachedNFTs]);
 
