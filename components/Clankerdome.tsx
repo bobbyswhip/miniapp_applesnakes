@@ -5,11 +5,14 @@ import { useAccount } from 'wagmi';
 import { useClankerdomeLaunch, Launch as LaunchType } from '@/hooks/useClankerdomeLaunch';
 import { useClankerdomeBuy } from '@/hooks/useClankerdomeBuy';
 import { useClankerdomeLaunchWithParticipants, type TopContributor } from '@/hooks/useClankerdomeLaunchWithParticipants';
+import { useLaunchConsensus } from '@/hooks/useLaunchConsensus';
 import { PredictionMarketCard } from './PredictionMarketCard';
 import { PredictionMarketPanel } from './PredictionMarketPanel';
 import { ParticipantIdentityCompact } from './ParticipantIdentity';
+import { ConsensusBar } from './ConsensusBar';
+import { ProtocolVoteSelector } from './ProtocolVoteSelector';
 import { useBatchIdentities } from '@/hooks/useBatchIdentities';
-import type { PredictionMarketInfo } from '@/types/clankerdome';
+import type { PredictionMarketInfo, ProtocolVote } from '@/types/clankerdome';
 
 // API Base URL
 const API_BASE_URL = 'https://api.applesnakes.com';
@@ -508,6 +511,7 @@ function CreateLaunchModal({
     image?: File | string;
     targetAmount?: number;
     durationHours?: number;
+    amountUsdc: number;
   }) => Promise<unknown>;
   progress: { status: string; step: number; totalSteps: number; message: string };
   newLaunch: LaunchType | null;
@@ -521,9 +525,15 @@ function CreateLaunchModal({
     symbol: '',
     description: '',
     targetAmount: '',
+    amountUsdc: '1', // Default $1 USDC - minimum required
     image: null as File | null,
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Parse USDC amount for calculations
+  const usdcAmount = parseFloat(formData.amountUsdc) || 0;
+  const pmSeedAmount = usdcAmount * 0.5;
+  const presaleAmount = usdcAmount * 0.5;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -544,6 +554,10 @@ function CreateLaunchModal({
       return;
     }
 
+    if (usdcAmount < 1) {
+      return; // Minimum $1 USDC required
+    }
+
     try {
       await createLaunch({
         name: formData.name,
@@ -553,6 +567,7 @@ function CreateLaunchModal({
         image: formData.image || undefined,
         targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
         durationHours: 24,
+        amountUsdc: usdcAmount,
       });
     } catch (err) {
       console.error('Launch creation failed:', err);
@@ -706,6 +721,46 @@ function CreateLaunchModal({
             <p className="text-xs text-gray-500 mt-1">Optional funding goal</p>
           </div>
 
+          {/* Initial Contribution (X402 Payment) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Initial Contribution (USDC) *</label>
+            <input
+              type="number"
+              value={formData.amountUsdc}
+              onChange={(e) => setFormData(prev => ({ ...prev, amountUsdc: e.target.value }))}
+              placeholder="1"
+              min="1"
+              step="0.01"
+              required
+              disabled={isLoading}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Minimum $1. Split: 50% seeds prediction market, 50% your presale contribution.
+            </p>
+          </div>
+
+          {/* Payment Breakdown */}
+          {usdcAmount >= 1 && (
+            <div className="p-4 bg-gray-800/80 rounded-xl border border-gray-700">
+              <h4 className="text-sm font-medium text-white mb-3">Payment Breakdown</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Prediction Market Seed:</span>
+                  <span className="text-green-400 font-medium">${pmSeedAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Your Presale Balance:</span>
+                  <span className="text-blue-400 font-medium">${presaleAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
+                  <span className="text-white font-medium">Total:</span>
+                  <span className="text-white font-bold">${usdcAmount.toFixed(2)} USDC</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Image Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Token Image</label>
@@ -738,7 +793,8 @@ function CreateLaunchModal({
               <span className="text-xl">ℹ️</span>
               <div className="text-sm text-gray-400">
                 <p className="mb-2">Your launch party will run for <span className="text-white">24 hours</span>.</p>
-                <p>Users can buy in with USDC during this period. After the presale ends, the token will be deployed on Clanker and paired with WASS.</p>
+                <p className="mb-2">Half of your initial contribution seeds the prediction market with liquidity. The other half counts as your presale buy-in.</p>
+                <p>After the presale ends, the token will be deployed on Clanker and paired with WASS.</p>
               </div>
             </div>
           </div>
@@ -746,10 +802,10 @@ function CreateLaunchModal({
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading || !walletAddress || !formData.name || !formData.symbol}
+            disabled={isLoading || !walletAddress || !formData.name || !formData.symbol || usdcAmount < 1}
             className={`
               w-full py-4 rounded-xl font-bold text-lg transition-all
-              ${isLoading || !walletAddress
+              ${isLoading || !walletAddress || usdcAmount < 1
                 ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
                 : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400'
               }
@@ -762,8 +818,10 @@ function CreateLaunchModal({
               </span>
             ) : !walletAddress ? (
               'Connect Wallet First'
+            ) : usdcAmount < 1 ? (
+              'Minimum $1 USDC Required'
             ) : (
-              'Create Launch Party 🚀'
+              `Create Launch Party ($${usdcAmount.toFixed(2)} USDC) 🚀`
             )}
           </button>
         </form>
@@ -788,6 +846,10 @@ function BuyModal({
   const [amount, setAmount] = useState('10');
   const [localError, setLocalError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'buy' | 'participants' | 'predict'>('buy');
+  const [protocolVote, setProtocolVote] = useState<ProtocolVote>('aerodrome');
+
+  // Fetch consensus data
+  const { consensus, refresh: refreshConsensus } = useLaunchConsensus(launchId, 5000);
 
   // Use the new hook for launch data with participants
   const {
@@ -819,9 +881,14 @@ function BuyModal({
       return;
     }
 
-    const result = await buyIn(launchId, amountNum);
+    const result = await buyIn({
+      launchId,
+      protocolVote,
+      amountUsdc: amountNum,
+    });
     if (result?.success) {
       refresh(); // Refresh data after successful buy
+      refreshConsensus(); // Refresh consensus data
       onSuccess();
     }
   };
@@ -945,6 +1012,21 @@ function BuyModal({
 
             {activeTab === 'buy' && (
               <>
+            {/* Consensus Bar */}
+            <div className="mb-4">
+              <ConsensusBar consensus={consensus} />
+            </div>
+
+            {/* Protocol Vote Selector */}
+            <div className="mb-4">
+              <ProtocolVoteSelector
+                value={protocolVote}
+                onChange={setProtocolVote}
+                consensus={consensus}
+                disabled={buyLoading}
+              />
+            </div>
+
             {/* Amount Input */}
             <div className="mb-4">
               <label className="text-sm text-gray-400 mb-2 block">Amount to Contribute (USDC)</label>
@@ -1000,7 +1082,9 @@ function BuyModal({
                 w-full py-3 rounded-xl font-bold text-lg transition-all
                 ${buyLoading || !walletAddress
                   ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400'
+                  : protocolVote === 'uniswap'
+                    ? 'bg-gradient-to-r from-pink-600 to-pink-500 text-white hover:from-pink-500 hover:to-pink-400'
+                    : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400'
                 }
               `}
             >
@@ -1012,15 +1096,15 @@ function BuyModal({
               ) : !walletAddress ? (
                 'Connect Wallet First'
               ) : (
-                `Buy In for $${amount} USDC`
+                `Buy $${amount} & Vote ${protocolVote === 'uniswap' ? 'Uniswap' : 'Aerodrome'}`
               )}
             </button>
 
             {/* Info */}
             <p className="text-xs text-gray-500 text-center mt-4">
-              USDC will be transferred via x402 payment protocol.
+              Your USDC = your vote weight for the liquidity protocol.
               <br />
-              All contributions are pooled for the token launch dev buy.
+              When presale ends, tokens launch on the winning protocol.
             </p>
               </>
             )}

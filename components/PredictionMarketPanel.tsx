@@ -44,7 +44,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
 
   const { placeBet, loading: betting, error: betError, clearError } = usePlaceBet();
   const { claim, loading: claiming, error: claimError } = useClaim();
-  const { claimable, totalClaimable, refresh: refreshClaimable } = useClaimable(address || null);
+  const { claims: claimablePositions, totalClaimable, refresh: refreshClaimable } = useClaimable(address || null);
 
   // Live countdown
   useEffect(() => {
@@ -123,7 +123,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
     : 0;
 
   // Check if user has claimable winnings from this market
-  const marketClaimable = claimable.filter(c => c.marketId === marketId);
+  const marketClaimable = claimablePositions.filter((c: { marketId: string }) => c.marketId === marketId);
   const hasClaimable = marketClaimable.length > 0;
 
   if (loading) {
@@ -326,7 +326,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
             <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-xl">
               <p className="text-green-400 font-medium mb-2">🎉 You have winnings to claim!</p>
               <div className="text-white mb-3">
-                Total claimable: ${marketClaimable.reduce((sum, c) => sum + c.potentialPayout, 0).toFixed(2)}
+                Total claimable: ${marketClaimable.reduce((sum: number, c: { potentialPayout: number }) => sum + c.potentialPayout, 0).toFixed(2)}
               </div>
               <button
                 onClick={handleClaim}

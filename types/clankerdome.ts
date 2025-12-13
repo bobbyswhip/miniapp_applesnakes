@@ -187,6 +187,73 @@ export interface ClaimResult {
 }
 
 // ====================================
+// Consensus Voting Types
+// ====================================
+
+// Protocol vote options
+export type ProtocolVote = "uniswap" | "aerodrome";
+
+// Consensus data from API
+export interface ProtocolConsensus {
+  leadingProtocol: ProtocolVote;
+  uniswap: {
+    votes: number;    // Total USDC voting for Uniswap
+    percent: number;  // 0-100
+  };
+  aerodrome: {
+    votes: number;    // Total USDC voting for Aerodrome
+    percent: number;  // 0-100
+  };
+  totalVotes: number; // Total USDC in presale
+  isTie: boolean;     // True if 50/50 (Aerodrome wins ties)
+  description?: string;
+}
+
+// X402 payment accepts (from 402 response body)
+export interface X402Accepts {
+  payTo: string;
+  asset: string;
+  maxAmount: string;
+  extra: {
+    name: string;
+    version: string;
+  };
+}
+
+// Buy request with protocol vote
+export interface ConsensusBuyRequest {
+  launchId: string;
+  protocolVote: ProtocolVote;
+}
+
+// Buy response with consensus
+export interface ConsensusBuyResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  buy?: {
+    launchId: string;
+    amount: number;
+    txHash: string;
+    wallet: string;
+    timestamp: number;
+    protocolVote: ProtocolVote;
+  };
+  launch?: {
+    id: string;
+    name: string;
+    symbol: string;
+    totalRaised: number;
+    participantCount: number;
+  };
+  wallet?: {
+    totalContribution: number;
+    sharePercent: number;
+  };
+  consensus?: ProtocolConsensus;
+}
+
+// ====================================
 // Clankerdome Launch Types
 // ====================================
 
@@ -232,6 +299,7 @@ export interface ClankerdomeLaunch {
   creatorWallet: string;
   tokenAddress?: string;
   predictionMarket?: PredictionMarketInfo;
+  consensus?: ProtocolConsensus | null;  // Consensus voting data
   // Legacy support
   predictionMarketAddress?: string;
 }

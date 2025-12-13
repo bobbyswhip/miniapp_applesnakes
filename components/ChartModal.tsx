@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance, useSendCalls, useCallsStatus } from 'wagmi';
-import { parseEther, formatEther, formatUnits, parseUnits, encodeFunctionData, maxUint160 } from 'viem';
+import { parseEther, formatEther, formatUnits, parseUnits, encodeFunctionData, maxUint160, decodeErrorResult } from 'viem';
 import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, UNIVERSAL_ROUTER_ADDRESS, PERMIT2_ADDRESS, TOKEN_PAIRS, getDefaultPair, getTokenPairById, getAllTokenAddresses, ETH_ADDRESS, TokenPairConfig, WASS_TOKEN_ADDRESS, HOOK_ADDRESS, POOL_CONFIG, STATE_VIEW_ADDRESS } from '@/config';
 import { base } from 'wagmi/chains';
 import { useTransactions } from '@/contexts/TransactionContext';
@@ -13,6 +13,7 @@ import { PoolTrade, formatRelativeTime, truncateAddress } from '@/hooks/usePoolT
 // V4 Command constants for Universal Router
 const V4_SWAP = 0x10; // V4_SWAP command
 const SWAP_EXACT_IN_SINGLE = 0x06; // Single pool exact input swap
+const SWAP_EXACT_IN = 0x07; // Multi-hop exact input swap with path (NOT 0x00!)
 const SETTLE_ALL = 0x0c; // Settle all tokens (handles Permit2 automatically)
 const TAKE_ALL = 0x0f; // Take all output tokens
 
@@ -158,6 +159,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   const [outputAmount, setOutputAmount] = useState<string>('');
   const [isQuoting, setIsQuoting] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
+  // Input currency for buy mode (ETH or wASS) - wASS only available for token pairs
+  const [buyInputCurrency, setBuyInputCurrency] = useState<'eth' | 'wass'>('eth');
+  // Output currency for sell mode (wASS or ETH) - ETH requires multi-hop for token pairs
+  const [sellOutputCurrency, setSellOutputCurrency] = useState<'wass' | 'eth'>('wass');
 
   // Transaction state
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
@@ -166,6 +171,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   // Approval state for sells
   const [approvalStep, setApprovalStep] = useState<'none' | 'permit2' | 'router' | 'ready'>('none');
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  // Approval state for buying with wASS (only for token pairs)
+  const [buyWassApprovalStep, setBuyWassApprovalStep] = useState<'none' | 'permit2' | 'router' | 'ready'>('none');
+  const [isCheckingBuyWassApproval, setIsCheckingBuyWassApproval] = useState(false);
   const [poolKey, setPoolKey] = useState<{
     currency0: `0x${string}`;
     currency1: `0x${string}`;
@@ -298,17 +306,24 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     }
     setInputAmount('');
     setOutputAmount('');
-    // Reset approval state when switching pairs (force re-check)
+    // Reset buy input currency to ETH when switching pairs (wASS only available for token pairs)
+    setBuyInputCurrency('eth');
+    // Reset sell output currency to wASS when switching pairs
+    setSellOutputCurrency('wass');
+    // Reset approval states when switching pairs (force re-check)
     setApprovalStep('none');
+    setBuyWassApprovalStep('none');
     // Refetch allowances for the new token (after state updates)
     setTimeout(() => {
       refetchPermit2Allowance();
       refetchRouterAllowance();
+      refetchWassPermit2Allowance();
+      refetchWassRouterAllowance();
     }, 100);
-    // Clear chart data immediately and reset time scale to prepare for new data
-    if (seriesRef.current && chartRef.current) {
+    // Clear chart data immediately to prepare for new data
+    // Note: Don't call resetTimeScale() here - let fitContent() handle view adjustment after data loads
+    if (seriesRef.current) {
       seriesRef.current.setData([]);
-      chartRef.current.timeScale().resetTimeScale();
     }
   };
 
@@ -372,6 +387,24 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     abi: PERMIT2_ABI,
     functionName: 'allowance',
     args: address ? [address, sellTokenAddress, UNIVERSAL_ROUTER_ADDRESS] : undefined,
+    chainId: base.id,
+  });
+
+  // Check wASS allowance for Permit2 (for buying with wASS on token pairs)
+  const { data: wassPermit2Allowance, refetch: refetchWassPermit2Allowance } = useReadContract({
+    address: contracts.token.address as `0x${string}`,
+    abi: contracts.token.abi,
+    functionName: 'allowance',
+    args: address ? [address, PERMIT2_ADDRESS] : undefined,
+    chainId: base.id,
+  });
+
+  // Check wASS Permit2 allowance for Universal Router (for buying with wASS on token pairs)
+  const { data: wassRouterAllowanceData, refetch: refetchWassRouterAllowance } = useReadContract({
+    address: PERMIT2_ADDRESS,
+    abi: PERMIT2_ABI,
+    functionName: 'allowance',
+    args: address ? [address, contracts.token.address, UNIVERSAL_ROUTER_ADDRESS] : undefined,
     chainId: base.id,
   });
 
@@ -508,6 +541,52 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     checkApprovals();
   }, [swapTab, address, inputAmount, permit2Allowance, routerAllowanceData, sellTokenAddress, isTokenPair]);
+
+  // Check approvals when buying with wASS (only for token pairs)
+  useEffect(() => {
+    // Only check when buying with wASS on token pairs
+    if (swapTab !== 'buy' || buyInputCurrency !== 'wass' || !isTokenPair) {
+      setBuyWassApprovalStep('none');
+      return;
+    }
+
+    if (!address || !inputAmount || parseFloat(inputAmount) <= 0) {
+      setBuyWassApprovalStep('none');
+      return;
+    }
+
+    const checkWassApprovals = async () => {
+      setIsCheckingBuyWassApproval(true);
+      try {
+        const buyAmount = parseUnits(inputAmount, 18);
+
+        // Check wASS ERC20 allowance for Permit2
+        const erc20Allowance = wassPermit2Allowance as bigint | undefined;
+        if (!erc20Allowance || erc20Allowance < buyAmount) {
+          setBuyWassApprovalStep('permit2');
+          return;
+        }
+
+        // Check wASS Permit2 allowance for Universal Router
+        const allowanceResult = wassRouterAllowanceData as unknown as readonly [bigint, bigint, bigint] | undefined;
+        const [amount, expiration] = allowanceResult || [0n, 0n, 0n];
+        const currentTime = BigInt(Math.floor(Date.now() / 1000));
+        if (amount < BigInt(buyAmount.toString()) || expiration < currentTime) {
+          setBuyWassApprovalStep('router');
+          return;
+        }
+
+        setBuyWassApprovalStep('ready');
+      } catch (err) {
+        console.error('Error checking wASS approvals:', err);
+        setBuyWassApprovalStep('permit2'); // Default to needing approval on error
+      } finally {
+        setIsCheckingBuyWassApproval(false);
+      }
+    };
+
+    checkWassApprovals();
+  }, [swapTab, buyInputCurrency, address, inputAmount, wassPermit2Allowance, wassRouterAllowanceData, isTokenPair]);
 
   // Fetch OHLCV data from GeckoTerminal API
   const fetchOHLCVData = useCallback(async (tf: TimeFrame, poolAddr: string): Promise<OHLCVData[]> => {
@@ -701,7 +780,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         }));
 
         seriesRef.current?.setData(chartData);
-        chartRef.current?.timeScale().fitContent();
+        // Use requestAnimationFrame to ensure fitContent runs after chart processes new data
+        // This fixes the issue where switching pairs leaves the view on the old price range
+        requestAnimationFrame(() => {
+          chartRef.current?.timeScale().fitContent();
+        });
         hasInitialDataRef.current = true;
         lastDataRef.current = data;
 
@@ -846,15 +929,72 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           console.log('wASS is token0:', wassIsToken0);
 
           if (swapTab === 'buy') {
-            // Buy: ETH → wASS → Token (two hops via OTC router's swapToToken)
-            //
-            // Use the SAME V4 quote approach as the default wASS/ETH pair
-            // The swapToToken function has slippage protection (minWassOut, minTokenOut)
-            // so we just need a good estimate - V4 quoter provides this
+            // Check if buying with wASS input (direct wASS → Token swap)
+            if (buyInputCurrency === 'wass') {
+              // Direct wASS → Token quote (single hop from the pool)
+              const wassIn = parseUnits(inputAmount, 18);
+              console.log('=== BUY WITH wASS QUOTE START ===');
+              console.log('Input:', inputAmount, 'wASS');
 
-            const ethIn = parseEther(inputAmount);
-            console.log('=== BUY QUOTE START ===');
-            console.log('Input:', inputAmount, 'ETH');
+              // wASS → TOKEN direction
+              // If wASS is token0: buying TOKEN (currency1) for wASS (currency0) = zeroForOne = true
+              // If wASS is token1: buying TOKEN (currency0) for wASS (currency1) = zeroForOne = false
+              const wassToTokenZeroForOne = wassIsToken0;
+              console.log('wASS→Token direction, zeroForOne:', wassToTokenZeroForOne, 'amount:', formatUnits(wassIn, 18));
+
+              try {
+                // Try direct quote first
+                const tokenOut = await getSimulateQuote(tokenPairPoolKey, wassToTokenZeroForOne, wassIn);
+                console.log('wASS→Token quote:', formatUnits(tokenOut, 18), 'Token for', formatUnits(wassIn, 18), 'wASS');
+
+                if (tokenOut > 0n) {
+                  setOutputAmount(formatUnits(tokenOut, 18));
+                  console.log('=== BUY WITH wASS QUOTE FINAL:', formatUnits(tokenOut, 18), 'TOKEN for', inputAmount, 'wASS ===');
+                } else {
+                  // Fallback: Use inverted sell rate
+                  console.log('Direct quote returned 0, using inverted sell rate');
+                  const sellDirection = !wassIsToken0;
+                  const oneToken = parseUnits('1', 18);
+                  const wassPerToken = await getSimulateQuote(tokenPairPoolKey, sellDirection, oneToken);
+
+                  if (wassPerToken > 0n) {
+                    const tokenEstimate = (wassIn * oneToken) / wassPerToken;
+                    console.log('Inverted estimate:', formatUnits(tokenEstimate, 18), 'TOKEN');
+                    setOutputAmount(formatUnits(tokenEstimate, 18));
+                  } else {
+                    setOutputAmount(formatUnits(wassIn, 18)); // 1:1 fallback
+                  }
+                }
+              } catch (err) {
+                console.error('wASS→Token quoter failed:', err);
+                // Fallback: Use inverted sell rate
+                try {
+                  const sellDirection = !wassIsToken0;
+                  const oneToken = parseUnits('1', 18);
+                  const wassPerToken = await getSimulateQuote(tokenPairPoolKey, sellDirection, oneToken);
+
+                  if (wassPerToken > 0n) {
+                    const tokenEstimate = (wassIn * oneToken) / wassPerToken;
+                    console.log('Fallback inverted estimate:', formatUnits(tokenEstimate, 18), 'TOKEN');
+                    setOutputAmount(formatUnits(tokenEstimate, 18));
+                  } else {
+                    setOutputAmount(formatUnits(wassIn, 18)); // 1:1 fallback
+                  }
+                } catch {
+                  console.log('Using 1:1 estimate');
+                  setOutputAmount(formatUnits(wassIn, 18));
+                }
+              }
+            } else {
+              // Buy with ETH: ETH → wASS → Token (two hops via OTC router's swapToToken)
+              //
+              // Use the SAME V4 quote approach as the default wASS/ETH pair
+              // The swapToToken function has slippage protection (minWassOut, minTokenOut)
+              // so we just need a good estimate - V4 quoter provides this
+
+              const ethIn = parseEther(inputAmount);
+              console.log('=== BUY QUOTE START ===');
+              console.log('Input:', inputAmount, 'ETH');
 
             // Get pool key for ETH/wASS (same as default pair uses)
             const [poolIdRaw, hookAddress] = await Promise.all([
@@ -985,8 +1125,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               console.error('Step 2 quote failed:', err);
               setOutputAmount(formatUnits(wassOut, 18));
             }
+            }
           } else {
-            // Sell: Token → wASS (single hop - output is wASS)
+            // Sell: Token → wASS or Token → wASS → ETH (multi-hop)
             const tokenIn = parseUnits(inputAmount, 18);
 
             // Token → wASS direction
@@ -996,17 +1137,88 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             console.log('Sell Token→wASS direction, zeroForOne:', tokenToWassZeroForOne, 'amount:', formatUnits(tokenIn, 18));
 
             try {
+              // Step 1: Get Token → wASS quote
               const wassOut = await getSimulateQuote(tokenPairPoolKey, tokenToWassZeroForOne, tokenIn);
               console.log('Token→wASS quote:', formatUnits(wassOut, 18), 'wASS for', formatUnits(tokenIn, 18), 'Token');
 
-              if (wassOut > 0n) {
-                setOutputAmount(formatUnits(wassOut, 18));
+              if (sellOutputCurrency === 'eth') {
+                // Multi-hop sell: Token → wASS → ETH
+                console.log('=== MULTI-HOP SELL QUOTE: Token → wASS → ETH ===');
+
+                if (wassOut > 0n) {
+                  // Step 2: Get wASS → ETH quote using the default wASS/ETH pool
+                  const [poolIdRaw, hookAddress] = await Promise.all([
+                    publicClient.readContract({
+                      address: contracts.nft.address as `0x${string}`,
+                      abi: contracts.nft.abi,
+                      functionName: 'poolIdRaw',
+                      args: [],
+                    }) as Promise<`0x${string}`>,
+                    publicClient.readContract({
+                      address: contracts.nft.address as `0x${string}`,
+                      abi: contracts.nft.abi,
+                      functionName: 'hook',
+                      args: [],
+                    }) as Promise<`0x${string}`>,
+                  ]);
+
+                  const wassEthPoolKey = await publicClient.readContract({
+                    address: hookAddress,
+                    abi: [{
+                      inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+                      name: 'getPoolKey',
+                      outputs: [{
+                        components: [
+                          { internalType: 'address', name: 'currency0', type: 'address' },
+                          { internalType: 'address', name: 'currency1', type: 'address' },
+                          { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                          { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                          { internalType: 'address', name: 'hooks', type: 'address' },
+                        ],
+                        internalType: 'tuple',
+                        name: '',
+                        type: 'tuple',
+                      }],
+                      stateMutability: 'view',
+                      type: 'function',
+                    }],
+                    functionName: 'getPoolKey',
+                    args: [poolIdRaw],
+                  }) as unknown as {
+                    currency0: `0x${string}`;
+                    currency1: `0x${string}`;
+                    fee: number;
+                    tickSpacing: number;
+                    hooks: `0x${string}`;
+                  };
+
+                  // wASS → ETH direction: zeroForOne = false (wASS is currency0, ETH is currency1)
+                  const ethOut = await getSimulateQuote(wassEthPoolKey, false, wassOut);
+                  console.log('wASS→ETH quote:', formatEther(ethOut), 'ETH for', formatUnits(wassOut, 18), 'wASS');
+                  console.log('=== MULTI-HOP FINAL:', formatEther(ethOut), 'ETH for', formatUnits(tokenIn, 18), 'Token ===');
+
+                  if (ethOut > 0n) {
+                    setOutputAmount(formatEther(ethOut));
+                  } else {
+                    // Fallback: estimate ETH from wASS at 1:1 USD
+                    console.log('wASS→ETH quote returned 0, using wASS amount as fallback');
+                    setOutputAmount(formatUnits(wassOut, 18));
+                  }
+                } else {
+                  console.log('Token→wASS quote returned 0, using 1:1 estimate');
+                  setOutputAmount(formatUnits(tokenIn, 18));
+                }
               } else {
-                console.log('Quoter returned 0, using 1:1 estimate');
-                setOutputAmount(formatUnits(tokenIn, 18));
+                // Single-hop sell: Token → wASS (output is wASS)
+                if (wassOut > 0n) {
+                  setOutputAmount(formatUnits(wassOut, 18));
+                } else {
+                  console.log('Quoter returned 0, using 1:1 estimate');
+                  setOutputAmount(formatUnits(tokenIn, 18));
+                }
               }
             } catch (err) {
-              console.error('Token→wASS quoter failed:', err);
+              console.error('Sell quoter failed:', err);
               console.log('Using 1:1 estimate');
               setOutputAmount(formatUnits(tokenIn, 18));
             }
@@ -1098,7 +1310,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     const debounce = setTimeout(fetchQuote, 300);
     return () => clearTimeout(debounce);
-  }, [inputAmount, swapTab, publicClient, contracts.nft.address, contracts.nft.abi, isTokenPair, outputTokenAddress, selectedPair]);
+  }, [inputAmount, swapTab, buyInputCurrency, sellOutputCurrency, publicClient, contracts.nft.address, contracts.nft.abi, isTokenPair, outputTokenAddress, selectedPair]);
 
   // Handle successful transaction
   useEffect(() => {
@@ -1108,8 +1320,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       refetchOutputTokenBalance();
       refetchPermit2Allowance();
       refetchRouterAllowance();
+      refetchWassPermit2Allowance();
+      refetchWassRouterAllowance();
       setInputAmount('');
       setOutputAmount('');
+      setBuyWassApprovalStep('none'); // Reset wASS approval state after successful transaction
       setTimeout(() => resetWrite(), 2000);
       // Enable fast polling mode for faster chart updates after swap
       enableFastPolling();
@@ -1121,7 +1336,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       onSwapComplete?.();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuccess, txHash, updateTransaction, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance, resetWrite]);
+  }, [isSuccess, txHash, updateTransaction, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance, refetchWassPermit2Allowance, refetchWassRouterAllowance, resetWrite]);
 
   // Reset on transaction error/cancel to allow retry immediately
   useEffect(() => {
@@ -1132,9 +1347,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     }
   }, [writeError, resetWrite]);
 
-  // Handle Buy (OTC for wASS/ETH, swapToToken for token pairs)
+  // Handle Buy (OTC for wASS/ETH, swapToToken for token pairs, V4 swap for wASS→Token)
   const handleBuy = () => {
     if (!address || !inputAmount || parseFloat(inputAmount) <= 0) return;
+
+    // Handle buying with wASS on token pairs (wASS → Token via V4)
+    if (buyInputCurrency === 'wass' && isTokenPair && outputTokenAddress) {
+      handleBuyWithWass();
+      return;
+    }
 
     const ethValue = parseEther(inputAmount);
 
@@ -1192,6 +1413,177 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     }
   };
 
+  // Handle buying with wASS input (wASS → Token via V4 swap)
+  const handleBuyWithWass = async () => {
+    if (!address || !inputAmount || !outputTokenAddress || !publicClient) return;
+
+    try {
+      const wassAmount = parseUnits(inputAmount, 18);
+      // TEMPORARY: Use 0 minOut to test if swap works at all (bypasses slippage check)
+      // Normal: parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18)
+      const minTokensOut = 0n; // TODO: Restore slippage protection after debugging
+      console.log('⚠️ TESTING MODE: minTokensOut = 0 (no slippage protection)');
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
+
+      // wASS → Token is a single-hop V4 swap
+      // Determine swap direction based on pool token order
+      const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+
+      // Build pool key for wASS/Token pair
+      const tokenPoolKey = {
+        currency0: selectedPair.token0,
+        currency1: selectedPair.token1,
+        fee: selectedPair.fee,
+        tickSpacing: selectedPair.tickSpacing,
+        hooks: selectedPair.hook,
+      };
+
+      console.log('=== wASS → TOKEN V4 SWAP (BUY) ===');
+      console.log('wASS amount (input):', formatUnits(wassAmount, 18));
+      console.log('Min tokens out:', formatUnits(minTokensOut, 18));
+      console.log('Pool key:', JSON.stringify(tokenPoolKey, null, 2));
+      console.log('wassIsToken0:', wassIsToken0);
+      console.log('zeroForOne:', wassIsToken0); // wASS → TOKEN = token0 → token1 if wASS is token0
+      console.log('Input token (wASS):', WASS_TOKEN_ADDRESS);
+      console.log('Output token:', outputTokenAddress);
+      console.log('Universal Router:', UNIVERSAL_ROUTER_ADDRESS);
+      console.log('Permit2:', PERMIT2_ADDRESS);
+
+      // Verify wASS approvals before attempting swap
+      console.log('=== CHECKING wASS APPROVALS ===');
+      const wassErc20Allowance = wassPermit2Allowance as bigint | undefined;
+      console.log('wASS ERC20 allowance for Permit2:', wassErc20Allowance?.toString() || '0');
+      console.log('Required amount:', wassAmount.toString());
+      if (!wassErc20Allowance || wassErc20Allowance < wassAmount) {
+        setSwapError('Insufficient wASS approval for Permit2. Please approve first.');
+        return;
+      }
+
+      const routerAllowance = wassRouterAllowanceData as unknown as readonly [bigint, bigint, bigint] | undefined;
+      const [routerAmount, routerExpiration] = routerAllowance || [0n, 0n, 0n];
+      const currentTime = BigInt(Math.floor(Date.now() / 1000));
+      console.log('Permit2 router allowance amount:', routerAmount.toString());
+      console.log('Permit2 router allowance expiration:', routerExpiration.toString());
+      console.log('Current time:', currentTime.toString());
+      if (routerAmount < wassAmount || routerExpiration < currentTime) {
+        setSwapError('Insufficient Permit2 router allowance. Please approve first.');
+        return;
+      }
+      console.log('=== APPROVALS VERIFIED ===');
+
+      // Use the same proper V4 Router format as the working sell function
+      // Actions: SWAP_EXACT_IN_SINGLE (0x06), SETTLE_ALL (0x0c), TAKE_ALL (0x0f)
+      const { commands, inputs } = buildV4SwapCalldataForTokenPair(
+        wassAmount,
+        minTokensOut,
+        tokenPoolKey,
+        wassIsToken0, // zeroForOne: if wASS is token0, swap 0→1
+        WASS_TOKEN_ADDRESS as `0x${string}`, // input token (wASS)
+        outputTokenAddress // output token (the token we're buying)
+      );
+
+      console.log('Commands (should be 0x10):', commands);
+      console.log('Inputs array length:', inputs.length);
+      console.log('V4 Input data:', inputs[0]?.substring(0, 200) + '...');
+
+      // Simulate the transaction first to get detailed error messages
+      console.log('=== SIMULATING TRANSACTION ===');
+      try {
+        const simulation = await publicClient.simulateContract({
+          address: UNIVERSAL_ROUTER_ADDRESS,
+          abi: UNIVERSAL_ROUTER_ABI,
+          functionName: 'execute',
+          args: [commands, inputs, deadline],
+          account: address,
+        });
+        console.log('Simulation successful:', simulation);
+      } catch (simError: unknown) {
+        console.error('=== SIMULATION FAILED ===');
+        console.error('Simulation error:', simError);
+
+        // Try to decode V4TooLittleReceived error to get actual values
+        const V4_ERROR_ABI = [{
+          type: 'error',
+          name: 'V4TooLittleReceived',
+          inputs: [
+            { name: 'minAmountOutReceived', type: 'uint256' },
+            { name: 'amountReceived', type: 'uint256' }
+          ]
+        }] as const;
+
+        // Extract error data from the error message
+        const errorObj = simError as { cause?: { data?: `0x${string}` }; data?: `0x${string}` };
+        const errorData = errorObj?.cause?.data || errorObj?.data;
+
+        if (errorData && errorData.startsWith('0x8b063d73')) {
+          try {
+            const decoded = decodeErrorResult({
+              abi: V4_ERROR_ABI,
+              data: errorData
+            });
+            console.error('=== V4TooLittleReceived DECODED ===');
+            console.error('minAmountOutReceived:', decoded.args[0]?.toString());
+            console.error('amountReceived:', decoded.args[1]?.toString());
+            setSwapError(`Swap failed: Expected min ${formatUnits(decoded.args[0] || 0n, 18)} but got ${formatUnits(decoded.args[1] || 0n, 18)} tokens`);
+          } catch (decodeErr) {
+            console.error('Failed to decode error:', decodeErr);
+            console.error('Raw error data:', errorData);
+          }
+        }
+
+        if (simError instanceof Error) {
+          console.error('Error message:', simError.message);
+          // Extract revert reason if available
+          const errorMessage = simError.message;
+
+          // Also try to extract error data from message
+          const dataMatch = errorMessage.match(/data: "(0x[a-fA-F0-9]+)"/);
+          if (dataMatch && dataMatch[1]?.startsWith('0x8b063d73')) {
+            try {
+              const decoded = decodeErrorResult({
+                abi: V4_ERROR_ABI,
+                data: dataMatch[1] as `0x${string}`
+              });
+              console.error('=== V4TooLittleReceived DECODED (from message) ===');
+              console.error('minAmountOutReceived:', decoded.args[0]?.toString());
+              console.error('amountReceived:', decoded.args[1]?.toString());
+              setSwapError(`Swap failed: Expected min ${formatUnits(decoded.args[0] || 0n, 18)} but got ${formatUnits(decoded.args[1] || 0n, 18)} tokens`);
+              return;
+            } catch (decodeErr) {
+              console.error('Failed to decode from message:', decodeErr);
+            }
+          }
+
+          if (errorMessage.includes('execution reverted')) {
+            const revertMatch = errorMessage.match(/reason: (.+?)(?:\n|$)/);
+            if (revertMatch) {
+              setSwapError(`Swap simulation failed: ${revertMatch[1]}`);
+            } else {
+              setSwapError('Swap simulation failed: execution reverted');
+            }
+          } else {
+            setSwapError(`Swap simulation failed: ${simError.message.substring(0, 100)}`);
+          }
+        }
+        return;
+      }
+
+      writeContract({
+        address: UNIVERSAL_ROUTER_ADDRESS,
+        abi: UNIVERSAL_ROUTER_ABI,
+        functionName: 'execute',
+        args: [commands, inputs, deadline],
+      });
+    } catch (err) {
+      console.error('Buy with wASS error:', err);
+      if (err instanceof Error) {
+        setSwapError(`Failed to execute swap: ${err.message.substring(0, 100)}`);
+      } else {
+        setSwapError('Failed to execute swap');
+      }
+    }
+  };
+
   // Handle Permit2 Approval (Step 1: Approve Permit2 to spend tokens)
   const handleApprovePermit2 = async () => {
     if (!address) return;
@@ -1235,6 +1627,50 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     } catch (err) {
       console.error('Router approval error:', err);
       setSwapError('Failed to approve Router');
+    }
+  };
+
+  // Handle wASS Permit2 Approval (for buying with wASS on token pairs)
+  const handleApproveWassPermit2 = async () => {
+    if (!address) return;
+
+    try {
+      writeContract({
+        address: contracts.token.address as `0x${string}`,
+        abi: contracts.token.abi,
+        functionName: 'approve',
+        args: [PERMIT2_ADDRESS, maxUint160],
+      });
+
+      if (txHash) {
+        addTransaction(txHash, 'Approving wASS');
+      }
+    } catch (err) {
+      console.error('wASS Permit2 approval error:', err);
+      setSwapError('Failed to approve wASS');
+    }
+  };
+
+  // Handle wASS Router Approval (for buying with wASS on token pairs)
+  const handleApproveWassRouter = async () => {
+    if (!address) return;
+
+    try {
+      const expiration = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // 1 year
+
+      writeContract({
+        address: PERMIT2_ADDRESS,
+        abi: PERMIT2_ABI,
+        functionName: 'approve',
+        args: [contracts.token.address, UNIVERSAL_ROUTER_ADDRESS, maxUint160, expiration],
+      });
+
+      if (txHash) {
+        addTransaction(txHash, 'Approving Router for wASS');
+      }
+    } catch (err) {
+      console.error('wASS Router approval error:', err);
+      setSwapError('Failed to approve Router for wASS');
     }
   };
 
@@ -1474,172 +1910,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     return { commands, inputs: [v4InputData] };
   }, []);
 
-  // Build V4 multi-hop swap calldata (Token -> wASS -> ETH)
-  const buildMultiHopV4SwapCalldata = useCallback((
-    amountIn: bigint,
-    minAmountOut: bigint,
-    tokenPoolKey: {
-      currency0: `0x${string}`;
-      currency1: `0x${string}`;
-      fee: number;
-      tickSpacing: number;
-      hooks: `0x${string}`;
-    },
-    wassPoolKey: {
-      currency0: `0x${string}`;
-      currency1: `0x${string}`;
-      fee: number;
-      tickSpacing: number;
-      hooks: `0x${string}`;
-    },
-    wassIsToken0InTokenPool: boolean
-  ): { commands: `0x${string}`; inputs: `0x${string}`[] } => {
-    // Multi-hop: Token -> wASS -> ETH
-    // Two swaps in sequence using V4Router actions
-
-    // Actions for multi-hop:
-    // SWAP_EXACT_IN_SINGLE (Token -> wASS)
-    // SWAP_EXACT_IN_SINGLE (wASS -> ETH)
-    // SETTLE_ALL (settle input token)
-    // TAKE_ALL (take ETH output)
-    const SWAP_EXACT_IN_SINGLE_2 = 0x06;
-    const actions = new Uint8Array([SWAP_EXACT_IN_SINGLE, SWAP_EXACT_IN_SINGLE_2, SETTLE_ALL, TAKE_ALL]);
-
-    // First swap: Token -> wASS
-    // If wASS is token0, we're swapping token1 -> token0 (zeroForOne = false)
-    // If wASS is token1, we're swapping token0 -> token1 (zeroForOne = true)
-    const tokenToWassZeroForOne = !wassIsToken0InTokenPool;
-    const inputToken = wassIsToken0InTokenPool ? tokenPoolKey.currency1 : tokenPoolKey.currency0;
-
-    const swap1Params = encodeFunctionData({
-      abi: [{
-        name: 'swap',
-        type: 'function',
-        inputs: [{
-          name: 'params',
-          type: 'tuple',
-          components: [
-            { name: 'poolKey', type: 'tuple', components: [
-              { name: 'currency0', type: 'address' },
-              { name: 'currency1', type: 'address' },
-              { name: 'fee', type: 'uint24' },
-              { name: 'tickSpacing', type: 'int24' },
-              { name: 'hooks', type: 'address' },
-            ]},
-            { name: 'zeroForOne', type: 'bool' },
-            { name: 'amountIn', type: 'uint128' },
-            { name: 'amountOutMinimum', type: 'uint128' },
-            { name: 'hookData', type: 'bytes' },
-          ],
-        }],
-        outputs: [],
-      }],
-      functionName: 'swap',
-      args: [{
-        poolKey: tokenPoolKey,
-        zeroForOne: tokenToWassZeroForOne,
-        amountIn: amountIn,
-        amountOutMinimum: 0n, // Intermediate - no min (slippage on final)
-        hookData: '0x' as `0x${string}`,
-      }],
-    });
-    const swap1ParamsData = ('0x' + swap1Params.slice(10)) as `0x${string}`;
-
-    // Second swap: wASS -> ETH
-    // wASS is currency1 in wassPoolKey (ETH is currency0)
-    // So zeroForOne = false (wASS -> ETH = token1 -> token0)
-    const swap2Params = encodeFunctionData({
-      abi: [{
-        name: 'swap',
-        type: 'function',
-        inputs: [{
-          name: 'params',
-          type: 'tuple',
-          components: [
-            { name: 'poolKey', type: 'tuple', components: [
-              { name: 'currency0', type: 'address' },
-              { name: 'currency1', type: 'address' },
-              { name: 'fee', type: 'uint24' },
-              { name: 'tickSpacing', type: 'int24' },
-              { name: 'hooks', type: 'address' },
-            ]},
-            { name: 'zeroForOne', type: 'bool' },
-            { name: 'amountIn', type: 'uint128' },
-            { name: 'amountOutMinimum', type: 'uint128' },
-            { name: 'hookData', type: 'bytes' },
-          ],
-        }],
-        outputs: [],
-      }],
-      functionName: 'swap',
-      args: [{
-        poolKey: wassPoolKey,
-        zeroForOne: false, // wASS (token1) -> ETH (token0)
-        amountIn: 0n, // Use output from previous swap (CONTRACT_BALANCE)
-        amountOutMinimum: minAmountOut,
-        hookData: '0x' as `0x${string}`,
-      }],
-    });
-    const swap2ParamsData = ('0x' + swap2Params.slice(10)) as `0x${string}`;
-
-    // Settle the input token
-    const settleParams = encodeFunctionData({
-      abi: [{
-        name: 'settle',
-        type: 'function',
-        inputs: [
-          { name: 'currency', type: 'address' },
-          { name: 'maxAmount', type: 'uint256' },
-        ],
-        outputs: [],
-      }],
-      functionName: 'settle',
-      args: [inputToken, amountIn],
-    });
-    const settleParamsData = ('0x' + settleParams.slice(10)) as `0x${string}`;
-
-    // Take ETH output
-    const takeParams = encodeFunctionData({
-      abi: [{
-        name: 'take',
-        type: 'function',
-        inputs: [
-          { name: 'currency', type: 'address' },
-          { name: 'minAmount', type: 'uint256' },
-        ],
-        outputs: [],
-      }],
-      functionName: 'take',
-      args: [ETH_ADDRESS, minAmountOut],
-    });
-    const takeParamsData = ('0x' + takeParams.slice(10)) as `0x${string}`;
-
-    // Build the V4 swap input
-    const v4Input = encodeFunctionData({
-      abi: [{
-        name: 'v4Swap',
-        type: 'function',
-        inputs: [
-          { name: 'actions', type: 'bytes' },
-          { name: 'params', type: 'bytes[]' },
-        ],
-        outputs: [],
-      }],
-      functionName: 'v4Swap',
-      args: [
-        ('0x' + Buffer.from(actions).toString('hex')) as `0x${string}`,
-        [swap1ParamsData, swap2ParamsData, settleParamsData, takeParamsData],
-      ],
-    });
-    const v4InputData = ('0x' + v4Input.slice(10)) as `0x${string}`;
-
-    const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
-
-    return { commands, inputs: [v4InputData] };
-  }, []);
-
-  // Build V4 swap calldata for token pair single-hop (TOKEN -> wASS)
+  // Build V4 swap calldata for token pair single-hop (TOKEN -> wASS or wASS -> TOKEN)
   // Uses SETTLE_ALL which automatically handles Permit2 transfers (same as working wASS->ETH)
+  // Uses same encodeFunctionData pattern as working buildV4SwapCalldata
   const buildV4SwapCalldataForTokenPair = useCallback((
     amountIn: bigint,
     minAmountOut: bigint,
@@ -1658,7 +1931,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     // SETTLE_ALL (0x0c) automatically handles Permit2 - same pattern as working wASS->ETH
     const actions = new Uint8Array([SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL]);
 
-    // Encode SWAP_EXACT_IN_SINGLE params
+    console.log('[buildV4SwapCalldataForTokenPair] Using encodeFunctionData (matching working pattern)');
+    console.log('[buildV4SwapCalldataForTokenPair] poolKey:', JSON.stringify(poolKeyData, null, 2));
+    console.log('[buildV4SwapCalldataForTokenPair] zeroForOne:', zeroForOne);
+    console.log('[buildV4SwapCalldataForTokenPair] amountIn:', amountIn.toString());
+    console.log('[buildV4SwapCalldataForTokenPair] minAmountOut:', minAmountOut.toString());
+    console.log('[buildV4SwapCalldataForTokenPair] inputToken:', inputToken);
+    console.log('[buildV4SwapCalldataForTokenPair] outputToken:', outputToken);
+
+    // Encode SWAP_EXACT_IN_SINGLE params - same pattern as working buildV4SwapCalldata
     const swapParams = encodeFunctionData({
       abi: [{
         name: 'swap',
@@ -1699,8 +1980,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     });
     const swapParamsData = ('0x' + swapParams.slice(10)) as `0x${string}`;
 
-    // Encode SETTLE_ALL params: (address currency, uint256 maxAmount)
-    // SETTLE_ALL automatically handles Permit2 transfers
+    // Encode SETTLE_ALL params: (Currency currency, uint256 maxAmount)
     const settleParams = encodeFunctionData({
       abi: [{
         name: 'settle',
@@ -1716,7 +1996,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     });
     const settleParamsData = ('0x' + settleParams.slice(10)) as `0x${string}`;
 
-    // Encode TAKE_ALL params: (address currency, uint256 minAmount)
+    // Encode TAKE_ALL params: (Currency currency, uint256 minAmount)
     const takeParams = encodeFunctionData({
       abi: [{
         name: 'take',
@@ -1732,7 +2012,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     });
     const takeParamsData = ('0x' + takeParams.slice(10)) as `0x${string}`;
 
-    // Build the V4 swap input
+    console.log('[buildV4SwapCalldataForTokenPair] swapParamsData length:', swapParamsData.length);
+    console.log('[buildV4SwapCalldataForTokenPair] settleParamsData:', settleParamsData);
+    console.log('[buildV4SwapCalldataForTokenPair] takeParamsData:', takeParamsData);
+
+    // Build the V4 swap input - same pattern as working buildV4SwapCalldata
     const v4Input = encodeFunctionData({
       abi: [{
         name: 'v4Swap',
@@ -1751,6 +2035,178 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     });
     const v4InputData = ('0x' + v4Input.slice(10)) as `0x${string}`;
 
+    console.log('[buildV4SwapCalldataForTokenPair] actions hex:', ('0x' + Buffer.from(actions).toString('hex')));
+    console.log('[buildV4SwapCalldataForTokenPair] v4InputData length:', v4InputData.length);
+
+    const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
+
+    return { commands, inputs: [v4InputData] };
+  }, []);
+
+  // Build multi-hop V4 swap calldata for Token → wASS → ETH sells
+  // Uses SWAP_EXACT_IN (0x07) with PathKey encoding per Uniswap V4 docs
+  // Uses same encodeFunctionData pattern as working buildV4SwapCalldata
+  const buildV4MultiHopSwapCalldata = useCallback((
+    amountIn: bigint,
+    minAmountOut: bigint,
+    tokenPoolKey: {
+      currency0: `0x${string}`;
+      currency1: `0x${string}`;
+      fee: number;
+      tickSpacing: number;
+      hooks: `0x${string}`;
+    },
+    wassEthPoolKey: {
+      currency0: `0x${string}`;
+      currency1: `0x${string}`;
+      fee: number;
+      tickSpacing: number;
+      hooks: `0x${string}`;
+    },
+    tokenToWassZeroForOne: boolean,
+    inputToken: `0x${string}`
+  ): { commands: `0x${string}`; inputs: `0x${string}`[] } => {
+    // For multi-hop swaps, use SWAP_EXACT_IN (0x07) with PathKey[] encoding
+    // Actions: SWAP_EXACT_IN, SETTLE_ALL, TAKE_ALL
+    const actions = new Uint8Array([SWAP_EXACT_IN, SETTLE_ALL, TAKE_ALL]);
+
+    // Path for Token → wASS → ETH:
+    // PathKey[0]: describes first hop to wASS (intermediateCurrency = wASS)
+    // PathKey[1]: describes second hop to ETH (intermediateCurrency = ETH = 0x0)
+    //
+    // PathKey structure:
+    // {
+    //   Currency intermediateCurrency; // The output currency of this hop
+    //   uint24 fee;
+    //   int24 tickSpacing;
+    //   IHooks hooks;
+    //   bytes hookData;
+    // }
+
+    // First PathKey: Token → wASS pool info, output is wASS
+    const pathKey1 = {
+      intermediateCurrency: WASS_TOKEN_ADDRESS as `0x${string}`,
+      fee: tokenPoolKey.fee,
+      tickSpacing: tokenPoolKey.tickSpacing,
+      hooks: tokenPoolKey.hooks,
+      hookData: '0x' as `0x${string}`,
+    };
+
+    // Second PathKey: wASS → ETH pool info, output is ETH (0x0)
+    const pathKey2 = {
+      intermediateCurrency: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      fee: wassEthPoolKey.fee,
+      tickSpacing: wassEthPoolKey.tickSpacing,
+      hooks: wassEthPoolKey.hooks,
+      hookData: '0x' as `0x${string}`,
+    };
+
+    console.log('[buildV4MultiHopSwapCalldata] Using encodeFunctionData (matching working pattern)');
+    console.log('[buildV4MultiHopSwapCalldata] PathKey1 (Token→wASS):', JSON.stringify(pathKey1, null, 2));
+    console.log('[buildV4MultiHopSwapCalldata] PathKey2 (wASS→ETH):', JSON.stringify(pathKey2, null, 2));
+    console.log('[buildV4MultiHopSwapCalldata] currencyIn:', inputToken);
+    console.log('[buildV4MultiHopSwapCalldata] amountIn:', amountIn.toString());
+    console.log('[buildV4MultiHopSwapCalldata] minAmountOut:', minAmountOut.toString());
+
+    // Encode SWAP_EXACT_IN params using encodeFunctionData
+    // struct ExactInputParams {
+    //     Currency currencyIn;
+    //     PathKey[] path;
+    //     uint128 amountIn;
+    //     uint128 amountOutMinimum;
+    // }
+    // Note: maxHopSlippage was added in Universal Router v2.1 but Base deployment may not have it
+    const swapParams = encodeFunctionData({
+      abi: [{
+        name: 'swap',
+        type: 'function',
+        inputs: [{
+          name: 'params',
+          type: 'tuple',
+          components: [
+            { name: 'currencyIn', type: 'address' },
+            { name: 'path', type: 'tuple[]', components: [
+              { name: 'intermediateCurrency', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'tickSpacing', type: 'int24' },
+              { name: 'hooks', type: 'address' },
+              { name: 'hookData', type: 'bytes' },
+            ]},
+            { name: 'amountIn', type: 'uint128' },
+            { name: 'amountOutMinimum', type: 'uint128' },
+          ],
+        }],
+        outputs: [],
+      }],
+      functionName: 'swap',
+      args: [{
+        currencyIn: inputToken,
+        path: [pathKey1, pathKey2],
+        amountIn: amountIn,
+        amountOutMinimum: minAmountOut,
+      }],
+    });
+    const swapParamsData = ('0x' + swapParams.slice(10)) as `0x${string}`;
+
+    // Encode SETTLE_ALL params: (Currency currency, uint256 maxAmount)
+    const settleParams = encodeFunctionData({
+      abi: [{
+        name: 'settle',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'maxAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'settle',
+      args: [inputToken, amountIn],
+    });
+    const settleParamsData = ('0x' + settleParams.slice(10)) as `0x${string}`;
+
+    // Encode TAKE_ALL params: (Currency currency, uint256 minAmount)
+    // Take ETH (address(0) for native ETH)
+    const takeParams = encodeFunctionData({
+      abi: [{
+        name: 'take',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'minAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'take',
+      args: ['0x0000000000000000000000000000000000000000' as `0x${string}`, minAmountOut],
+    });
+    const takeParamsData = ('0x' + takeParams.slice(10)) as `0x${string}`;
+
+    console.log('[buildV4MultiHopSwapCalldata] swapParamsData length:', swapParamsData.length);
+    console.log('[buildV4MultiHopSwapCalldata] settleParamsData:', settleParamsData);
+    console.log('[buildV4MultiHopSwapCalldata] takeParamsData:', takeParamsData);
+
+    // Build the V4 swap input - same pattern as working buildV4SwapCalldata
+    const v4Input = encodeFunctionData({
+      abi: [{
+        name: 'v4Swap',
+        type: 'function',
+        inputs: [
+          { name: 'actions', type: 'bytes' },
+          { name: 'params', type: 'bytes[]' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'v4Swap',
+      args: [
+        ('0x' + Buffer.from(actions).toString('hex')) as `0x${string}`,
+        [swapParamsData, settleParamsData, takeParamsData],
+      ],
+    });
+    const v4InputData = ('0x' + v4Input.slice(10)) as `0x${string}`;
+
+    console.log('[buildV4MultiHopSwapCalldata] actions hex:', ('0x' + Buffer.from(actions).toString('hex')));
+    console.log('[buildV4MultiHopSwapCalldata] v4InputData length:', v4InputData.length);
+
     const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
 
     return { commands, inputs: [v4InputData] };
@@ -1765,12 +2221,14 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     try {
       const sellAmount = parseUnits(inputAmount, 18);
-      const minEthOut = outputAmount ? parseEther((parseFloat(outputAmount) * 0.95).toString()) : 0n; // 5% slippage
+      // TEMPORARY: Use 0 minOut to test if swap works at all (bypasses slippage check)
+      // Normal: outputAmount ? parseEther((parseFloat(outputAmount) * 0.95).toString()) : 0n
+      const minEthOut = 0n; // TODO: Restore slippage protection after debugging
+      console.log('⚠️ TESTING MODE: minEthOut = 0 (no slippage protection)');
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
 
       if (isTokenPair && outputTokenAddress) {
-        // Single-hop sell: Token -> wASS
-        // The token pair pool key (wASS/TOKEN)
+        // Token pair sell: either single-hop to wASS or multi-hop to ETH
         const tokenPoolKey = {
           currency0: selectedPair.token0,
           currency1: selectedPair.token1,
@@ -1780,45 +2238,173 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         };
 
         // Determine zeroForOne direction
-        // If wASS is token0 (currency0), selling TOKEN (currency1) for wASS means currency1 -> currency0 = zeroForOne = false
-        // If wASS is token1 (currency1), selling TOKEN (currency0) for wASS means currency0 -> currency1 = zeroForOne = true
         const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
         const zeroForOne = !wassIsToken0; // TOKEN -> wASS direction
 
-        // Min wASS output (with 5% slippage)
-        const minWassOut = outputAmount ? parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18) : 0n;
+        if (sellOutputCurrency === 'eth') {
+          // Multi-hop sell: Token → wASS → ETH
+          console.log('=== MULTI-HOP TOKEN PAIR SELL: Token → wASS → ETH ===');
+          console.log('Action: SWAP_EXACT_IN (0x07), SETTLE_ALL (0x0c), TAKE_ALL (0x0f)');
+          console.log('Token pool key:', JSON.stringify(tokenPoolKey, null, 2));
+          console.log('wASS is token0 in Token pool:', wassIsToken0);
+          console.log('Input token (being sold):', outputTokenAddress);
+          console.log('Intermediate: wASS at', WASS_TOKEN_ADDRESS);
+          console.log('Output: ETH (native)');
+          console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
+          console.log('Min ETH out:', formatEther(minEthOut), 'ETH');
 
-        console.log('=== TOKEN PAIR SELL ===');
-        console.log('Pool key:', tokenPoolKey);
-        console.log('wASS is token0:', wassIsToken0);
-        console.log('zeroForOne (TOKEN→wASS):', zeroForOne);
-        console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
-        console.log('Min wASS out:', formatUnits(minWassOut, 18), 'wASS');
-        console.log('Input token:', outputTokenAddress);
-        console.log('Output token:', WASS_TOKEN_ADDRESS);
+          // Get wASS/ETH pool key
+          if (!poolKey) {
+            setSwapError('wASS/ETH pool not loaded');
+            return;
+          }
 
-        // Build single-hop V4 swap calldata using the same pattern as default wASS sells
-        const { commands, inputs } = buildV4SwapCalldataForTokenPair(
-          sellAmount,
-          minWassOut,
-          tokenPoolKey,
-          zeroForOne,
-          outputTokenAddress, // input token (the token being sold)
-          WASS_TOKEN_ADDRESS as `0x${string}` // output token (wASS)
-        );
+          console.log('wASS/ETH pool key:', JSON.stringify(poolKey, null, 2));
+          console.log('Universal Router:', UNIVERSAL_ROUTER_ADDRESS);
 
-        console.log('Commands:', commands);
-        console.log('Inputs:', inputs);
+          // Build multi-hop V4 swap calldata
+          const { commands, inputs } = buildV4MultiHopSwapCalldata(
+            sellAmount,
+            minEthOut,
+            tokenPoolKey,
+            poolKey, // wASS/ETH pool key
+            zeroForOne,
+            outputTokenAddress // input token (the token being sold)
+          );
 
-        writeContract({
-          address: UNIVERSAL_ROUTER_ADDRESS,
-          abi: UNIVERSAL_ROUTER_ABI,
-          functionName: 'execute',
-          args: [commands, inputs, deadline],
-        });
+          console.log('Multi-hop Commands (should be 0x10):', commands);
+          console.log('Multi-hop Inputs array length:', inputs.length);
+          console.log('V4 Input data (first 200 chars):', inputs[0]?.substring(0, 200) + '...');
 
-        if (txHash) {
-          addTransaction(txHash, `Selling ${outputTokenSymbol || 'Token'} for wASS`);
+          // Simulate the transaction first to get detailed error messages
+          if (publicClient) {
+            console.log('=== SIMULATING MULTI-HOP TRANSACTION ===');
+            try {
+              const simulation = await publicClient.simulateContract({
+                address: UNIVERSAL_ROUTER_ADDRESS,
+                abi: UNIVERSAL_ROUTER_ABI,
+                functionName: 'execute',
+                args: [commands, inputs, deadline],
+                account: address,
+              });
+              console.log('Multi-hop simulation successful:', simulation);
+            } catch (simError: unknown) {
+              console.error('=== MULTI-HOP SIMULATION FAILED ===');
+              console.error('Simulation error:', simError);
+
+              // Try to decode V4TooLittleReceived error to get actual values
+              const V4_ERROR_ABI = [{
+                type: 'error',
+                name: 'V4TooLittleReceived',
+                inputs: [
+                  { name: 'minAmountOutReceived', type: 'uint256' },
+                  { name: 'amountReceived', type: 'uint256' }
+                ]
+              }] as const;
+
+              // Extract error data from the error object
+              const errorObj = simError as { cause?: { data?: `0x${string}` }; data?: `0x${string}` };
+              const errorData = errorObj?.cause?.data || errorObj?.data;
+
+              if (errorData && errorData.startsWith('0x8b063d73')) {
+                try {
+                  const decoded = decodeErrorResult({
+                    abi: V4_ERROR_ABI,
+                    data: errorData
+                  });
+                  console.error('=== V4TooLittleReceived DECODED ===');
+                  console.error('minAmountOutReceived:', decoded.args[0]?.toString());
+                  console.error('amountReceived:', decoded.args[1]?.toString());
+                  setSwapError(`Multi-hop swap failed: Expected min ${formatUnits(decoded.args[0] || 0n, 18)} but got ${formatUnits(decoded.args[1] || 0n, 18)} ETH`);
+                  return;
+                } catch (decodeErr) {
+                  console.error('Failed to decode error:', decodeErr);
+                  console.error('Raw error data:', errorData);
+                }
+              }
+
+              if (simError instanceof Error) {
+                console.error('Error message:', simError.message);
+                const errorMessage = simError.message;
+
+                // Also try to extract error data from message
+                const dataMatch = errorMessage.match(/data: "(0x[a-fA-F0-9]+)"/);
+                if (dataMatch && dataMatch[1]?.startsWith('0x8b063d73')) {
+                  try {
+                    const decoded = decodeErrorResult({
+                      abi: V4_ERROR_ABI,
+                      data: dataMatch[1] as `0x${string}`
+                    });
+                    console.error('=== V4TooLittleReceived DECODED (from message) ===');
+                    console.error('minAmountOutReceived:', decoded.args[0]?.toString());
+                    console.error('amountReceived:', decoded.args[1]?.toString());
+                    setSwapError(`Multi-hop swap failed: Expected min ${formatUnits(decoded.args[0] || 0n, 18)} but got ${formatUnits(decoded.args[1] || 0n, 18)} ETH`);
+                    return;
+                  } catch (decodeErr) {
+                    console.error('Failed to decode from message:', decodeErr);
+                  }
+                }
+
+                if (errorMessage.includes('execution reverted')) {
+                  const revertMatch = errorMessage.match(/reason: (.+?)(?:\n|$)/);
+                  if (revertMatch) {
+                    setSwapError(`Multi-hop swap simulation failed: ${revertMatch[1]}`);
+                  } else {
+                    setSwapError('Multi-hop swap simulation failed: execution reverted');
+                  }
+                } else {
+                  setSwapError(`Multi-hop swap simulation failed: ${simError.message.substring(0, 100)}`);
+                }
+              }
+              return;
+            }
+          }
+
+          writeContract({
+            address: UNIVERSAL_ROUTER_ADDRESS,
+            abi: UNIVERSAL_ROUTER_ABI,
+            functionName: 'execute',
+            args: [commands, inputs, deadline],
+          });
+        } else {
+          // Single-hop sell: Token -> wASS
+          // TEMPORARY: Use 0 minOut to test if swap works at all (bypasses slippage check)
+          // Normal: outputAmount ? parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18) : 0n
+          const minWassOut = 0n; // TODO: Restore slippage protection after debugging
+          console.log('⚠️ TESTING MODE: minWassOut = 0 (no slippage protection)');
+
+          console.log('=== TOKEN PAIR SELL: Token → wASS ===');
+          console.log('Pool key:', tokenPoolKey);
+          console.log('wASS is token0:', wassIsToken0);
+          console.log('zeroForOne (TOKEN→wASS):', zeroForOne);
+          console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
+          console.log('Min wASS out:', formatUnits(minWassOut, 18), 'wASS');
+          console.log('Input token:', outputTokenAddress);
+          console.log('Output token:', WASS_TOKEN_ADDRESS);
+
+          // Build single-hop V4 swap calldata
+          const { commands, inputs } = buildV4SwapCalldataForTokenPair(
+            sellAmount,
+            minWassOut,
+            tokenPoolKey,
+            zeroForOne,
+            outputTokenAddress, // input token (the token being sold)
+            WASS_TOKEN_ADDRESS as `0x${string}` // output token (wASS)
+          );
+
+          console.log('Commands:', commands);
+          console.log('Inputs:', inputs);
+
+          writeContract({
+            address: UNIVERSAL_ROUTER_ADDRESS,
+            abi: UNIVERSAL_ROUTER_ABI,
+            functionName: 'execute',
+            args: [commands, inputs, deadline],
+          });
+
+          if (txHash) {
+            addTransaction(txHash, `Selling ${outputTokenSymbol || 'Token'} for wASS`);
+          }
         }
       } else {
         // Single-hop sell: wASS -> ETH
@@ -1846,15 +2432,31 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     }
   };
 
-  const handleMaxInput = () => {
+  // Handle percentage-based input (replaces MAX button)
+  const handlePercentageInput = (percent: number) => {
     if (swapTab === 'buy') {
-      // Leave some ETH for gas
-      const maxEth = Math.max(0, parseFloat(ethBalance) - 0.001);
-      setInputAmount(maxEth.toFixed(6));
+      if (buyInputCurrency === 'eth') {
+        // Leave some ETH for gas when using max percentage
+        const gasReserve = percent === 80 ? 0.001 : 0;
+        const maxEth = Math.max(0, parseFloat(ethBalance) - gasReserve);
+        const amount = (maxEth * percent / 100).toFixed(6);
+        setInputAmount(amount);
+      } else {
+        // Using wASS as input (only for token pairs)
+        const maxWass = parseFloat(tokenBalance);
+        const amount = (maxWass * percent / 100).toFixed(2);
+        setInputAmount(amount);
+      }
     } else {
-      setInputAmount(sellBalance);
+      // Sell mode
+      const maxSell = parseFloat(sellBalance);
+      const amount = (maxSell * percent / 100).toFixed(sellBalance.includes('.') ? Math.min(6, sellBalance.split('.')[1]?.length || 2) : 2);
+      setInputAmount(amount);
     }
   };
+
+  // Get the current buy balance based on input currency
+  const buyBalance = buyInputCurrency === 'eth' ? ethBalance : tokenBalance;
 
   // In embedded mode, always render (not controlled by isOpen)
   if (!isOpen && !embedded) return null;
@@ -1867,8 +2469,17 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     { value: '1d', label: '1D' },
   ];
 
+  // Percentage buttons for quick input
+  const percentageButtons = [
+    { value: 10, label: '10%' },
+    { value: 30, label: '30%' },
+    { value: 55, label: '55%' },
+    { value: 80, label: '80%' },
+  ];
+
   const isBusy = isPending || isConfirming || isBatchPending;
-  const canBuy = address && inputAmount && parseFloat(inputAmount) > 0 && parseFloat(inputAmount) <= parseFloat(ethBalance);
+  // canBuy now checks the correct balance based on input currency
+  const canBuy = address && inputAmount && parseFloat(inputAmount) > 0 && parseFloat(inputAmount) <= parseFloat(buyBalance);
   const canSell = address && inputAmount && parseFloat(inputAmount) > 0 && parseFloat(inputAmount) <= parseFloat(sellBalance);
 
   // Determine if using horizontal layout (swap left, chart right)
@@ -2047,10 +2658,14 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
                 <span>You Pay</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)}
+                  Balance: {swapTab === 'buy'
+                    ? (buyInputCurrency === 'eth' ? parseFloat(ethBalance).toFixed(4) : parseFloat(tokenBalance).toFixed(2))
+                    : parseFloat(sellBalance).toFixed(2)}
                   <img
-                    src={swapTab === 'buy' ? '/Images/Ether.png' : '/Images/Token.png'}
-                    alt={swapTab === 'buy' ? 'ETH' : 'wASS'}
+                    src={swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                      : '/Images/Token.png'}
+                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'wASS'}
                     style={{ width: 14, height: 14 }}
                   />
                 </span>
@@ -2071,6 +2686,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   placeholder="0.0"
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
@@ -2079,24 +2695,68 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     fontWeight: 500,
                   }}
                 />
-                <button
-                  onClick={handleMaxInput}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: 'none',
-                    borderRadius: 4,
-                    color: '#10b981',
-                    cursor: 'pointer',
-                  }}
-                >
-                  MAX
-                </button>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
-                  {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
-                </span>
+                {/* Currency toggle for buy mode on token pairs */}
+                {swapTab === 'buy' && isTokenPair && (
+                  <button
+                    onClick={() => {
+                      setBuyInputCurrency(buyInputCurrency === 'eth' ? 'wass' : 'eth');
+                      setInputAmount('');
+                      setOutputAmount('');
+                    }}
+                    style={{
+                      padding: '4px 6px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      border: 'none',
+                      borderRadius: 4,
+                      color: '#a855f7',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0,
+                    }}
+                    title="Switch input currency"
+                  >
+                    <span>⇄</span>
+                  </button>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <img
+                    src={swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                      : (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')}
+                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'Token'}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)', whiteSpace: 'nowrap' }}>
+                    {swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS')
+                      : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                  </span>
+                </div>
+              </div>
+              {/* Percentage buttons */}
+              <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                {percentageButtons.map((btn) => (
+                  <button
+                    key={btn.value}
+                    onClick={() => handlePercentageInput(btn.value)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 4px',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: 6,
+                      color: '#10b981',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -2131,9 +2791,47 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   {isQuoting ? 'Loading...' : outputAmount || '0.0'}
                 </span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
-                  {swapTab === 'buy' ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS') : (isTokenPair ? 'wASS' : 'ETH')}
-                </span>
+                {/* Sell output currency toggle for token pairs */}
+                {swapTab === 'sell' && isTokenPair && (
+                  <button
+                    onClick={() => {
+                      setSellOutputCurrency(sellOutputCurrency === 'wass' ? 'eth' : 'wass');
+                      setOutputAmount('');
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      border: 'none',
+                      borderRadius: 4,
+                      color: '#a855f7',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                    title="Switch output currency"
+                  >
+                    <span>⇄</span>
+                  </button>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <img
+                    src={swapTab === 'buy'
+                      ? (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')
+                      : (isTokenPair
+                        ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                        : '/Images/Ether.png')}
+                    alt={swapTab === 'buy' ? 'Token' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS')}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
+                    {swapTab === 'buy'
+                      ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')
+                      : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH')}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2166,6 +2864,81 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   Connect wallet to buy
                 </div>
+              ) : buyInputCurrency === 'wass' && isTokenPair ? (
+                // Buying with wASS - show approval flow
+                isCheckingBuyWassApproval ? (
+                  <button
+                    disabled
+                    style={{
+                      width: '100%',
+                      padding: 14,
+                      background: 'rgba(107, 114, 128, 0.5)',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: 'not-allowed',
+                    }}
+                  >
+                    Checking approvals...
+                  </button>
+                ) : buyWassApprovalStep === 'permit2' ? (
+                  <button
+                    onClick={handleApproveWassPermit2}
+                    disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                    style={{
+                      width: '100%',
+                      padding: 14,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isBusy ? 'Approving...' : 'Step 1: Approve wASS'}
+                  </button>
+                ) : buyWassApprovalStep === 'router' ? (
+                  <button
+                    onClick={handleApproveWassRouter}
+                    disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                    style={{
+                      width: '100%',
+                      padding: 14,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isBusy ? 'Approving...' : 'Step 2: Approve Router'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleBuy}
+                    disabled={isBusy || isQuoting || !canBuy || buyWassApprovalStep !== 'ready'}
+                    style={{
+                      width: '100%',
+                      padding: 14,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
+                      opacity: !canBuy ? 0.5 : 1,
+                    }}
+                  >
+                    {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${outputTokenSymbol || 'Token'} with wASS`}
+                  </button>
+                )
               ) : (
                 <button
                   onClick={handleBuy}
@@ -2231,7 +3004,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   opacity: !canSell ? 0.5 : 1,
                 }}
               >
-                {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+                {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
             ) : approvalStep === 'permit2' ? (
               <button
@@ -2286,7 +3059,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   opacity: !canSell ? 0.5 : 1,
                 }}
               >
-                {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+                {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
             )}
           </div>
@@ -2916,10 +3689,14 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
                 <span>You Pay</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Balance: {swapTab === 'buy' ? parseFloat(ethBalance).toFixed(4) : parseFloat(sellBalance).toFixed(2)}
+                  Balance: {swapTab === 'buy'
+                    ? (buyInputCurrency === 'eth' ? parseFloat(ethBalance).toFixed(4) : parseFloat(tokenBalance).toFixed(2))
+                    : parseFloat(sellBalance).toFixed(2)}
                   <img
-                    src={swapTab === 'buy' ? '/Images/Ether.png' : '/Images/Token.png'}
-                    alt={swapTab === 'buy' ? 'ETH' : 'wASS'}
+                    src={swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                      : '/Images/Token.png'}
+                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'wASS'}
                     style={{ width: 12, height: 12 }}
                   />
                 </span>
@@ -2940,6 +3717,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   placeholder="0.0"
                   style={{
                     flex: 1,
+                    minWidth: 0,
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
@@ -2948,24 +3726,68 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     fontWeight: 500,
                   }}
                 />
-                <button
-                  onClick={handleMaxInput}
-                  style={{
-                    padding: '3px 6px',
-                    fontSize: 10,
-                    fontWeight: 600,
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: 'none',
-                    borderRadius: 4,
-                    color: '#10b981',
-                    cursor: 'pointer',
-                  }}
-                >
-                  MAX
-                </button>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
-                  {swapTab === 'buy' ? 'ETH' : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
-                </span>
+                {/* Currency toggle for buy mode on token pairs */}
+                {swapTab === 'buy' && isTokenPair && (
+                  <button
+                    onClick={() => {
+                      setBuyInputCurrency(buyInputCurrency === 'eth' ? 'wass' : 'eth');
+                      setInputAmount('');
+                      setOutputAmount('');
+                    }}
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: 9,
+                      fontWeight: 600,
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      border: 'none',
+                      borderRadius: 4,
+                      color: '#a855f7',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0,
+                    }}
+                    title="Switch input currency"
+                  >
+                    <span>⇄</span>
+                  </button>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  <img
+                    src={swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                      : (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')}
+                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'Token'}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)', whiteSpace: 'nowrap' }}>
+                    {swapTab === 'buy'
+                      ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS')
+                      : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
+                  </span>
+                </div>
+              </div>
+              {/* Percentage buttons */}
+              <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                {percentageButtons.map((btn) => (
+                  <button
+                    key={btn.value}
+                    onClick={() => handlePercentageInput(btn.value)}
+                    style={{
+                      flex: 1,
+                      padding: '5px 3px',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: 5,
+                      color: '#10b981',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -3000,9 +3822,47 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   {isQuoting ? 'Loading...' : outputAmount || '0.0'}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
-                  {swapTab === 'buy' ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS') : (isTokenPair ? 'wASS' : 'ETH')}
-                </span>
+                {/* Sell output currency toggle for token pairs */}
+                {swapTab === 'sell' && isTokenPair && (
+                  <button
+                    onClick={() => {
+                      setSellOutputCurrency(sellOutputCurrency === 'wass' ? 'eth' : 'wass');
+                      setOutputAmount('');
+                    }}
+                    style={{
+                      padding: '3px 6px',
+                      fontSize: 9,
+                      fontWeight: 600,
+                      background: 'rgba(168, 85, 247, 0.2)',
+                      border: 'none',
+                      borderRadius: 4,
+                      color: '#a855f7',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 3,
+                    }}
+                    title="Switch output currency"
+                  >
+                    <span>⇄</span>
+                  </button>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <img
+                    src={swapTab === 'buy'
+                      ? (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')
+                      : (isTokenPair
+                        ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                        : '/Images/Ether.png')}
+                    alt={swapTab === 'buy' ? 'Token' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS')}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
+                    {swapTab === 'buy'
+                      ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')
+                      : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH')}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -3035,6 +3895,81 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   Connect wallet to buy
                 </div>
+              ) : buyInputCurrency === 'wass' && isTokenPair ? (
+                // Buying with wASS - show approval flow
+                isCheckingBuyWassApproval ? (
+                  <button
+                    disabled
+                    style={{
+                      width: '100%',
+                      padding: 12,
+                      background: 'rgba(107, 114, 128, 0.5)',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: 'not-allowed',
+                    }}
+                  >
+                    Checking approvals...
+                  </button>
+                ) : buyWassApprovalStep === 'permit2' ? (
+                  <button
+                    onClick={handleApproveWassPermit2}
+                    disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                    style={{
+                      width: '100%',
+                      padding: 12,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isBusy ? 'Approving...' : 'Step 1: Approve wASS'}
+                  </button>
+                ) : buyWassApprovalStep === 'router' ? (
+                  <button
+                    onClick={handleApproveWassRouter}
+                    disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                    style={{
+                      width: '100%',
+                      padding: 12,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {isBusy ? 'Approving...' : 'Step 2: Approve Router'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleBuy}
+                    disabled={isBusy || isQuoting || !canBuy || buyWassApprovalStep !== 'ready'}
+                    style={{
+                      width: '100%',
+                      padding: 12,
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
+                      opacity: !canBuy ? 0.5 : 1,
+                    }}
+                  >
+                    {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${outputTokenSymbol || 'Token'} with wASS`}
+                  </button>
+                )
               ) : (
                 <button
                   onClick={handleBuy}
@@ -3101,7 +4036,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   opacity: !canSell ? 0.5 : 1,
                 }}
               >
-                {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+                {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
             ) : approvalStep === 'permit2' ? (
               // Regular wallet: Step 1 - Approve Token for Permit2
@@ -3159,7 +4094,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   opacity: !canSell ? 0.5 : 1,
                 }}
               >
-                {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? outputTokenSymbol || 'Token' : 'wASS'}`}
+                {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
             )}
 

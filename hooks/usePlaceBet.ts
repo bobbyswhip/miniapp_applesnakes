@@ -8,7 +8,7 @@ import type { BetResult } from '@/types/clankerdome';
 // Use local API proxy to avoid CORS issues
 // The proxy forwards to https://api.applesnakes.com
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const AI_WALLET = '0xE5e9108B4467158C498e8c6B6e39aE12F8b0A098';
+const AI_WALLET = '0xE5E9108B4467158C498E8C6b6E39Ae12F8b0A098';
 
 interface PlaceBetParams {
   marketId: string;
@@ -29,55 +29,23 @@ export function usePlaceBet() {
       return null;
     }
 
+    if (params.amountUsdc < 1) {
+      setError('Minimum bet is $1 USDC');
+      return null;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      // Step 1: Get payment requirements from 402 response
-      console.log('[PlaceBet] Step 1: Requesting payment requirements...', params);
-      const initialResponse = await fetch('/api/prediction-market/bet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marketId: params.marketId,
-          outcomeIndex: params.outcomeIndex,
-          side: params.side,
-        }),
-      });
-
-      console.log('[PlaceBet] Initial response status:', initialResponse.status);
-
-      if (initialResponse.status !== 402) {
-        const data = await initialResponse.json();
-        if (!initialResponse.ok) throw new Error(data.error || 'Request failed');
-        // Already paid or no payment needed
-        return data;
-      }
-
-      // Step 2: Parse X402 requirements from header
-      const acceptsHeader = initialResponse.headers.get('X-PAYMENT');
-      console.log('[PlaceBet] X-PAYMENT header:', acceptsHeader);
-
-      if (!acceptsHeader) {
-        throw new Error('No payment header in 402 response');
-      }
-
-      // Parse accepts (could be JSON string)
-      let accepts;
-      try {
-        accepts = JSON.parse(acceptsHeader);
-      } catch {
-        throw new Error('Invalid payment header format');
-      }
-
-      const paymentInfo = accepts[0]; // First accepted payment method
-      console.log('[PlaceBet] Payment info:', paymentInfo);
-
-      // Step 3: Create EIP-3009 authorization
+      // Step 1: Create EIP-3009 authorization for X402 payment
       const atomicAmount = BigInt(Math.floor(params.amountUsdc * 1_000_000)); // USDC has 6 decimals
       const validAfter = 0;
       const validBefore = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-      const nonce = `0x${crypto.randomUUID().replace(/-/g, '')}` as `0x${string}`;
+      // Generate 32 bytes (64 hex chars) for bytes32 nonce
+      const nonceBytes = new Uint8Array(32);
+      crypto.getRandomValues(nonceBytes);
+      const nonce = `0x${Array.from(nonceBytes).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
 
       console.log('[PlaceBet] Signing authorization...', {
         from: address,
@@ -88,7 +56,7 @@ export function usePlaceBet() {
         nonce,
       });
 
-      // Step 4: Sign the authorization
+      // Step 2: Sign the authorization
       const signature = await signTypedDataAsync({
         domain: {
           name: 'USD Coin',
@@ -119,8 +87,8 @@ export function usePlaceBet() {
 
       console.log('[PlaceBet] Signature obtained:', signature);
 
-      // Step 5: Build X402 payment payload
-      // IMPORTANT: All values must be STRINGS for JSON serialization
+      // Step 3: Build X402 payment payload
+      // CRITICAL: All numeric values MUST be strings for JSON serialization
       const payload = {
         x402Version: 1,
         scheme: 'exact',
@@ -130,19 +98,19 @@ export function usePlaceBet() {
           authorization: {
             from: address,
             to: AI_WALLET,
-            value: atomicAmount.toString(), // STRING!
-            validAfter: validAfter.toString(), // STRING!
-            validBefore: validBefore.toString(), // STRING!
+            value: atomicAmount.toString(),
+            validAfter: validAfter.toString(),
+            validBefore: validBefore.toString(),
             nonce,
           },
         },
       };
 
       const paymentHeader = btoa(JSON.stringify(payload));
-      console.log('[PlaceBet] Payment payload built, retrying with X-PAYMENT header...');
+      console.log('[PlaceBet] Sending bet with X-PAYMENT header...');
 
-      // Step 6: Retry with payment
-      const betResponse = await fetch('/api/prediction-market/bet', {
+      // Step 4: Send bet request with payment header upfront
+      const response = await fetch('/api/prediction-market/bet', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,10 +123,10 @@ export function usePlaceBet() {
         }),
       });
 
-      const result = await betResponse.json();
-      console.log('[PlaceBet] Final response:', result);
+      const result = await response.json();
+      console.log('[PlaceBet] Response:', result);
 
-      if (!betResponse.ok || !result.success) {
+      if (!response.ok || !result.success) {
         throw new Error(result.error || 'Bet failed');
       }
 

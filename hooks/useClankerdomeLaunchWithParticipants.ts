@@ -2,14 +2,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import type { PredictionMarketInfo } from '@/types/clankerdome';
 
 const API_BASE_URL = 'https://api.applesnakes.com';
-
-interface PredictionMarket {
-  address: string | null;
-  txHash: string | null;
-  hasMarket: boolean;
-}
 
 interface Launch {
   id: string;
@@ -29,7 +24,7 @@ interface Launch {
   participantCount: number;
   progressPercent?: number;
   creatorWallet: string;
-  predictionMarket: PredictionMarket;
+  predictionMarket?: PredictionMarketInfo;
   tokenAddress?: string;
   poolAddress?: string;
   launchTxHash?: string;
@@ -137,4 +132,4 @@ export function useClankerdomeLaunchWithParticipants(
 }
 
 // Export types for use in components
-export type { Launch, TopContributor, Participant, Stats, WalletInfo, PredictionMarket };
+export type { Launch, TopContributor, Participant, Stats, WalletInfo };

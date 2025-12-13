@@ -2,51 +2,32 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
-import { parseUnits } from 'viem';
-
-const API_BASE_URL = 'https://api.applesnakes.com';
+import { useAccount, useSignTypedData } from 'wagmi';
+import type { ProtocolVote, ConsensusBuyResponse, X402Accepts } from '@/types/clankerdome';
 
 // USDC on Base
 const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const;
-const USDC_DECIMALS = 6;
 
-// EIP-3009 TransferWithAuthorization domain for USDC on Base
-const USDC_DOMAIN = {
-  name: 'USD Coin',
-  version: '2',
-  chainId: 8453,
-  verifyingContract: USDC_ADDRESS
-} as const;
-
-// TransferWithAuthorization types
-const TRANSFER_AUTH_TYPES = {
-  TransferWithAuthorization: [
-    { name: 'from', type: 'address' },
-    { name: 'to', type: 'address' },
-    { name: 'value', type: 'uint256' },
-    { name: 'validAfter', type: 'uint256' },
-    { name: 'validBefore', type: 'uint256' },
-    { name: 'nonce', type: 'bytes32' }
-  ]
-} as const;
-
-// Generate random bytes32 nonce
-function generateNonce(): `0x${string}` {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return `0x${Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+interface BuyParams {
+  launchId: string;
+  protocolVote: ProtocolVote;
+  amountUsdc: number;
 }
 
 export function useClankerdomeBuy() {
   const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { signTypedDataAsync } = useSignTypedData();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const buyIn = useCallback(async (launchId: string, amountUsdc: number) => {
-    if (!address || !walletClient) {
+  const buyIn = useCallback(async ({ launchId, protocolVote, amountUsdc }: BuyParams): Promise<ConsensusBuyResponse | null> => {
+    if (!address) {
       setError('Wallet not connected');
+      return null;
+    }
+
+    if (amountUsdc < 1) {
+      setError('Minimum buy-in is $1 USDC');
       return null;
     }
 
@@ -54,112 +35,138 @@ export function useClankerdomeBuy() {
     setError(null);
 
     try {
-      // Step 1: Make initial request to get payment requirements
-      const initialResponse = await fetch(`${API_BASE_URL}/api/clankerdome/buy`, {
+      // Step 1: Initial request to get 402 payment requirements
+      console.log('[ConsensusBuy] Step 1: Getting payment requirements...');
+      const initialResponse = await fetch('/api/clankerdome/buy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ launchId })
+        body: JSON.stringify({ launchId, protocolVote }),
       });
 
-      // If not 402, something went wrong or no payment needed
+      console.log('[ConsensusBuy] Initial response status:', initialResponse.status);
+
       if (initialResponse.status !== 402) {
         const data = await initialResponse.json();
         if (data.success) return data;
         throw new Error(data.error || 'Unexpected response');
       }
 
-      // Step 2: Parse payment requirements from 402 response
-      const paymentData = await initialResponse.json();
-      const accepts = paymentData.accepts?.[0];
+      // Step 2: Parse 402 response body for payment requirements
+      const paymentReq = await initialResponse.json();
+      console.log('[ConsensusBuy] Payment requirements:', paymentReq);
 
-      if (!accepts) {
-        throw new Error('No payment requirements returned');
+      if (!paymentReq.accepts || !paymentReq.accepts[0]) {
+        throw new Error('No payment requirements in 402 response');
       }
 
-      console.log('[X402] Payment requirements:', accepts);
+      const accepts = paymentReq.accepts[0] as X402Accepts;
+      const payTo = accepts.payTo as `0x${string}`;
 
-      // Step 3: Build the authorization
-      // Use the amount from accepts OR override with user's amount
-      const value = parseUnits(amountUsdc.toString(), USDC_DECIMALS);
-      const nonce = generateNonce();
+      console.log('[ConsensusBuy] Pay to:', payTo);
+      console.log('[ConsensusBuy] Domain:', accepts.extra);
 
-      // validAfter: 10 minutes ago (to handle clock skew)
-      const validAfter = BigInt(Math.floor(Date.now() / 1000) - 600);
-      // validBefore: based on maxTimeoutSeconds from requirements
-      const maxTimeout = accepts.maxTimeoutSeconds || 3600;
-      const validBefore = BigInt(Math.floor(Date.now() / 1000) + maxTimeout);
+      // Step 3: Sign EIP-3009 TransferWithAuthorization
+      const atomicAmount = BigInt(Math.floor(amountUsdc * 1_000_000)); // USDC 6 decimals
+      const validAfter = BigInt(0);
+      const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
 
-      const authorization = {
+      // Generate 32 bytes (64 hex chars) for bytes32 nonce
+      const nonceBytes = new Uint8Array(32);
+      crypto.getRandomValues(nonceBytes);
+      const nonce = `0x${Array.from(nonceBytes).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
+
+      console.log('[ConsensusBuy] Signing authorization...', {
         from: address,
-        to: accepts.payTo as `0x${string}`,
-        value,
-        validAfter,
-        validBefore,
-        nonce
-      };
-
-      console.log('[X402] Signing authorization:', authorization);
-
-      // Step 4: Sign the authorization using EIP-712
-      const signature = await walletClient.signTypedData({
-        domain: USDC_DOMAIN,
-        types: TRANSFER_AUTH_TYPES,
-        primaryType: 'TransferWithAuthorization',
-        message: authorization
+        to: payTo,
+        value: atomicAmount.toString(),
+        validAfter: validAfter.toString(),
+        validBefore: validBefore.toString(),
+        nonce,
       });
 
-      console.log('[X402] Signature:', signature);
+      const signature = await signTypedDataAsync({
+        domain: {
+          name: accepts.extra.name,
+          version: accepts.extra.version,
+          chainId: 8453,
+          verifyingContract: USDC_ADDRESS,
+        },
+        types: {
+          TransferWithAuthorization: [
+            { name: 'from', type: 'address' },
+            { name: 'to', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'validAfter', type: 'uint256' },
+            { name: 'validBefore', type: 'uint256' },
+            { name: 'nonce', type: 'bytes32' },
+          ],
+        },
+        primaryType: 'TransferWithAuthorization',
+        message: {
+          from: address,
+          to: payTo,
+          value: atomicAmount,
+          validAfter,
+          validBefore,
+          nonce,
+        },
+      });
 
-      // Step 5: Build payment payload (strings for JSON serialization)
-      const paymentPayload = {
+      console.log('[ConsensusBuy] Signature obtained:', signature);
+
+      // Step 4: Build X402 payment payload (ALL values as strings)
+      const payload = {
         x402Version: 1,
-        scheme: accepts.scheme || 'exact',
-        network: accepts.network || 'base',
+        scheme: 'exact',
+        network: 'base',
         payload: {
           signature,
           authorization: {
             from: address,
-            to: accepts.payTo,
-            value: value.toString(),
+            to: payTo,
+            value: atomicAmount.toString(),
             validAfter: validAfter.toString(),
             validBefore: validBefore.toString(),
-            nonce
-          }
-        }
+            nonce,
+          },
+        },
       };
 
-      // Step 6: Base64 encode and send
-      const paymentHeader = btoa(JSON.stringify(paymentPayload));
+      const paymentHeader = btoa(JSON.stringify(payload));
+      console.log('[ConsensusBuy] Retrying with X-PAYMENT header...');
 
-      console.log('[X402] Sending payment...');
-
-      const paidResponse = await fetch(`${API_BASE_URL}/api/clankerdome/buy`, {
+      // Step 5: Retry with X-PAYMENT header
+      const buyResponse = await fetch('/api/clankerdome/buy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-PAYMENT': paymentHeader
+          'X-PAYMENT': paymentHeader,
         },
-        body: JSON.stringify({ launchId })
+        body: JSON.stringify({ launchId, protocolVote }),
       });
 
-      const result = await paidResponse.json();
+      const data = await buyResponse.json();
+      console.log('[ConsensusBuy] Final response:', data);
 
-      if (!result.success) {
-        throw new Error(result.error || 'Payment failed');
+      if (!buyResponse.ok || !data.success) {
+        throw new Error(data.error || 'Buy failed');
       }
 
-      console.log('[X402] Payment successful:', result);
-      return result;
+      return data;
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[X402] Error:', err);
+      console.error('[ConsensusBuy] Error:', err);
       setError(message);
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, [address, walletClient]);
+  }, [address, signTypedDataAsync]);
 
-  return { buyIn, isLoading, error };
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  return { buyIn, isLoading, error, clearError };
 }

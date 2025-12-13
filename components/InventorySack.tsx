@@ -56,6 +56,7 @@ type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'pr
 type FilterType = 'all' | 'human' | 'snake' | 'egg';
 type TradingView = 'swap' | 'launch';
 type LaunchTab = 'instant' | 'clankerdome';
+type ExchangeSubTab = 'pool' | 'wass';
 
 export function InventorySack() {
   const router = useRouter();
@@ -105,6 +106,15 @@ export function InventorySack() {
 
   // Launch tab view - 'instant' for VerifiedTokenLauncher, 'clankerdome' for 24-hour presale parties
   const [launchTab, setLaunchTab] = useState<LaunchTab>('instant');
+
+  // Exchange tab sub-view - 'pool' for NFT ↔ Pool swap, 'wass' for NFT ↔ $wASS wrap/unwrap
+  const [exchangeSubTab, setExchangeSubTab] = useState<ExchangeSubTab>('pool');
+
+  // Unwrap amount selector state
+  const [unwrapAmount, setUnwrapAmount] = useState<number>(1);
+
+  // Wrap/Unwrap mode toggle (default to unwrap)
+  const [wassMode, setWassMode] = useState<'unwrap' | 'wrap'>('unwrap');
 
   // Viewport dimensions for responsive scaling
   const [viewportWidth, setViewportWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -754,14 +764,14 @@ export function InventorySack() {
   }, [unifiedNFTs]);
 
   // Handle initial tab setting on first load
+  // IMPORTANT: Only change tab if explicitly requested via initialTab - don't force tab changes during normal loading
   useEffect(() => {
     if (!isLoading && !isLoadingStaked && !hasSetInitialTab) {
-      // Use initialTab from context if provided, otherwise default to collection
-      const tabToSet = initialTab || 'collection';
-      setActiveTab(tabToSet);
       setHasSetInitialTab(true);
-      // Clear the initialTab after using it
+      // Only change tab if explicitly requested via initialTab from context
+      // Don't force tab changes during normal loading routines
       if (initialTab) {
+        setActiveTab(initialTab);
         clearInitialTab();
       }
     }
@@ -2075,20 +2085,391 @@ export function InventorySack() {
               </>
             )}
 
-            {/* ===== NFT EXCHANGE TAB ===== */}
+            {/* ===== NFT EXCHANGE TAB - Two Sub-tabs ===== */}
             {activeTab === 'exchange' && (
               <div className="absolute inset-0 flex flex-col overflow-hidden">
-                {/* Swap NFT Interface - embedded swap-only mode, maximized - matches trading tab layout */}
-                <SwapWrapModal
-                  isOpen={true}
-                  onClose={() => setActiveTab('collection')}
-                  initialMode="wrap"
-                  embedded={true}
-                  swapOnly={true}
-                  filterType={filterType}
-                  searchQuery={searchQuery}
-                  gridSize={gridSize}
-                />
+                {/* Sub-tab Navigation */}
+                <div className="flex-shrink-0 border-b border-gray-700 px-4 bg-gray-900/50">
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setExchangeSubTab('pool')}
+                      className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                        exchangeSubTab === 'pool'
+                          ? 'border-orange-500 text-orange-400'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-4 h-4" />
+                        Swap NFT ↔ Pool
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setExchangeSubTab('wass')}
+                      className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                        exchangeSubTab === 'wass'
+                          ? 'border-blue-500 text-blue-400'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
+                        Swap NFT ↔ $wASS
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-tab Content */}
+                <div className="flex-1 overflow-hidden">
+                  {exchangeSubTab === 'pool' ? (
+                    /* ===== POOL SWAP - Original SwapWrapModal ===== */
+                    <SwapWrapModal
+                      isOpen={true}
+                      onClose={() => setActiveTab('collection')}
+                      initialMode="wrap"
+                      embedded={true}
+                      swapOnly={true}
+                      filterType={filterType}
+                      searchQuery={searchQuery}
+                      gridSize={gridSize}
+                    />
+                  ) : (
+                    /* ===== WASS SWAP - Wrap/Unwrap Interface (Tabbed) ===== */
+                    <div className="h-full flex flex-col">
+                      {/* Header with mode toggle */}
+                      <div className="flex-shrink-0 p-4 border-b border-gray-700">
+                        <div className="max-w-xl mx-auto">
+                          {/* Mode Toggle Tabs */}
+                          <div className="flex bg-gray-800 rounded-xl p-1 mb-3">
+                            <button
+                              onClick={() => setWassMode('unwrap')}
+                              className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                                wassMode === 'unwrap'
+                                  ? 'bg-purple-500 text-white shadow-lg'
+                                  : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
+                              Unwrap → NFT
+                            </button>
+                            <button
+                              onClick={() => setWassMode('wrap')}
+                              className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                                wassMode === 'wrap'
+                                  ? 'bg-blue-500 text-white shadow-lg'
+                                  : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-4 h-4" />
+                              Wrap → $wASS
+                            </button>
+                          </div>
+
+                          {/* Balance & Fee Info Row */}
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
+                              <span className="text-gray-400">Balance:</span>
+                              <span className="text-white font-bold">
+                                {wTokenBalance ? parseFloat(formatUnits(wTokenBalance as bigint, 18)).toFixed(2) : '0.00'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                              <span className="text-gray-400">Fee:</span>
+                              <span className="text-orange-400 font-medium">{parseFloat(wrapFeeFormatted).toFixed(4)}/NFT</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content Area */}
+                      <div className="flex-1 overflow-hidden p-4">
+                        <div className="max-w-xl mx-auto h-full flex flex-col">
+                          {wassMode === 'unwrap' ? (
+                            /* ===== UNWRAP MODE ===== */
+                            <div className="flex-1 flex flex-col">
+                              {/* How it works - compact */}
+                              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-gray-400">
+                                  <span className="text-purple-400 font-medium">Unwrap:</span> Burn $wASS tokens to receive NFTs from the pool (FIFO order)
+                                </p>
+                              </div>
+
+                              {/* Amount Selector */}
+                              <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 mb-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <span className="text-gray-400 text-sm">Amount to unwrap</span>
+                                  <span className="text-gray-500 text-xs">
+                                    Max: {wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 0}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => setUnwrapAmount(Math.max(1, unwrapAmount - 1))}
+                                    disabled={unwrapAmount <= 1}
+                                    className="w-10 h-10 rounded-lg bg-gray-700 text-white font-bold text-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max={wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 1}
+                                    value={unwrapAmount}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value) || 1;
+                                      const max = wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 1;
+                                      setUnwrapAmount(Math.min(Math.max(1, val), Math.max(1, max)));
+                                    }}
+                                    className="flex-1 h-10 text-center bg-gray-800 border border-gray-600 rounded-lg text-white font-bold text-xl focus:outline-none focus:border-purple-500"
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const max = wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 1;
+                                      setUnwrapAmount(Math.min(unwrapAmount + 1, Math.max(1, max)));
+                                    }}
+                                    disabled={!wTokenBalance || unwrapAmount >= Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18)))}
+                                    className="w-10 h-10 rounded-lg bg-gray-700 text-white font-bold text-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const max = wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 1;
+                                      setUnwrapAmount(Math.max(1, max));
+                                    }}
+                                    disabled={!wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < 1}
+                                    className="px-4 h-10 rounded-lg bg-purple-500/20 text-purple-400 font-medium hover:bg-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Cost Summary */}
+                              <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700 mb-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-gray-400">You pay</span>
+                                  <div className="flex items-center gap-2">
+                                    <img src="/Images/Token.png" alt="wASS" className="w-5 h-5" />
+                                    <span className="text-white font-bold text-lg">{unwrapAmount} $wASS</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-gray-400">+ Fee</span>
+                                  <div className="flex items-center gap-2">
+                                    <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
+                                    <span className="text-orange-400 font-medium">{parseFloat(formatEther(wrapFee * BigInt(unwrapAmount))).toFixed(4)} ETH</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t border-gray-700">
+                                  <span className="text-gray-300 font-medium">You receive</span>
+                                  <div className="flex items-center gap-2">
+                                    <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-5 h-5" />
+                                    <span className="text-purple-400 font-bold text-lg">{unwrapAmount} NFT{unwrapAmount !== 1 ? 's' : ''}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Unwrap Button */}
+                              <button
+                                onClick={async () => {
+                                  const balance = wTokenBalance ? parseFloat(formatUnits(wTokenBalance as bigint, 18)) : 0;
+                                  if (balance < unwrapAmount) return;
+
+                                  await writeContractAsync({
+                                    address: contracts.wrapper.address,
+                                    abi: contracts.wrapper.abi,
+                                    functionName: 'unwrapNFTs',
+                                    args: [contracts.nft.address, BigInt(unwrapAmount)],
+                                    value: wrapFee * BigInt(unwrapAmount),
+                                  });
+                                  refetchNFTs();
+                                }}
+                                disabled={!wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < unwrapAmount || isWritePending || isBatchPending}
+                                className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                                  !wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < unwrapAmount || isWritePending || isBatchPending
+                                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25'
+                                }`}
+                              >
+                                {isWritePending || isBatchPending ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                    Processing...
+                                  </>
+                                ) : !wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < 1 ? (
+                                  <>Insufficient $wASS Balance</>
+                                ) : (
+                                  <>
+                                    <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-5 h-5" />
+                                    Unwrap {unwrapAmount} NFT{unwrapAmount !== 1 ? 's' : ''}
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            /* ===== WRAP MODE ===== */
+                            <div className="flex-1 flex flex-col">
+                              {/* How it works - compact */}
+                              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-gray-400">
+                                  <span className="text-blue-400 font-medium">Wrap:</span> Lock your NFTs in the wrapper contract and receive $wASS tokens
+                                </p>
+                              </div>
+
+                              {/* NFT Grid */}
+                              {isLoading ? (
+                                <div className="flex-1 flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+                                </div>
+                              ) : nfts.length === 0 ? (
+                                <div className="flex-1 flex flex-col items-center justify-center">
+                                  <p className="text-gray-400 mb-3">No NFTs available to wrap</p>
+                                  <button
+                                    onClick={() => setExchangeSubTab('pool')}
+                                    className="px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors text-sm"
+                                  >
+                                    Get NFTs from Pool
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex-1 overflow-y-auto mb-4">
+                                    <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-7 gap-2">
+                                      {nfts.map((nft) => {
+                                        const isSelected = selectedNFTs.has(nft.tokenId);
+                                        return (
+                                          <button
+                                            key={nft.tokenId}
+                                            onClick={() => {
+                                              const newSelected = new Set(selectedNFTs);
+                                              if (isSelected) {
+                                                newSelected.delete(nft.tokenId);
+                                              } else {
+                                                newSelected.add(nft.tokenId);
+                                              }
+                                              setSelectedNFTs(newSelected);
+                                            }}
+                                            className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                                              isSelected
+                                                ? 'border-blue-500 ring-2 ring-blue-500/50 scale-95'
+                                                : 'border-gray-700 hover:border-blue-400'
+                                            }`}
+                                          >
+                                            <img
+                                              src={nft.imageUrl}
+                                              alt={nft.name}
+                                              className="w-full h-full object-cover"
+                                            />
+                                            {isSelected && (
+                                              <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
+                                                <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                                                  <span className="text-white text-xs">✓</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* Wrap Summary & Action */}
+                                  <div className="flex-shrink-0 bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-white font-medium">{selectedNFTs.size} NFT{selectedNFTs.size !== 1 ? 's' : ''} selected</span>
+                                        {selectedNFTs.size > 0 && (
+                                          <button
+                                            onClick={() => setSelectedNFTs(new Set())}
+                                            className="text-xs text-gray-400 hover:text-white"
+                                          >
+                                            Clear
+                                          </button>
+                                        )}
+                                      </div>
+                                      {selectedNFTs.size > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                          <span className="text-gray-400">Fee:</span>
+                                          <span className="text-orange-400 font-medium">{parseFloat(formatEther(wrapFee * BigInt(selectedNFTs.size))).toFixed(4)} ETH</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={async () => {
+                                        if (selectedNFTs.size === 0) return;
+                                        const tokenIds = Array.from(selectedNFTs);
+                                        const totalFee = wrapFee * BigInt(tokenIds.length);
+
+                                        if (supportsAtomicBatch && !isWrapperApproved) {
+                                          await executeBatch([
+                                            {
+                                              address: contracts.nft.address,
+                                              abi: contracts.nft.abi,
+                                              functionName: 'setApprovalForAll',
+                                              args: [contracts.wrapper.address, true],
+                                            },
+                                            {
+                                              address: contracts.wrapper.address,
+                                              abi: contracts.wrapper.abi,
+                                              functionName: 'wrapNFTs',
+                                              args: [contracts.nft.address, tokenIds],
+                                              value: totalFee,
+                                            },
+                                          ]);
+                                        } else if (!isWrapperApproved) {
+                                          await writeContractAsync({
+                                            address: contracts.nft.address,
+                                            abi: contracts.nft.abi,
+                                            functionName: 'setApprovalForAll',
+                                            args: [contracts.wrapper.address, true],
+                                          });
+                                          await refetchWrapperApproval();
+                                        } else {
+                                          await writeContractAsync({
+                                            address: contracts.wrapper.address,
+                                            abi: contracts.wrapper.abi,
+                                            functionName: 'wrapNFTs',
+                                            args: [contracts.nft.address, tokenIds],
+                                            value: totalFee,
+                                          });
+                                        }
+                                        setSelectedNFTs(new Set());
+                                        refetchNFTs();
+                                      }}
+                                      disabled={selectedNFTs.size === 0 || isWritePending || isBatchPending || isBatchConfirming}
+                                      className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                                        selectedNFTs.size === 0 || isWritePending || isBatchPending || isBatchConfirming
+                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                          : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25'
+                                      }`}
+                                    >
+                                      {isWritePending || isBatchPending || isBatchConfirming ? (
+                                        <>
+                                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                          Processing...
+                                        </>
+                                      ) : !isWrapperApproved && supportsAtomicBatch ? (
+                                        <>⚡ Approve & Wrap {selectedNFTs.size} NFT{selectedNFTs.size !== 1 ? 's' : ''}</>
+                                      ) : !isWrapperApproved ? (
+                                        <>Approve Wrapper</>
+                                      ) : (
+                                        <>🪙 Wrap {selectedNFTs.size} NFT{selectedNFTs.size !== 1 ? 's' : ''} → {selectedNFTs.size} $wASS</>
+                                      )}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

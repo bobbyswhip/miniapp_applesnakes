@@ -1,197 +1,397 @@
-# Clankerdome Prediction Market Integration Guide
+# Consensus Presale Voting - Implementation Guide
 
-## Quick Start - What You Need to Know
+Complete frontend implementation guide for the Clankerdome consensus presale voting system. Each presale buy is also a vote for which liquidity protocol (Uniswap or Aerodrome) will be used when the token launches.
 
-The prediction market data is **already included** in the `/api/clankerdome/launch` response. The frontend just needs to display it.
+## Table of Contents
+1. [System Overview](#system-overview)
+2. [API Reference](#api-reference)
+3. [Frontend Implementation](#frontend-implementation)
+4. [React Hooks](#react-hooks)
+5. [UI Components](#ui-components)
+6. [X402 Payment Integration](#x402-payment-integration)
+7. [Atomic Deployment Strategy](#atomic-deployment-strategy)
+8. [Best Practices](#best-practices)
 
-### Current Launch Response Structure
+---
+
+## System Overview
+
+### How Consensus Voting Works
+
+1. **Each buy is a vote**: When a user buys into a presale, they also vote for either Uniswap or Aerodrome
+2. **Weighted by USDC**: Every $1 USDC = 1 vote for the chosen protocol
+3. **Starts at 50/50**: Before any votes, the consensus shows a tie
+4. **Aerodrome wins ties**: If votes are equal when presale ends, Aerodrome is used
+5. **Final consensus**: The protocol with most USDC votes when presale ends determines deployment
+
+### Data Flow
+
+```
+User selects protocol → Buys with X402 payment → Vote recorded → Consensus updated → All users see live results
+```
+
+### Response Structure
+
+Every launch response includes consensus data:
 
 ```typescript
-// GET /api/clankerdome/launch returns:
+interface LaunchConsensus {
+  leadingProtocol: "uniswap" | "aerodrome";
+  uniswap: {
+    votes: number;    // Total USDC voting for Uniswap
+    percent: number;  // 0-100
+  };
+  aerodrome: {
+    votes: number;    // Total USDC voting for Aerodrome
+    percent: number;  // 0-100
+  };
+  totalVotes: number; // Total USDC in presale
+  isTie: boolean;     // True if 50/50 (Aerodrome wins ties)
+}
+```
+
+---
+
+## API Reference
+
+### GET /api/clankerdome/launch
+
+Returns all launches with consensus data.
+
+**Response:**
+```json
 {
-  "currentLaunches": [{
-    "id": "launch-xxx",
-    "name": "test",
-    "symbol": "TEST",
-    // ... other launch fields ...
-
-    // THIS IS THE PREDICTION MARKET DATA:
-    "predictionMarket": {
-      "id": "market-1765392746080-czvwvr",  // Use this for betting
-      "hasMarket": true,
-      "type": "x402",
-      "totalPool": 0,
-      "totalBets": 0,
-      "uniqueBettors": 0,
-      "outcomes": [
-        {
-          "index": 0,
-          "label": "0-25% Funded",
-          "yesProbability": 50,
-          "noProbability": 50,
-          "yesOdds": 2,
-          "noOdds": 2,
-          "totalPool": 0
-        },
-        // ... 4 more outcomes (indices 1-4)
-      ]
+  "success": true,
+  "launches": [
+    {
+      "id": "launch-xxx",
+      "name": "My Token",
+      "symbol": "MTK",
+      "totalRaised": 150,
+      "participantCount": 12,
+      "consensus": {
+        "leadingProtocol": "aerodrome",
+        "uniswap": { "votes": 45, "percent": 30 },
+        "aerodrome": { "votes": 105, "percent": 70 },
+        "totalVotes": 150,
+        "isTie": false
+      },
+      "predictionMarket": { ... }
     }
-  }]
+  ]
+}
+```
+
+### GET /api/clankerdome/buy?launchId={id}
+
+Get launch details including participants and their votes.
+
+**Response:**
+```json
+{
+  "success": true,
+  "launch": {
+    "id": "launch-xxx",
+    "name": "My Token",
+    "symbol": "MTK",
+    "totalRaised": 150,
+    "isActive": true
+  },
+  "consensus": {
+    "leadingProtocol": "aerodrome",
+    "uniswap": { "votes": 45, "percent": 30 },
+    "aerodrome": { "votes": 105, "percent": 70 },
+    "totalVotes": 150,
+    "isTie": false
+  },
+  "participants": [
+    {
+      "wallet": "0x123...",
+      "totalUsdc": 50,
+      "sharePercent": 33.3,
+      "buyCount": 2,
+      "votes": {
+        "uniswap": 20,
+        "aerodrome": 30
+      }
+    }
+  ],
+  "payment": {
+    "minAmount": "$1.00",
+    "network": "base",
+    "payTo": "0xE5e9033C57B4332283Cda19B39431CD716340098",
+    "currency": "USDC"
+  }
+}
+```
+
+### POST /api/clankerdome/buy
+
+Buy into a launch with protocol vote. **Requires X402 payment.**
+
+**Request Body:**
+```json
+{
+  "launchId": "launch-xxx",
+  "protocolVote": "aerodrome"  // REQUIRED: "uniswap" or "aerodrome"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Successfully joined the launch party! Voted for aerodrome.",
+  "buy": {
+    "launchId": "launch-xxx",
+    "amount": 10,
+    "txHash": "x402-...",
+    "wallet": "0x123...",
+    "timestamp": 1765457200000,
+    "protocolVote": "aerodrome"
+  },
+  "launch": {
+    "id": "launch-xxx",
+    "name": "My Token",
+    "symbol": "MTK",
+    "totalRaised": 160,
+    "participantCount": 13
+  },
+  "wallet": {
+    "totalContribution": 10,
+    "sharePercent": 6.25
+  },
+  "consensus": {
+    "leadingProtocol": "aerodrome",
+    "uniswap": { "votes": 45, "percent": 28.1 },
+    "aerodrome": { "votes": 115, "percent": 71.9 },
+    "totalVotes": 160,
+    "isTie": false
+  }
 }
 ```
 
 ---
 
-## Step 1: Access Prediction Market Data
+## Frontend Implementation
 
-The data is already in your launch object. Access it like this:
+### TypeScript Interfaces
 
 ```typescript
-// In your Clankerdome component
-const launch = currentLaunches[0]; // or whichever launch
+// Protocol vote options
+type ProtocolVote = "uniswap" | "aerodrome";
 
-// Check if prediction market exists
-if (launch.predictionMarket?.hasMarket) {
-  const marketId = launch.predictionMarket.id;
-  const outcomes = launch.predictionMarket.outcomes;
+// Consensus data from API
+interface ProtocolConsensus {
+  leadingProtocol: ProtocolVote;
+  uniswap: {
+    votes: number;
+    percent: number;
+  };
+  aerodrome: {
+    votes: number;
+    percent: number;
+  };
+  totalVotes: number;
+  isTie: boolean;
+  description?: string;
+}
 
-  // Display the outcomes
-  outcomes.forEach(outcome => {
-    console.log(`${outcome.label}: YES ${outcome.yesProbability}% / NO ${outcome.noProbability}%`);
-  });
+// Launch with consensus
+interface ClankerdomeLaunch {
+  id: string;
+  name: string;
+  symbol: string;
+  description?: string;
+  imageUrl?: string;
+  createdAt: number;
+  endsAt: number;
+  timeRemainingMs: number;
+  timeRemainingFormatted: string;
+  status: "active" | "launching" | "launched" | "failed" | "cancelled";
+  isActive: boolean;
+  totalRaised: number;
+  participantCount: number;
+  consensus: ProtocolConsensus | null;
+  predictionMarket?: {
+    id: string;
+    hasMarket: boolean;
+    // ... prediction market data
+  };
+}
+
+// Buy request
+interface BuyRequest {
+  launchId: string;
+  protocolVote: ProtocolVote;
+}
+
+// Buy response
+interface BuyResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  buy?: {
+    launchId: string;
+    amount: number;
+    txHash: string;
+    wallet: string;
+    timestamp: number;
+    protocolVote: ProtocolVote;
+  };
+  consensus?: ProtocolConsensus;
+}
+
+// X402 payment accepts (from 402 response body)
+interface X402Accepts {
+  payTo: string;
+  asset: string;
+  maxAmount: string;
+  extra: {
+    name: string;
+    version: string;
+  };
 }
 ```
 
 ---
 
-## Step 2: Display Prediction Market UI
+## React Hooks
 
-### Simple Outcome Display Component
+### useLaunchConsensus
 
-```tsx
-interface PredictionOutcome {
-  index: number;
-  label: string;
-  yesProbability: number;
-  noProbability: number;
-  yesOdds: number;
-  noOdds: number;
-  totalPool: number;
-}
-
-interface PredictionMarketProps {
-  marketId: string;
-  outcomes: PredictionOutcome[];
-  onBet: (outcomeIndex: number, side: 'yes' | 'no') => void;
-}
-
-function PredictionMarketDisplay({ marketId, outcomes, onBet }: PredictionMarketProps) {
-  return (
-    <div className="prediction-market">
-      <h3>Predict the Outcome</h3>
-      <p className="text-sm text-gray-400">Bet on whether this launch will reach each funding tier</p>
-
-      <div className="space-y-2 mt-4">
-        {outcomes.map((outcome) => (
-          <div key={outcome.index} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-            {/* Outcome Label */}
-            <div className="flex-1">
-              <span className="font-medium">{outcome.label}</span>
-              <div className="text-xs text-gray-400">
-                Pool: ${outcome.totalPool.toFixed(2)}
-              </div>
-            </div>
-
-            {/* YES Button */}
-            <button
-              onClick={() => onBet(outcome.index, 'yes')}
-              className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded mr-2"
-            >
-              YES {outcome.yesOdds.toFixed(1)}x
-            </button>
-
-            {/* NO Button */}
-            <button
-              onClick={() => onBet(outcome.index, 'no')}
-              className="px-3 py-1 bg-red-600 hover:bg-red-500 rounded"
-            >
-              NO {outcome.noOdds.toFixed(1)}x
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
-
----
-
-## Step 3: Place a Bet (X402 Payment)
-
-Betting requires X402 USDC payment. Here's the complete flow:
-
-### Bet Hook
+Fetch and auto-refresh consensus data for a launch.
 
 ```typescript
-import { useAccount, useSignTypedData } from 'wagmi';
+import { useState, useEffect, useCallback } from 'react';
 
-const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const AI_WALLET = '0xE5e9108B4467158C498e8c6B6e39aE12F8b0A098';
-
-interface BetParams {
-  marketId: string;
-  outcomeIndex: number;
-  side: 'yes' | 'no';
-  amountUsdc: number;
+interface UseLaunchConsensusResult {
+  consensus: ProtocolConsensus | null;
+  launch: ClankerdomeLaunch | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
 }
 
-function usePlaceBet() {
-  const { address } = useAccount();
-  const { signTypedDataAsync } = useSignTypedData();
-  const [isLoading, setIsLoading] = useState(false);
+export function useLaunchConsensus(
+  launchId: string | null,
+  refreshInterval = 5000
+): UseLaunchConsensusResult {
+  const [consensus, setConsensus] = useState<ProtocolConsensus | null>(null);
+  const [launch, setLaunch] = useState<ClankerdomeLaunch | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const placeBet = async ({ marketId, outcomeIndex, side, amountUsdc }: BetParams) => {
+  const fetchData = useCallback(async () => {
+    if (!launchId) return;
+
+    try {
+      const response = await fetch(`/api/clankerdome/buy?launchId=${launchId}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setConsensus(data.consensus);
+        setLaunch(data.launch);
+        setError(null);
+      } else {
+        setError(data.error || 'Failed to fetch consensus');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  }, [launchId]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Auto-refresh
+  useEffect(() => {
+    if (!launchId || refreshInterval <= 0) return;
+
+    const interval = setInterval(fetchData, refreshInterval);
+    return () => clearInterval(interval);
+  }, [launchId, refreshInterval, fetchData]);
+
+  return {
+    consensus,
+    launch,
+    loading,
+    error,
+    refresh: fetchData,
+  };
+}
+```
+
+### useConsensusBuy
+
+Handle buying with protocol vote (X402 payment).
+
+```typescript
+import { useState, useCallback } from 'react';
+import { useAccount, useSignTypedData } from 'wagmi';
+
+interface UseConsensusBuyResult {
+  buy: (launchId: string, protocolVote: ProtocolVote, amount: number) => Promise<BuyResponse>;
+  loading: boolean;
+  error: string | null;
+}
+
+// USDC contract address on Base
+const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+
+export function useConsensusBuy(): UseConsensusBuyResult {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { address } = useAccount();
+  const { signTypedDataAsync } = useSignTypedData();
+
+  const buy = useCallback(async (
+    launchId: string,
+    protocolVote: ProtocolVote,
+    amount: number
+  ): Promise<BuyResponse> => {
     if (!address) {
-      setError('Connect wallet first');
-      return null;
+      return { success: false, error: 'Wallet not connected' };
     }
 
-    setIsLoading(true);
+    setLoading(true);
     setError(null);
 
     try {
-      // Step 1: Get payment requirements from 402 response
-      const initialResponse = await fetch('/api/prediction-market/bet', {
+      // Step 1: Initial request to get 402 payment requirements
+      const initialResponse = await fetch('/api/clankerdome/buy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketId, outcomeIndex, side }),
+        body: JSON.stringify({ launchId, protocolVote }),
       });
 
       if (initialResponse.status !== 402) {
-        throw new Error('Expected 402 payment required response');
+        const data = await initialResponse.json();
+        return { success: false, error: data.error || 'Unexpected response' };
       }
 
-      // Step 2: Parse X402 requirements
-      const acceptsHeader = initialResponse.headers.get('X-PAYMENT');
-      if (!acceptsHeader) throw new Error('No payment header');
+      // Step 2: Parse 402 response body for payment requirements
+      const paymentReq = await initialResponse.json();
+      const accepts = paymentReq.accepts[0] as X402Accepts;
+      const payTo = accepts.payTo as `0x${string}`;
 
-      const accepts = JSON.parse(acceptsHeader);
-      const paymentInfo = accepts[0]; // First accepted payment method
+      // Step 3: Sign EIP-3009 TransferWithAuthorization
+      const atomicAmount = BigInt(Math.floor(amount * 1_000_000)); // USDC 6 decimals
+      const validAfter = BigInt(0);
+      const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
+      const nonce = `0x${[...Array(32)].map(() =>
+        Math.floor(Math.random() * 256).toString(16).padStart(2, '0')
+      ).join('')}` as `0x${string}`;
 
-      // Step 3: Create EIP-3009 authorization
-      const atomicAmount = BigInt(Math.floor(amountUsdc * 1_000_000)); // USDC has 6 decimals
-      const validAfter = 0;
-      const validBefore = Math.floor(Date.now() / 1000) + 3600; // 1 hour
-      const nonce = `0x${crypto.randomUUID().replace(/-/g, '')}`;
-
-      // Step 4: Sign the authorization
       const signature = await signTypedDataAsync({
         domain: {
-          name: 'USD Coin',
-          version: '2',
-          chainId: 8453, // Base mainnet
+          name: accepts.extra.name,
+          version: accepts.extra.version,
+          chainId: 8453,
           verifyingContract: USDC_ADDRESS,
         },
         types: {
@@ -207,16 +407,15 @@ function usePlaceBet() {
         primaryType: 'TransferWithAuthorization',
         message: {
           from: address,
-          to: AI_WALLET,
+          to: payTo,
           value: atomicAmount,
-          validAfter: BigInt(validAfter),
-          validBefore: BigInt(validBefore),
-          nonce: nonce as `0x${string}`,
+          validAfter,
+          validBefore,
+          nonce,
         },
       });
 
-      // Step 5: Build X402 payment payload
-      // IMPORTANT: All values must be STRINGS for JSON serialization
+      // Step 4: Build X402 payment payload (ALL values as strings)
       const payload = {
         x402Version: 1,
         scheme: 'exact',
@@ -225,209 +424,412 @@ function usePlaceBet() {
           signature,
           authorization: {
             from: address,
-            to: AI_WALLET,
-            value: atomicAmount.toString(), // STRING!
-            validAfter: validAfter.toString(), // STRING!
-            validBefore: validBefore.toString(), // STRING!
-            nonce: nonce,
+            to: payTo,
+            value: atomicAmount.toString(),
+            validAfter: validAfter.toString(),
+            validBefore: validBefore.toString(),
+            nonce,
           },
         },
       };
 
       const paymentHeader = btoa(JSON.stringify(payload));
 
-      // Step 6: Retry with payment
-      const betResponse = await fetch('/api/prediction-market/bet', {
+      // Step 5: Retry with X-PAYMENT header
+      const buyResponse = await fetch('/api/clankerdome/buy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-PAYMENT': paymentHeader,
         },
-        body: JSON.stringify({ marketId, outcomeIndex, side }),
+        body: JSON.stringify({ launchId, protocolVote }),
       });
 
-      if (!betResponse.ok) {
-        const errorData = await betResponse.json();
-        throw new Error(errorData.error || 'Bet failed');
+      const data = await buyResponse.json();
+
+      if (!buyResponse.ok) {
+        setError(data.error || 'Buy failed');
+        return { success: false, error: data.error };
       }
 
-      return await betResponse.json();
+      return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      return null;
+      const message = err instanceof Error ? err.message : 'Transaction failed';
+      setError(message);
+      return { success: false, error: message };
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  };
+  }, [address, signTypedDataAsync]);
 
-  return { placeBet, isLoading, error };
+  return { buy, loading, error };
 }
 ```
 
 ---
 
-## Step 4: Complete Integration Example
+## UI Components
 
-Here's how to integrate into your existing Clankerdome component:
+### ConsensusBar
+
+Visual representation of the protocol vote split.
 
 ```tsx
-// In your Clankerdome.tsx or similar
+import React from 'react';
 
-import { useState } from 'react';
-import { useAccount } from 'wagmi';
+interface ConsensusBarProps {
+  consensus: ProtocolConsensus | null;
+  showLabels?: boolean;
+  height?: number;
+}
 
-export function ClankerdomeWithPrediction({ launch }) {
-  const { address } = useAccount();
-  const { placeBet, isLoading, error } = usePlaceBet();
-  const [selectedBet, setSelectedBet] = useState<{
-    outcomeIndex: number;
-    side: 'yes' | 'no';
-  } | null>(null);
-  const [betAmount, setBetAmount] = useState('1');
-
-  const handleBetClick = (outcomeIndex: number, side: 'yes' | 'no') => {
-    setSelectedBet({ outcomeIndex, side });
-  };
-
-  const handleConfirmBet = async () => {
-    if (!selectedBet || !launch.predictionMarket?.id) return;
-
-    const result = await placeBet({
-      marketId: launch.predictionMarket.id,
-      outcomeIndex: selectedBet.outcomeIndex,
-      side: selectedBet.side,
-      amountUsdc: parseFloat(betAmount),
-    });
-
-    if (result?.success) {
-      // Bet placed successfully!
-      setSelectedBet(null);
-      // Refresh launch data to show updated odds
-    }
-  };
-
-  // Check if prediction market exists
-  if (!launch.predictionMarket?.hasMarket) {
-    return <div>No prediction market for this launch</div>;
-  }
+export function ConsensusBar({
+  consensus,
+  showLabels = true,
+  height = 24
+}: ConsensusBarProps) {
+  const uniswapPercent = consensus?.uniswap.percent ?? 50;
+  const aerodromePercent = consensus?.aerodrome.percent ?? 50;
+  const isTie = consensus?.isTie ?? true;
+  const leadingProtocol = consensus?.leadingProtocol ?? 'aerodrome';
 
   return (
-    <div className="clankerdome-prediction">
-      {/* Launch Info */}
-      <div className="launch-header">
-        <h2>{launch.name} ({launch.symbol})</h2>
-        <p>Target: ${launch.targetAmount} | Raised: ${launch.totalRaised}</p>
-      </div>
-
-      {/* Prediction Market */}
-      <div className="prediction-section mt-6">
-        <h3 className="text-lg font-bold mb-4">
-          Prediction Market
-          <span className="ml-2 text-sm text-gray-400">
-            {launch.predictionMarket.totalBets} bets | ${launch.predictionMarket.totalPool} pool
-          </span>
-        </h3>
-
-        {/* Outcomes */}
-        <div className="space-y-3">
-          {launch.predictionMarket.outcomes.map((outcome) => (
-            <div
-              key={outcome.index}
-              className="bg-gray-800 rounded-lg p-4"
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <div className="font-medium">{outcome.label}</div>
-                  <div className="text-xs text-gray-400">
-                    Pool: ${outcome.totalPool.toFixed(2)}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleBetClick(outcome.index, 'yes')}
-                    disabled={isLoading}
-                    className={`px-4 py-2 rounded font-medium transition-colors ${
-                      selectedBet?.outcomeIndex === outcome.index && selectedBet?.side === 'yes'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-green-900 hover:bg-green-700 text-green-300'
-                    }`}
-                  >
-                    YES {outcome.yesOdds.toFixed(1)}x
-                  </button>
-
-                  <button
-                    onClick={() => handleBetClick(outcome.index, 'no')}
-                    disabled={isLoading}
-                    className={`px-4 py-2 rounded font-medium transition-colors ${
-                      selectedBet?.outcomeIndex === outcome.index && selectedBet?.side === 'no'
-                        ? 'bg-red-500 text-white'
-                        : 'bg-red-900 hover:bg-red-700 text-red-300'
-                    }`}
-                  >
-                    NO {outcome.noOdds.toFixed(1)}x
-                  </button>
-                </div>
-              </div>
-
-              {/* Probability Bar */}
-              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500"
-                  style={{ width: `${outcome.yesProbability}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs mt-1">
-                <span className="text-green-400">YES {outcome.yesProbability}%</span>
-                <span className="text-red-400">NO {outcome.noProbability}%</span>
-              </div>
-            </div>
-          ))}
+    <div className="w-full">
+      {showLabels && (
+        <div className="flex justify-between text-sm mb-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-pink-500">Uniswap</span>
+            <span className="text-gray-400">${consensus?.uniswap.votes ?? 0}</span>
+            <span className={`font-bold ${leadingProtocol === 'uniswap' ? 'text-pink-500' : 'text-gray-500'}`}>
+              {uniswapPercent.toFixed(1)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`font-bold ${leadingProtocol === 'aerodrome' ? 'text-blue-500' : 'text-gray-500'}`}>
+              {aerodromePercent.toFixed(1)}%
+            </span>
+            <span className="text-gray-400">${consensus?.aerodrome.votes ?? 0}</span>
+            <span className="font-semibold text-blue-500">Aerodrome</span>
+          </div>
         </div>
+      )}
 
-        {/* Bet Confirmation Modal */}
-        {selectedBet && (
-          <div className="mt-4 p-4 bg-gray-900 rounded-lg border border-gray-700">
-            <h4 className="font-medium mb-2">
-              Place Bet: {selectedBet.side.toUpperCase()} on "{
-                launch.predictionMarket.outcomes[selectedBet.outcomeIndex].label
-              }"
-            </h4>
+      <div
+        className="relative w-full rounded-full overflow-hidden bg-gray-700"
+        style={{ height }}
+      >
+        {/* Uniswap side (pink) */}
+        <div
+          className="absolute left-0 top-0 h-full bg-gradient-to-r from-pink-600 to-pink-500 transition-all duration-500"
+          style={{ width: `${uniswapPercent}%` }}
+        />
 
-            <div className="flex items-center gap-2 mb-4">
-              <input
-                type="number"
-                value={betAmount}
-                onChange={(e) => setBetAmount(e.target.value)}
-                min="1"
-                step="1"
-                className="w-24 px-3 py-2 bg-gray-800 rounded border border-gray-600"
-              />
-              <span className="text-gray-400">USDC</span>
-            </div>
+        {/* Aerodrome side (blue) */}
+        <div
+          className="absolute right-0 top-0 h-full bg-gradient-to-l from-blue-600 to-blue-500 transition-all duration-500"
+          style={{ width: `${aerodromePercent}%` }}
+        />
 
-            {error && (
-              <div className="text-red-400 text-sm mb-2">{error}</div>
-            )}
+        {/* Center line for tie */}
+        {isTie && (
+          <div className="absolute left-1/2 top-0 w-0.5 h-full bg-white/50 transform -translate-x-1/2" />
+        )}
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleConfirmBet}
-                disabled={isLoading || !address}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium disabled:opacity-50"
-              >
-                {isLoading ? 'Placing Bet...' : `Bet $${betAmount} USDC`}
-              </button>
-              <button
-                onClick={() => setSelectedBet(null)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
-              >
-                Cancel
-              </button>
-            </div>
+        {/* Leading indicator */}
+        {!isTie && (
+          <div
+            className={`absolute top-1/2 transform -translate-y-1/2 text-white text-xs font-bold px-2 ${
+              leadingProtocol === 'uniswap' ? 'left-2' : 'right-2'
+            }`}
+          >
+            LEADING
           </div>
         )}
       </div>
+
+      {isTie && (
+        <p className="text-center text-xs text-gray-400 mt-1">
+          Tie! Aerodrome will be used as tiebreaker
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+### ProtocolVoteSelector
+
+Radio button selector for protocol vote.
+
+```tsx
+import React from 'react';
+
+interface ProtocolVoteSelectorProps {
+  value: ProtocolVote;
+  onChange: (vote: ProtocolVote) => void;
+  consensus?: ProtocolConsensus | null;
+  disabled?: boolean;
+}
+
+export function ProtocolVoteSelector({
+  value,
+  onChange,
+  consensus,
+  disabled = false,
+}: ProtocolVoteSelectorProps) {
+  const options: Array<{
+    value: ProtocolVote;
+    label: string;
+    color: string;
+    bgColor: string;
+    description: string;
+  }> = [
+    {
+      value: 'uniswap',
+      label: 'Uniswap',
+      color: 'text-pink-500',
+      bgColor: 'bg-pink-500/10 border-pink-500',
+      description: 'Deploy on Uniswap V3',
+    },
+    {
+      value: 'aerodrome',
+      label: 'Aerodrome',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500/10 border-blue-500',
+      description: 'Deploy on Aerodrome CL',
+    },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-medium text-gray-300">
+        Vote for Liquidity Protocol
+      </label>
+      <div className="grid grid-cols-2 gap-4">
+        {options.map((option) => {
+          const isSelected = value === option.value;
+          const currentVotes = consensus?.[option.value]?.votes ?? 0;
+          const currentPercent = consensus?.[option.value]?.percent ?? 50;
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(option.value)}
+              className={`
+                relative p-4 rounded-lg border-2 transition-all
+                ${isSelected
+                  ? option.bgColor
+                  : 'border-gray-600 hover:border-gray-500'
+                }
+                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+            >
+              {/* Selection indicator */}
+              <div className={`
+                absolute top-2 right-2 w-5 h-5 rounded-full border-2
+                ${isSelected
+                  ? `${option.bgColor} flex items-center justify-center`
+                  : 'border-gray-500'
+                }
+              `}>
+                {isSelected && (
+                  <div className={`w-2.5 h-2.5 rounded-full ${option.color.replace('text-', 'bg-')}`} />
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="text-left">
+                <h4 className={`font-bold text-lg ${isSelected ? option.color : 'text-white'}`}>
+                  {option.label}
+                </h4>
+                <p className="text-sm text-gray-400 mt-1">
+                  {option.description}
+                </p>
+
+                {/* Current votes */}
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Current votes:</span>
+                  <span className={isSelected ? option.color : 'text-gray-400'}>
+                    ${currentVotes.toFixed(0)} ({currentPercent.toFixed(1)}%)
+                  </span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+```
+
+### BuyWithVoteForm
+
+Complete buy form with protocol selection.
+
+```tsx
+import React, { useState } from 'react';
+import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { ConsensusBar } from './ConsensusBar';
+import { ProtocolVoteSelector } from './ProtocolVoteSelector';
+import { useLaunchConsensus, useConsensusBuy } from '../hooks';
+
+interface BuyWithVoteFormProps {
+  launchId: string;
+  onSuccess?: (response: BuyResponse) => void;
+}
+
+export function BuyWithVoteForm({ launchId, onSuccess }: BuyWithVoteFormProps) {
+  const [amount, setAmount] = useState<string>('');
+  const [protocolVote, setProtocolVote] = useState<ProtocolVote>('aerodrome');
+
+  const { address, isConnected } = useAccount();
+  const { consensus, launch, loading: loadingConsensus } = useLaunchConsensus(launchId);
+  const { buy, loading: buyLoading, error: buyError } = useConsensusBuy();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount < 1) {
+      return;
+    }
+
+    const response = await buy(launchId, protocolVote, numAmount);
+
+    if (response.success) {
+      setAmount('');
+      onSuccess?.(response);
+    }
+  };
+
+  const numAmount = parseFloat(amount) || 0;
+  const isValidAmount = numAmount >= 1;
+
+  return (
+    <div className="bg-gray-800 rounded-xl p-6 space-y-6">
+      {/* Launch Header */}
+      {launch && (
+        <div className="border-b border-gray-700 pb-4">
+          <h2 className="text-xl font-bold text-white">{launch.symbol}</h2>
+          <p className="text-gray-400">{launch.name}</p>
+          <div className="mt-2 flex gap-4 text-sm">
+            <span className="text-green-400">${launch.totalRaised} raised</span>
+            <span className="text-gray-500">{launch.participantCount} participants</span>
+          </div>
+        </div>
+      )}
+
+      {/* Consensus Bar */}
+      <div>
+        <h3 className="text-sm font-medium text-gray-300 mb-3">Protocol Consensus</h3>
+        <ConsensusBar consensus={consensus} />
+      </div>
+
+      {/* Buy Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Amount Input */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Amount (USDC)
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+            <input
+              type="number"
+              min="1"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="10.00"
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-8 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Minimum $1 USDC. Your contribution = your vote weight.
+          </p>
+        </div>
+
+        {/* Protocol Vote Selector */}
+        <ProtocolVoteSelector
+          value={protocolVote}
+          onChange={setProtocolVote}
+          consensus={consensus}
+          disabled={buyLoading}
+        />
+
+        {/* Preview */}
+        {isValidAmount && (
+          <div className="bg-gray-700/50 rounded-lg p-4 space-y-2">
+            <h4 className="text-sm font-medium text-gray-300">Transaction Preview</h4>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">You pay:</span>
+              <span className="text-white">${numAmount.toFixed(2)} USDC</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Your vote:</span>
+              <span className={protocolVote === 'uniswap' ? 'text-pink-500' : 'text-blue-500'}>
+                {protocolVote === 'uniswap' ? 'Uniswap' : 'Aerodrome'} +${numAmount.toFixed(0)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Your share:</span>
+              <span className="text-white">
+                {launch ? ((numAmount / (launch.totalRaised + numAmount)) * 100).toFixed(2) : '0'}%
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {buyError && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+            <p className="text-red-400 text-sm">{buyError}</p>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        {isConnected ? (
+          <button
+            type="submit"
+            disabled={buyLoading || !isValidAmount}
+            className={`
+              w-full py-4 rounded-lg font-bold text-lg transition-all
+              ${isValidAmount && !buyLoading
+                ? 'bg-gradient-to-r from-pink-500 to-blue-500 text-white hover:from-pink-600 hover:to-blue-600'
+                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }
+            `}
+          >
+            {buyLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              `Buy & Vote ${protocolVote === 'uniswap' ? 'Uniswap' : 'Aerodrome'}`
+            )}
+          </button>
+        ) : (
+          <ConnectButton.Custom>
+            {({ openConnectModal }) => (
+              <button
+                type="button"
+                onClick={openConnectModal}
+                className="w-full py-4 rounded-lg font-bold text-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              >
+                Connect Wallet
+              </button>
+            )}
+          </ConnectButton.Custom>
+        )}
+      </form>
     </div>
   );
 }
@@ -435,65 +837,275 @@ export function ClankerdomeWithPrediction({ launch }) {
 
 ---
 
-## API Reference Quick Guide
+## X402 Payment Integration
 
-### Get Market Details
+The buy endpoint uses X402 payment protocol. See the `useConsensusBuy` hook for full implementation.
+
+### Key Points
+
+1. **Two-step flow**: Initial request returns 402 → Parse `accepts[0]` → Sign → Retry with payment
+2. **Payment info is in response BODY**, not headers
+3. **All authorization values must be STRINGS** in the JSON payload
+4. **Use `payTo` from 402 response**, don't hardcode wallet addresses
+
+### Error Handling
+
 ```typescript
-// GET /api/prediction-market/{marketId}
-const response = await fetch(`/api/prediction-market/${marketId}`);
-const data = await response.json();
-// Returns: { success: true, market: {...}, outcomes: [...], stats: {...} }
+// Common X402 errors:
+// - "protocolVote is required" → Missing vote in request body
+// - "Minimum buy-in is $1 USDC" → Amount too low
+// - "invalid_payload" → Skipped initial 402 request
+// - "invalid_exact_evm_payload_authorization_value" → Value encoding issue
 ```
 
-### Get Market Activity
-```typescript
-// GET /api/prediction-market/{marketId}/activity
-const response = await fetch(`/api/prediction-market/${marketId}/activity`);
-const data = await response.json();
-// Returns: { recentBets: [...], topBettors: [...], volumeByOutcome: [...], momentum: {...} }
+---
+
+## Atomic Deployment Strategy
+
+### Problem: Front-Running Risk
+
+When deploying to Aerodrome:
+1. Pool creation is a public transaction
+2. MEV bots can detect and front-run the first buy
+3. Goal: Guarantee platform gets first buy in same block
+
+### Solution: Multicall Contract
+
+Deploy a contract that atomically:
+1. Creates the Aerodrome pool
+2. Adds initial liquidity
+3. Executes first swap (dev buy)
+
+All in a single transaction - MEV bots can't insert between steps.
+
+### Implementation Pattern
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "@aerodrome/interfaces/ICLFactory.sol";
+import "@aerodrome/interfaces/INonfungiblePositionManager.sol";
+import "@aerodrome/interfaces/ISwapRouter.sol";
+
+contract AtomicPoolDeployer {
+    ICLFactory public immutable factory;
+    INonfungiblePositionManager public immutable positionManager;
+    ISwapRouter public immutable swapRouter;
+
+    constructor(
+        address _factory,
+        address _positionManager,
+        address _swapRouter
+    ) {
+        factory = ICLFactory(_factory);
+        positionManager = INonfungiblePositionManager(_positionManager);
+        swapRouter = ISwapRouter(_swapRouter);
+    }
+
+    /**
+     * @notice Atomically deploy pool, add liquidity, and execute first buy
+     * @param token The new token address
+     * @param weth WETH address
+     * @param tickSpacing Pool tick spacing
+     * @param sqrtPriceX96 Initial price
+     * @param tokenAmount Tokens for liquidity
+     * @param ethForBuy ETH for first buy
+     */
+    function deployAndBuy(
+        address token,
+        address weth,
+        int24 tickSpacing,
+        uint160 sqrtPriceX96,
+        uint256 tokenAmount,
+        uint256 ethForBuy,
+        int24 tickLower,
+        int24 tickUpper
+    ) external payable returns (
+        address pool,
+        uint256 positionId,
+        uint256 tokensReceived
+    ) {
+        require(msg.value >= ethForBuy, "Insufficient ETH");
+
+        // Step 1: Create pool
+        (address token0, address token1) = token < weth
+            ? (token, weth)
+            : (weth, token);
+
+        pool = factory.createPool(token0, token1, tickSpacing, sqrtPriceX96);
+
+        // Step 2: Add liquidity
+        IERC20(token).transferFrom(msg.sender, address(this), tokenAmount);
+        IERC20(token).approve(address(positionManager), tokenAmount);
+
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
+            token0: token0,
+            token1: token1,
+            tickSpacing: tickSpacing,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            amount0Desired: token0 == token ? tokenAmount : 0,
+            amount1Desired: token1 == token ? tokenAmount : 0,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: msg.sender,
+            deadline: block.timestamp,
+            sqrtPriceX96: 0
+        });
+
+        (positionId,,,) = positionManager.mint(params);
+
+        // Step 3: Execute first buy (ETH → Token)
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: weth,
+            tokenOut: token,
+            tickSpacing: tickSpacing,
+            recipient: msg.sender,
+            deadline: block.timestamp,
+            amountIn: ethForBuy,
+            amountOutMinimum: 0, // Accept any amount
+            sqrtPriceLimitX96: 0
+        });
+
+        tokensReceived = swapRouter.exactInputSingle{value: ethForBuy}(swapParams);
+
+        // Return excess ETH
+        if (address(this).balance > 0) {
+            payable(msg.sender).transfer(address(this).balance);
+        }
+    }
+
+    receive() external payable {}
+}
 ```
 
-### Get User Positions
+### Backend Integration
+
 ```typescript
-// GET /api/prediction-market/user?wallet=0x...
-const response = await fetch(`/api/prediction-market/user?wallet=${address}`);
-const data = await response.json();
-// Returns: { positions: [...], stats: {...} }
+// lib/atomic-deployer.ts
+
+import { encodeFunctionData } from 'viem';
+
+export async function deployPoolAtomically(
+  tokenAddress: Address,
+  liquidityTokens: bigint,
+  devBuyEth: bigint,
+  sqrtPriceX96: bigint,
+  tickLower: number,
+  tickUpper: number,
+): Promise<{ poolAddress: Address; positionId: bigint; tokensReceived: bigint }> {
+  const ATOMIC_DEPLOYER = '0x...'; // Deploy this contract once
+  const WETH = '0x4200000000000000000000000000000000000006';
+  const TICK_SPACING = 2000;
+
+  // Approve tokens first
+  await approveToken(tokenAddress, ATOMIC_DEPLOYER, liquidityTokens);
+
+  // Call atomic deploy
+  const txHash = await walletClient.writeContract({
+    address: ATOMIC_DEPLOYER,
+    abi: ATOMIC_DEPLOYER_ABI,
+    functionName: 'deployAndBuy',
+    args: [
+      tokenAddress,
+      WETH,
+      TICK_SPACING,
+      sqrtPriceX96,
+      liquidityTokens,
+      devBuyEth,
+      tickLower,
+      tickUpper,
+    ],
+    value: devBuyEth,
+  });
+
+  // Parse logs for results
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  // ... parse pool address, position ID, tokens received from logs
+
+  return { poolAddress, positionId, tokensReceived };
+}
 ```
 
-### Claim Winnings (After Market Resolves)
+### Deployment Flow with Consensus
+
+```
+1. Presale ends
+2. Determine winning protocol from consensus
+3. If Aerodrome wins:
+   - Use AtomicPoolDeployer.deployAndBuy()
+   - Single tx: create pool → add liquidity → first buy
+4. If Uniswap wins:
+   - Similar atomic pattern for Uniswap V3
+5. Distribute tokens to presale participants
+```
+
+---
+
+## Best Practices
+
+### 1. Real-Time Updates
+- Poll consensus every 5 seconds during active presale
+- Update UI immediately after successful buy
+- Show loading states during transactions
+
+### 2. Error Handling
+- Validate vote selection before submission
+- Handle X402 errors gracefully
+- Show clear error messages to users
+
+### 3. UX Considerations
+- Default to Aerodrome (tiebreaker)
+- Show both current votes AND percentages
+- Indicate which protocol is winning
+- Explain that vote weight = USDC amount
+
+### 4. Mobile Responsiveness
+- Stack protocol options vertically on mobile
+- Make consensus bar touch-friendly
+- Ensure buttons are large enough to tap
+
+### 5. Accessibility
+- Use proper ARIA labels
+- Ensure color contrast for pink/blue
+- Support keyboard navigation
+
+---
+
+## Contract Addresses (Base Mainnet)
+
 ```typescript
-// POST /api/prediction-market/claim
-const response = await fetch('/api/prediction-market/claim', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ marketId, wallet: address }),
-});
+// Tokens
+const USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const WETH = '0x4200000000000000000000000000000000000006';
+
+// Aerodrome CL
+const AERODROME_CL_FACTORY = '0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A';
+const AERODROME_POSITION_MANAGER = '0x827922686190790b37229fd06084350E74485b72';
+const AERODROME_SWAP_ROUTER = '0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5';
+
+// Payment receiver
+const AI_WALLET = '0xE5e9033C57B4332283Cda19B39431CD716340098';
 ```
 
 ---
 
 ## Troubleshooting
 
-### "No prediction market for this launch"
-- The market may not have been created for older launches
-- Check if `launch.predictionMarket.hasMarket` is `true`
-- Markets are auto-created for NEW launches only
+### "protocolVote is required"
+The request body must include `protocolVote` field with value `"uniswap"` or `"aerodrome"`.
 
-### X402 Payment Errors
-- `invalid_exact_evm_payload_authorization_value` - Amount encoding issue, ensure all values are strings
-- `Missing payment` - Initial request needs to return 402 first, then retry with signed payment
+### Consensus shows 50/50 but totalVotes > 0
+This shouldn't happen. Check that existing buys have valid `protocol_vote` in database.
 
-### Odds Not Updating
-- Odds update after each bet
-- Refresh the launch data to see new odds
-- Pool-based pricing: `odds = totalPool / sidePool`
+### Votes not updating after buy
+- Verify the buy response includes updated consensus
+- Check that `useLaunchConsensus` is polling
+- Confirm database was updated (check server logs)
 
----
-
-## Summary
-
-1. **Data is already there** - `launch.predictionMarket` has everything you need
-2. **Display outcomes** - Map over `outcomes` array, show YES/NO buttons with odds
-3. **Place bets** - Use X402 payment flow (402 response → sign → retry)
-4. **Show positions** - Use `/api/prediction-market/user?wallet=0x...`
+### X402 payment failures
+See X402 error handling section above. Common issues:
+- Missing initial 402 request
+- Hardcoded wallet instead of using `payTo` from response
+- BigInt values not converted to strings
