@@ -15,7 +15,8 @@ import { ParticipantIdentityCompact } from './ParticipantIdentity';
 import { ConsensusBar } from './ConsensusBar';
 import { ProtocolVoteSelector } from './ProtocolVoteSelector';
 import { useBatchIdentities } from '@/hooks/useBatchIdentities';
-import { AdminTestButton, CancelWarButton, RemoveWarButton } from './AdminTestButton';
+// Admin buttons hidden for production
+// import { AdminTestButton, CancelWarButton, RemoveWarButton } from './AdminTestButton';
 import { TradingTerminal, type LaunchedToken } from './TradingTerminal';
 import { UserAllocations } from './UserAllocations';
 import type { PredictionMarketInfo, ProtocolVote, WarLocks, DexVote, PairVote } from '@/types/token-wars';
@@ -1335,26 +1336,9 @@ function LaunchCard({
             </span>
           )}
           {launch.isActive && !isEnded && (
-            <>
-              <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full font-medium">
-                LIVE
-              </span>
-              <AdminTestButton
-                warId={launch.id}
-                warSymbol={launch.symbol}
-                onSuccess={onRefresh}
-              />
-              <CancelWarButton
-                warId={launch.id}
-                warSymbol={launch.symbol}
-                onCancelled={onRefresh}
-              />
-              <RemoveWarButton
-                warId={launch.id}
-                warSymbol={launch.symbol}
-                onRemoved={onRefresh}
-              />
-            </>
+            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full font-medium">
+              LIVE
+            </span>
           )}
         </div>
       </div>
