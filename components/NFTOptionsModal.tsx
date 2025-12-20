@@ -4,17 +4,22 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserNFT } from '@/hooks/useUserNFTs';
 import { useInventory } from '@/contexts/InventoryContext';
+import { ListingModal } from './ListingModal';
+import { TraitSwapper } from './TraitSwapper';
 
 interface NFTOptionsModalProps {
   nft: UserNFT | null;
   isOpen: boolean;
   onClose: () => void;
+  onListingSuccess?: () => void;
 }
 
-export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) {
+export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTOptionsModalProps) {
   const router = useRouter();
   const { setIsOpen } = useInventory();
   const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [showListingModal, setShowListingModal] = useState(false);
+  const [showTraitSwapper, setShowTraitSwapper] = useState(false);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -291,9 +296,91 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
             </button>
           )}
 
-          {/* HUMANS/WARDENS: Show all 3 options */}
+          {/* HUMANS/WARDENS: Show all options */}
           {isHuman && (
             <>
+              {/* Option 0: List on Marketplace */}
+              <button
+                onClick={() => {
+                  setShowListingModal(true);
+                }}
+                disabled={nft.isJailed}
+                className="w-full text-white rounded-lg transition-all text-left flex items-center relative overflow-hidden"
+                style={{
+                  padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
+                  gap: 'clamp(0.5rem, 2vw, 0.75rem)',
+                  background: nft.isJailed
+                    ? 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))'
+                    : 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))',
+                  border: nft.isJailed
+                    ? '2px solid rgba(75, 85, 99, 0.5)'
+                    : '2px solid rgba(34, 197, 94, 0.5)',
+                  boxShadow: nft.isJailed
+                    ? '0 0 10px rgba(75, 85, 99, 0.1)'
+                    : '0 0 15px rgba(34, 197, 94, 0.2)',
+                  cursor: nft.isJailed ? 'not-allowed' : 'pointer',
+                  opacity: nft.isJailed ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!nft.isJailed) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(22, 163, 74, 0.5))';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(34, 197, 94, 0.4)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!nft.isJailed) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.2)';
+                  }
+                }}
+              >
+                <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>🏪</span>
+                <div className="flex-1">
+                  <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
+                    List on Market
+                  </span>
+                  <p className="text-green-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                    {nft.isJailed
+                      ? 'Cannot list while jailed'
+                      : 'Sell for wASS on our marketplace'
+                    }
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 0.5: Edit Traits */}
+              <button
+                onClick={() => {
+                  setShowTraitSwapper(true);
+                }}
+                className="w-full text-white rounded-lg transition-all text-left flex items-center relative overflow-hidden"
+                style={{
+                  padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
+                  gap: 'clamp(0.5rem, 2vw, 0.75rem)',
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3))',
+                  border: '2px solid rgba(59, 130, 246, 0.5)',
+                  boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(147, 51, 234, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(59, 130, 246, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.2)';
+                }}
+              >
+                <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>✨</span>
+                <div className="flex-1">
+                  <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
+                    Edit Traits
+                  </span>
+                  <p className="text-blue-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                    Customize appearance with inventory items ($0.05)
+                  </p>
+                </div>
+              </button>
+
               {/* Option 1: Wrap */}
               <button
                 onClick={() => {
@@ -420,6 +507,39 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
           {/* SNAKES: Similar to humans but different jail message */}
           {isSnake && (
             <>
+              {/* Option 0: List on Marketplace */}
+              <button
+                onClick={() => {
+                  setShowListingModal(true);
+                }}
+                className="w-full text-white rounded-lg transition-all text-left flex items-center relative overflow-hidden"
+                style={{
+                  padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
+                  gap: 'clamp(0.5rem, 2vw, 0.75rem)',
+                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))',
+                  border: '2px solid rgba(34, 197, 94, 0.5)',
+                  boxShadow: '0 0 15px rgba(34, 197, 94, 0.2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(22, 163, 74, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(34, 197, 94, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.2)';
+                }}
+              >
+                <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>🏪</span>
+                <div className="flex-1">
+                  <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
+                    List on Market
+                  </span>
+                  <p className="text-green-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                    Sell for wASS on our marketplace
+                  </p>
+                </div>
+              </button>
+
               {/* Option 1: Wrap */}
               <button
                 onClick={() => {
@@ -568,6 +688,30 @@ export function NFTOptionsModal({ nft, isOpen, onClose }: NFTOptionsModalProps) 
           }
         `}</style>
       </div>
+
+      {/* Listing Modal */}
+      <ListingModal
+        nft={nft}
+        isOpen={showListingModal}
+        onClose={() => setShowListingModal(false)}
+        onSuccess={() => {
+          setShowListingModal(false);
+          onListingSuccess?.();
+        }}
+      />
+
+      {/* Trait Swapper Modal */}
+      {nft && (
+        <TraitSwapper
+          nft={nft}
+          isOpen={showTraitSwapper}
+          onClose={() => setShowTraitSwapper(false)}
+          onSuccess={() => {
+            // Optionally trigger a refresh of the NFT data
+            onListingSuccess?.();
+          }}
+        />
+      )}
     </div>
   );
 }

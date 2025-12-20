@@ -2,7 +2,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { ProtocolConsensus, ClankerdomeLaunch } from '@/types/clankerdome';
+import type { VoteConsensus, TokenWar } from '@/types/token-wars';
+
+// Call production API directly - no proxy needed
+const API_BASE = 'https://api.applesnakes.com';
+
+// Legacy type aliases for backwards compatibility
+type ProtocolConsensus = VoteConsensus;
+type ClankerdomeLaunch = TokenWar;
 
 interface UseLaunchConsensusResult {
   consensus: ProtocolConsensus | null;
@@ -11,9 +18,6 @@ interface UseLaunchConsensusResult {
   error: string | null;
   refresh: () => Promise<void>;
 }
-
-// API proxy base - uses local proxy to avoid CORS
-const API_BASE_URL = '';
 
 export function useLaunchConsensus(
   launchId: string | null,
@@ -31,13 +35,17 @@ export function useLaunchConsensus(
     }
 
     try {
-      // Try local proxy first, then direct API
-      const response = await fetch(`${API_BASE_URL}/api/clankerdome/buy?launchId=${launchId}`);
+      // Call production API directly (no proxy)
+      const response = await fetch(`${API_BASE}/api/token-wars/${launchId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
       const data = await response.json();
 
       if (data.success !== false) {
-        setConsensus(data.consensus || null);
-        setLaunch(data.launch || null);
+        // Extract consensus from war data
+        setConsensus(data.war?.consensus || data.consensus || null);
+        setLaunch(data.war || data.launch || null);
         setError(null);
       } else {
         setError(data.error || 'Failed to fetch consensus');

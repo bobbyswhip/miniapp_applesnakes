@@ -1,9 +1,11 @@
 'use client';
 
-import { useUserNFTs } from '@/hooks/useUserNFTs';
+import { useState } from 'react';
+import { useUserNFTs, UserNFT } from '@/hooks/useUserNFTs';
 import { NFTGallery } from '@/components/NFTImage';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { NFTOptionsModal } from '@/components/NFTOptionsModal';
 
 /**
  * My NFTs Page
@@ -13,7 +15,9 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
  */
 export default function MyNFTsPage() {
   const { address: userAddress } = useAccount();
-  const { nfts, isLoading, error } = useUserNFTs();
+  const { nfts, isLoading, error, refetch } = useUserNFTs();
+  const [selectedNFT, setSelectedNFT] = useState<UserNFT | null>(null);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
 
   if (!userAddress) {
     return (
@@ -109,13 +113,29 @@ export default function MyNFTsPage() {
         {/* NFT Gallery */}
         <NFTGallery
           nfts={nfts}
-          onNFTClick={(tokenId) => {
-            // Navigate to NFT detail page
-            window.location.href = `/nft/${tokenId}`;
+          onNFTClick={(nft) => {
+            // Open options modal for selected NFT
+            setSelectedNFT(nft);
+            setShowOptionsModal(true);
           }}
           showJailedBadge={true}
         />
       </div>
+
+      {/* NFT Options Modal */}
+      <NFTOptionsModal
+        nft={selectedNFT}
+        isOpen={showOptionsModal}
+        onClose={() => {
+          setShowOptionsModal(false);
+          setSelectedNFT(null);
+        }}
+        onListingSuccess={() => {
+          setShowOptionsModal(false);
+          setSelectedNFT(null);
+          refetch();
+        }}
+      />
     </div>
   );
 }

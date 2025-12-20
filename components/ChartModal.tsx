@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, CandlestickSeries } from 'lightweight-charts';
-import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance, useSendCalls, useCallsStatus } from 'wagmi';
-import { parseEther, formatEther, formatUnits, parseUnits, encodeFunctionData, maxUint160, decodeErrorResult } from 'viem';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, UNIVERSAL_ROUTER_ADDRESS, PERMIT2_ADDRESS, TOKEN_PAIRS, getDefaultPair, getTokenPairById, getAllTokenAddresses, ETH_ADDRESS, TokenPairConfig, WASS_TOKEN_ADDRESS, HOOK_ADDRESS, POOL_CONFIG, STATE_VIEW_ADDRESS } from '@/config';
+import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance, useSendCalls, useCallsStatus, useSendTransaction, useWalletClient } from 'wagmi';
+import { parseEther, formatEther, formatUnits, parseUnits, encodeFunctionData, maxUint160, decodeErrorResult, concat, toHex } from 'viem';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, UNIVERSAL_ROUTER_ADDRESS, PERMIT2_ADDRESS, TOKEN_PAIRS, getDefaultPair, getTokenPairById, getAllTokenAddresses, ETH_ADDRESS, TokenPairConfig, WASS_TOKEN_ADDRESS, HOOK_ADDRESS, POOL_CONFIG, STATE_VIEW_ADDRESS, AERODROME_ROUTER_ADDRESS, WETH_ADDRESS } from '@/config';
+import { AERODROME_ROUTER_ABI, AERODROME_FACTORY_ADDRESS, AERODROME_FACTORY_ABI, AERODROME_POOL_ABI, AERODROME_MIXED_QUOTER_ADDRESS, AERODROME_MIXED_QUOTER_ABI, AERODROME_CL_POOL_ABI, AERODROME_CL_FACTORY_ADDRESS, AERODROME_CL_FACTORY_ABI, SLIPSTREAM_SWAP_ROUTER_ADDRESS, SLIPSTREAM_SWAP_ROUTER_ABI, type AerodromeRoute } from '@/abis/aerodromeRouter';
+import { KYBERSWAP_ROUTER_ADDRESS, KYBERSWAP_NATIVE_TOKEN, getKyberSwapQuote, buildKyberSwapTransaction, type KyberSwapRouteSummary } from '@/abis/hydrexRouter';
+import { ERC20_ABI } from '@/abis/erc20';
 import { base } from 'wagmi/chains';
 import { useTransactions } from '@/contexts/TransactionContext';
 import { useMultipleTokenInfo, TokenInfo } from '@/hooks/useTokenInfo';
@@ -63,6 +66,19 @@ const UNIVERSAL_ROUTER_ABI = [
   },
 ] as const;
 
+// Extended pair type for Token Wars integration
+interface ExtendedPair extends TokenPairConfig {
+  isTokenWars?: boolean;
+  tokenWarsData?: {
+    name: string;
+    symbol: string;
+    imageUrl: string | null;
+    dex?: 'v4' | 'aerodrome' | 'hydrex';
+    poolAddress?: string; // Original pool address for Aerodrome/Hydrex swaps
+    dexScreenerUrl?: string | null;
+  };
+}
+
 interface ChartModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -74,6 +90,9 @@ interface ChartModalProps {
   trades?: PoolTrade[];
   tradesLoading?: boolean;
   selectedPairId?: string; // External control of selected pair
+  externalPairData?: ExtendedPair; // Full pair data for Token Wars or custom pairs
+  additionalPairs?: ExtendedPair[]; // Additional pairs from Token Wars
+  externalPairChanges?: Map<string, number>; // Price changes passed from parent to avoid duplicate API calls
 }
 
 type TimeFrame = '5m' | '15m' | '1h' | '4h' | '1d';
@@ -88,7 +107,7 @@ interface OHLCVData {
   volume: number;
 }
 
-export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layout = 'vertical', onPairChange, onSwapComplete, trades = [], tradesLoading = false, selectedPairId }: ChartModalProps) {
+export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layout = 'vertical', onPairChange, onSwapComplete, trades = [], tradesLoading = false, selectedPairId, externalPairData, additionalPairs = [], externalPairChanges }: ChartModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient({ chainId: base.id });
   const contracts = getContracts(base.id);
@@ -99,21 +118,67 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const seriesRef = useRef<ISeriesApi<any> | null>(null);
 
-  // Token pair selection state
-  const [selectedPair, setSelectedPair] = useState<TokenPairConfig>(getDefaultPair());
+  // Token pair selection state (using ExtendedPair to preserve isTokenWars flag)
+  const [selectedPair, setSelectedPair] = useState<ExtendedPair>(getDefaultPair() as ExtendedPair);
   const [isPairDropdownOpen, setIsPairDropdownOpen] = useState(false);
   const pairDropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch token names dynamically via RPC
   const { tokenInfos, isLoading: isLoadingTokenInfo } = useMultipleTokenInfo(getAllTokenAddresses());
 
-  // Helper to get token symbol by address
+  // Combine static TOKEN_PAIRS with additional pairs from Token Wars
+  const allPairs = useMemo((): ExtendedPair[] => {
+    const staticPairs: ExtendedPair[] = TOKEN_PAIRS.map(p => ({ ...p, isTokenWars: false }));
+    return [...staticPairs, ...additionalPairs];
+  }, [additionalPairs]);
+
+  // Create maps for Token Wars token symbols and images
+  const tokenWarsSymbolMap = useMemo(() => {
+    const map = new Map<string, string>();
+    additionalPairs.forEach(pair => {
+      if (pair.tokenWarsData?.symbol) {
+        map.set(pair.token1.toLowerCase(), pair.tokenWarsData.symbol);
+      }
+    });
+    return map;
+  }, [additionalPairs]);
+
+  const tokenWarsImageMap = useMemo(() => {
+    const map = new Map<string, string>();
+    additionalPairs.forEach(pair => {
+      if (pair.tokenWarsData?.imageUrl) {
+        // Convert IPFS URLs to HTTP gateway URLs
+        let imageUrl = pair.tokenWarsData.imageUrl;
+        if (imageUrl.startsWith('ipfs://')) {
+          imageUrl = `https://ipfs.io/ipfs/${imageUrl.replace('ipfs://', '')}`;
+        }
+        map.set(pair.token1.toLowerCase(), imageUrl);
+      }
+    });
+    return map;
+  }, [additionalPairs]);
+
+  // Helper to get token symbol by address (with Token Wars support)
   const getTokenSymbol = useCallback((address: `0x${string}`): string => {
     if (address === ETH_ADDRESS) return 'ETH';
     if (address.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) return 'wASS';
+    // Check Token Wars tokens first
+    const twSymbol = tokenWarsSymbolMap.get(address.toLowerCase());
+    if (twSymbol) return twSymbol;
+    // Fall back to RPC token info
     const info = tokenInfos.get(address.toLowerCase());
     return info?.symbol || `${address.slice(0, 6)}...`;
-  }, [tokenInfos]);
+  }, [tokenInfos, tokenWarsSymbolMap]);
+
+  // Helper to get token image (for Token Wars tokens)
+  const getTokenImage = useCallback((address: `0x${string}`): string | null => {
+    if (address === ETH_ADDRESS) return '/Images/Ether.png';
+    if (address.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) return '/Images/Token.png';
+    // Check Token Wars tokens
+    const twImage = tokenWarsImageMap.get(address.toLowerCase());
+    if (twImage) return twImage;
+    return null;
+  }, [tokenWarsImageMap]);
 
   // Helper to get display name for a pair
   const getPairDisplayName = useCallback((pair: TokenPairConfig): string => {
@@ -123,12 +188,107 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   }, [getTokenSymbol]);
 
   // Check if selected pair is a token pair (not the default wASS/ETH pair)
-  const isTokenPair = !selectedPair.isDefault && selectedPair.token0 !== ETH_ADDRESS && selectedPair.token1 !== ETH_ADDRESS;
+  // Token Wars pairs with ETH (e.g., ETH/GGG) should also be recognized as token pairs
+  const isTokenPair = useMemo(() => {
+    // Token Wars pairs are always considered token pairs (even if one side is ETH)
+    if (selectedPair.isTokenWars) return true;
+    // For non-Token Wars pairs, require both tokens to NOT be ETH (wASS/TOKEN pairs)
+    return !selectedPair.isDefault && selectedPair.token0 !== ETH_ADDRESS && selectedPair.token1 !== ETH_ADDRESS;
+  }, [selectedPair]);
 
-  // Get the output token for token pairs (the non-wASS token)
+  // Check if this is a Token Wars ETH pair (ETH/TOKEN, not wASS/TOKEN)
+  // These pairs need DIRECT V4 swaps, not multi-hop through wASS
+  const isTokenWarsEthPair = useMemo(() => {
+    if (!selectedPair.isTokenWars) return false;
+    // Check if either token is ETH
+    return selectedPair.token0 === ETH_ADDRESS || selectedPair.token1 === ETH_ADDRESS;
+  }, [selectedPair]);
+
+  // Check if current pair is an Aerodrome pair
+  // First check selectedPair directly (for externalPairData fallback), then allPairs as backup
+  const isAerodromePair = useMemo(() => {
+    // Direct check on selectedPair (works for externalPairData passed directly)
+    if (selectedPair.tokenWarsData?.dex === 'aerodrome') {
+      console.log('[isAerodromePair] Detected Aerodrome pair from selectedPair.tokenWarsData');
+      return true;
+    }
+    // Fallback: check allPairs lookup
+    const pair = allPairs.find(p => p.id === selectedPair.id);
+    const result = pair?.tokenWarsData?.dex === 'aerodrome';
+    if (result) {
+      console.log('[isAerodromePair] Detected Aerodrome pair from allPairs lookup');
+    }
+    return result;
+  }, [selectedPair, allPairs]);
+
+  // Check if current pair is a Hydrex pair (uses KyberSwap aggregator)
+  const isHydrexPair = useMemo(() => {
+    // Direct check on selectedPair (works for externalPairData passed directly)
+    if (selectedPair.tokenWarsData?.dex === 'hydrex') {
+      console.log('[isHydrexPair] Detected Hydrex pair from selectedPair.tokenWarsData');
+      return true;
+    }
+    // Fallback: check allPairs lookup
+    const pair = allPairs.find(p => p.id === selectedPair.id);
+    const result = pair?.tokenWarsData?.dex === 'hydrex';
+    if (result) {
+      console.log('[isHydrexPair] Detected Hydrex pair from allPairs lookup');
+    }
+    return result;
+  }, [selectedPair, allPairs]);
+
+  // Check if this Aerodrome pair uses wASS as the base token (instead of WETH)
+  // For wASS-paired tokens, we swap wASS ↔ Token instead of ETH ↔ Token
+  const isWassPairedAerodrome = useMemo(() => {
+    if (!isAerodromePair) return false;
+    // Check if token0 or token1 is wASS (and the other is NOT ETH/WETH)
+    const token0Lower = selectedPair.token0.toLowerCase();
+    const token1Lower = selectedPair.token1.toLowerCase();
+    const wassLower = WASS_TOKEN_ADDRESS.toLowerCase();
+    const wethLower = WETH_ADDRESS.toLowerCase();
+    const ethLower = ETH_ADDRESS.toLowerCase();
+
+    // If token0 is wASS and token1 is NOT WETH/ETH → wASS-paired
+    if (token0Lower === wassLower && token1Lower !== wethLower && token1Lower !== ethLower) {
+      console.log('[isWassPairedAerodrome] Detected wASS as token0');
+      return true;
+    }
+    // If token1 is wASS and token0 is NOT WETH/ETH → wASS-paired
+    if (token1Lower === wassLower && token0Lower !== wethLower && token0Lower !== ethLower) {
+      console.log('[isWassPairedAerodrome] Detected wASS as token1');
+      return true;
+    }
+    return false;
+  }, [isAerodromePair, selectedPair.token0, selectedPair.token1]);
+
+  // Get the base token address for Aerodrome pairs (WETH for ETH-paired, wASS for wASS-paired)
+  const aerodromeBaseToken = useMemo((): `0x${string}` => {
+    if (isWassPairedAerodrome) {
+      return WASS_TOKEN_ADDRESS;
+    }
+    return WETH_ADDRESS;
+  }, [isWassPairedAerodrome]);
+
+  // Get the output token for token pairs (the non-ETH/non-wASS token)
   const getOutputTokenAddress = useCallback((): `0x${string}` | null => {
     if (!isTokenPair) return null;
-    // In token pairs, one is wASS and the other is the output token
+
+    // For Token Wars ETH pairs (ETH/TOKEN), return the non-ETH token
+    if (selectedPair.isTokenWars) {
+      if (selectedPair.token0 === ETH_ADDRESS) {
+        return selectedPair.token1;
+      }
+      if (selectedPair.token1 === ETH_ADDRESS) {
+        return selectedPair.token0;
+      }
+      // For Token Wars wASS pairs (wASS/TOKEN), return the non-wASS token
+      if (selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) {
+        return selectedPair.token1;
+      }
+      return selectedPair.token0;
+    }
+
+    // For non-Token Wars pairs, one is wASS and the other is the output token
     if (selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) {
       return selectedPair.token1;
     }
@@ -159,6 +319,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   const [outputAmount, setOutputAmount] = useState<string>('');
   const [isQuoting, setIsQuoting] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
+  // Aerodrome pool info detected during quoting (stable/volatile, pool address)
+  const [aerodromePoolInfo, setAerodromePoolInfo] = useState<{ stable: boolean; poolAddress: `0x${string}`; tickSpacing?: number } | null>(null);
+  // Hydrex/KyberSwap route info for swaps
+  const [hydrexRouteInfo, setHydrexRouteInfo] = useState<{ routeSummary: KyberSwapRouteSummary; routerAddress: string } | null>(null);
+  // Discovered pool address for chart loading (used when geckoPoolAddress is empty)
+  const [discoveredChartPoolAddress, setDiscoveredChartPoolAddress] = useState<string | null>(null);
   // Input currency for buy mode (ETH or wASS) - wASS only available for token pairs
   const [buyInputCurrency, setBuyInputCurrency] = useState<'eth' | 'wass'>('eth');
   // Output currency for sell mode (wASS or ETH) - ETH requires multi-hop for token pairs
@@ -166,14 +332,20 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
   // Transaction state
   const { writeContract, data: txHash, isPending, error: writeError, reset: resetWrite } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+  const { sendTransaction, data: sendTxHash, isPending: isSendPending, error: sendError, reset: resetSendTx } = useSendTransaction();
+  const { data: walletClient } = useWalletClient();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: txHash || sendTxHash });
 
   // Approval state for sells
   const [approvalStep, setApprovalStep] = useState<'none' | 'permit2' | 'router' | 'ready'>('none');
   const [isCheckingApproval, setIsCheckingApproval] = useState(false);
+  // Track what type of transaction is pending (to handle success differently)
+  const [pendingTxType, setPendingTxType] = useState<'swap' | 'approval-permit2' | 'approval-router' | 'approval-aerodrome' | 'approval-hydrex' | 'approval-wass-permit2' | 'approval-wass-router' | 'approval-wass-aerodrome' | null>(null);
   // Approval state for buying with wASS (only for token pairs)
   const [buyWassApprovalStep, setBuyWassApprovalStep] = useState<'none' | 'permit2' | 'router' | 'ready'>('none');
   const [isCheckingBuyWassApproval, setIsCheckingBuyWassApproval] = useState(false);
+  // Approval state for buying with wASS on Aerodrome pairs (direct approval to router, no Permit2)
+  const [wassAerodromeApprovalNeeded, setWassAerodromeApprovalNeeded] = useState(false);
   const [poolKey, setPoolKey] = useState<{
     currency0: `0x${string}`;
     currency1: `0x${string}`;
@@ -227,57 +399,79 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     detectSmartWallet();
   }, [address, publicClient]);
 
-  // Fetch price changes for all pairs on modal open (for dropdown sorting)
+  // Use external price changes when provided (from parent InventorySack)
+  // This eliminates duplicate API calls - parent already fetches for sidebar display
   useEffect(() => {
     if (!isOpen) return;
 
+    // If external price changes are provided, use them directly
+    if (externalPairChanges && externalPairChanges.size > 0) {
+      setAllPairChanges(externalPairChanges);
+      return;
+    }
+
+    // Fallback: fetch price changes if not provided externally
+    // This is only used when ChartModal is used standalone (not embedded)
     const fetchAllPairChanges = async () => {
       const changes = new Map<string, number>();
 
-      await Promise.all(
-        TOKEN_PAIRS.map(async (pair) => {
-          if (!pair.geckoPoolAddress) {
-            changes.set(pair.id, 0);
-            return;
-          }
+      // Batch requests to avoid rate limiting (3 at a time)
+      const batchSize = 3;
+      const pairs = allPairs.filter(p => p.geckoPoolAddress);
 
-          try {
-            // Use 1h timeframe for consistency
-            const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${pair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
-            const response = await fetch(url);
+      for (let i = 0; i < pairs.length; i += batchSize) {
+        const batch = pairs.slice(i, i + batchSize);
 
-            if (!response.ok) {
-              changes.set(pair.id, 0);
-              return;
-            }
+        await Promise.all(
+          batch.map(async (pair) => {
+            try {
+              const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${pair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
+              const response = await fetch(url);
 
-            const json = await response.json();
-            const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+              if (!response.ok) {
+                changes.set(pair.id, 0);
+                return;
+              }
 
-            if (ohlcvList.length >= 2) {
-              // Data is in reverse chronological order [newest, ..., oldest]
-              const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0; // open price
-              const newestPrice = ohlcvList[0]?.[4] || 0; // close price
-              if (oldestPrice > 0) {
-                const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
-                changes.set(pair.id, percentChange);
+              const json = await response.json();
+              const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+
+              if (ohlcvList.length >= 2) {
+                const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0;
+                const newestPrice = ohlcvList[0]?.[4] || 0;
+                if (oldestPrice > 0) {
+                  const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
+                  changes.set(pair.id, percentChange);
+                } else {
+                  changes.set(pair.id, 0);
+                }
               } else {
                 changes.set(pair.id, 0);
               }
-            } else {
+            } catch {
               changes.set(pair.id, 0);
             }
-          } catch {
-            changes.set(pair.id, 0);
-          }
-        })
-      );
+          })
+        );
+
+        // Small delay between batches
+        if (i + batchSize < pairs.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      // Set 0 for pairs without geckoPoolAddress
+      allPairs.forEach(pair => {
+        if (!pair.geckoPoolAddress && !changes.has(pair.id)) {
+          changes.set(pair.id, 0);
+        }
+      });
 
       setAllPairChanges(changes);
     };
 
     fetchAllPairChanges();
-  }, [isOpen]);
+  }, [isOpen, allPairs, externalPairChanges]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -295,9 +489,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     };
   }, [isPairDropdownOpen]);
 
-  // Handle pair selection
-  const handlePairSelect = (pair: TokenPairConfig) => {
-    setSelectedPair(pair);
+  // Handle pair selection (accepts ExtendedPair to preserve isTokenWars flag)
+  const handlePairSelect = (pair: ExtendedPair | TokenPairConfig) => {
+    setSelectedPair(pair as ExtendedPair);
     setIsPairDropdownOpen(false);
     setPriceChange(null);
     // Notify parent of pool change for trade history
@@ -308,8 +502,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     setOutputAmount('');
     // Reset buy input currency to ETH when switching pairs (wASS only available for token pairs)
     setBuyInputCurrency('eth');
-    // Reset sell output currency to wASS when switching pairs
-    setSellOutputCurrency('wass');
+    // Reset sell output currency based on pair type
+    // Token Wars ETH pairs can ONLY sell to ETH (no wASS in the pool)
+    const extPair = pair as ExtendedPair;
+    const isEthPair = extPair.isTokenWars && (extPair.token0 === ETH_ADDRESS || extPair.token1 === ETH_ADDRESS);
+    setSellOutputCurrency(isEthPair ? 'eth' : 'wass');
     // Reset approval states when switching pairs (force re-check)
     setApprovalStep('none');
     setBuyWassApprovalStep('none');
@@ -320,15 +517,30 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       refetchWassPermit2Allowance();
       refetchWassRouterAllowance();
     }, 100);
-    // Clear chart data immediately to prepare for new data
-    // Note: Don't call resetTimeScale() here - let fitContent() handle view adjustment after data loads
-    if (seriesRef.current) {
+    // Clear chart data and reset time scale to prepare for new data
+    // This ensures the chart starts fresh and fitContent() can properly adjust the view
+    if (seriesRef.current && chartRef.current) {
       seriesRef.current.setData([]);
+      // Reset time scale to ensure clean state for new pair
+      chartRef.current.timeScale().resetTimeScale();
     }
   };
 
   // Watch for external pair selection changes (from sidebar)
+  // Supports both static pairs (via selectedPairId) and custom pairs (via externalPairData)
   useEffect(() => {
+    // First check for externalPairData (used for Token Wars pairs)
+    if (externalPairData && externalPairData.id !== selectedPair.id) {
+      console.log(`[ChartModal] Received external pair data:`, {
+        id: externalPairData.id,
+        geckoPoolAddress: externalPairData.geckoPoolAddress,
+        isTokenWars: externalPairData.isTokenWars,
+        tokenWarsData: externalPairData.tokenWarsData,
+      });
+      handlePairSelect(externalPairData);
+      return;
+    }
+    // Fall back to selectedPairId for static pairs
     if (selectedPairId && selectedPairId !== selectedPair.id) {
       const pair = getTokenPairById(selectedPairId);
       if (pair) {
@@ -336,7 +548,89 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPairId]);
+  }, [selectedPairId, externalPairData]);
+
+  // Discover pool address for Aerodrome pairs when geckoPoolAddress is empty
+  // This enables chart loading for Aerodrome CL pools by looking up the pool from the factory
+  useEffect(() => {
+    const discoverAerodromePoolAddress = async () => {
+      // Reset discovered address when pair changes
+      setDiscoveredChartPoolAddress(null);
+
+      // Only proceed if this is an Aerodrome pair with no geckoPoolAddress
+      if (!isAerodromePair || !outputTokenAddress || !publicClient) return;
+
+      const currentGeckoAddr = selectedPair.geckoPoolAddress;
+      if (currentGeckoAddr && currentGeckoAddr !== '0x' && currentGeckoAddr.length > 10) {
+        // Already have a valid address
+        return;
+      }
+
+      console.log('[Chart] Discovering pool address for Aerodrome pair...');
+
+      // Try common CL tickSpacings to find the pool
+      const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+      const tickSpacingsToTry = [2000, 200, 100, 50, 1];
+
+      for (const tickSpacing of tickSpacingsToTry) {
+        try {
+          const discoveredPool = await publicClient.readContract({
+            address: AERODROME_CL_FACTORY_ADDRESS,
+            abi: AERODROME_CL_FACTORY_ABI,
+            functionName: 'getPool',
+            args: [WETH_ADDRESS, outputTokenAddress, tickSpacing],
+          }) as `0x${string}`;
+
+          if (discoveredPool && discoveredPool !== ZERO_ADDRESS) {
+            console.log('[Chart] Discovered CL pool:', discoveredPool, 'tickSpacing:', tickSpacing);
+            setDiscoveredChartPoolAddress(discoveredPool);
+            return;
+          }
+        } catch {
+          // Try next tickSpacing
+        }
+      }
+
+      // Try V2 factory as fallback
+      try {
+        // Volatile pool
+        const volatilePool = await publicClient.readContract({
+          address: AERODROME_FACTORY_ADDRESS,
+          abi: AERODROME_FACTORY_ABI,
+          functionName: 'getPool',
+          args: [WETH_ADDRESS, outputTokenAddress, false],
+        }) as `0x${string}`;
+
+        if (volatilePool && volatilePool !== ZERO_ADDRESS) {
+          console.log('[Chart] Discovered V2 volatile pool:', volatilePool);
+          setDiscoveredChartPoolAddress(volatilePool);
+          return;
+        }
+      } catch {
+        // Continue to stable check
+      }
+
+      try {
+        // Stable pool
+        const stablePool = await publicClient.readContract({
+          address: AERODROME_FACTORY_ADDRESS,
+          abi: AERODROME_FACTORY_ABI,
+          functionName: 'getPool',
+          args: [WETH_ADDRESS, outputTokenAddress, true],
+        }) as `0x${string}`;
+
+        if (stablePool && stablePool !== ZERO_ADDRESS) {
+          console.log('[Chart] Discovered V2 stable pool:', stablePool);
+          setDiscoveredChartPoolAddress(stablePool);
+          return;
+        }
+      } catch {
+        console.log('[Chart] Failed to discover any Aerodrome pool');
+      }
+    };
+
+    discoverAerodromePoolAddress();
+  }, [isAerodromePair, outputTokenAddress, selectedPair.geckoPoolAddress, publicClient]);
 
   // Get ETH balance
   const { data: ethBalanceData } = useBalance({
@@ -405,6 +699,24 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     abi: PERMIT2_ABI,
     functionName: 'allowance',
     args: address ? [address, contracts.token.address, UNIVERSAL_ROUTER_ADDRESS] : undefined,
+    chainId: base.id,
+  });
+
+  // Check wASS allowance for Aerodrome Router (for buying on wASS-paired Aerodrome tokens)
+  const { data: wassAerodromeAllowance, refetch: refetchWassAerodromeAllowance } = useReadContract({
+    address: WASS_TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address ? [address, AERODROME_ROUTER_ADDRESS] : undefined,
+    chainId: base.id,
+  });
+
+  // Check wASS allowance for Slipstream Router (for buying on wASS-paired CL pools)
+  const { data: wassSlipstreamAllowance, refetch: refetchWassSlipstreamAllowance } = useReadContract({
+    address: WASS_TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address ? [address, SLIPSTREAM_SWAP_ROUTER_ADDRESS] : undefined,
     chainId: base.id,
   });
 
@@ -514,7 +826,76 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       try {
         const sellAmount = parseUnits(inputAmount, 18);
 
-        // Check ERC20 allowance for Permit2
+        // For Aerodrome pairs, check direct ERC20 approval to the correct router
+        // CL pools use Slipstream SwapRouter, V2 pools use Aerodrome Router
+        if (isAerodromePair && outputTokenAddress && publicClient) {
+          const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+          const routerToCheck = isCLPool ? SLIPSTREAM_SWAP_ROUTER_ADDRESS : AERODROME_ROUTER_ADDRESS;
+
+          const aerodromeAllowance = await publicClient.readContract({
+            address: outputTokenAddress,
+            abi: [{
+              inputs: [
+                { name: 'owner', type: 'address' },
+                { name: 'spender', type: 'address' },
+              ],
+              name: 'allowance',
+              outputs: [{ name: '', type: 'uint256' }],
+              stateMutability: 'view',
+              type: 'function',
+            }],
+            functionName: 'allowance',
+            args: [address, routerToCheck],
+          }) as bigint;
+
+          console.log(`${isCLPool ? 'Slipstream' : 'Aerodrome'} Router allowance:`, formatUnits(aerodromeAllowance, 18));
+          console.log('Sell amount:', formatUnits(sellAmount, 18));
+          console.log('Router to approve:', routerToCheck);
+
+          if (aerodromeAllowance < sellAmount) {
+            setApprovalStep('permit2'); // Reuse 'permit2' step for Aerodrome approval
+            setIsCheckingApproval(false);
+            return;
+          }
+
+          setApprovalStep('ready');
+          setIsCheckingApproval(false);
+          return;
+        }
+
+        // For Hydrex pairs, check direct ERC20 approval to KyberSwap Router
+        if (isHydrexPair && outputTokenAddress && publicClient) {
+          const kyberAllowance = await publicClient.readContract({
+            address: outputTokenAddress,
+            abi: [{
+              inputs: [
+                { name: 'owner', type: 'address' },
+                { name: 'spender', type: 'address' },
+              ],
+              name: 'allowance',
+              outputs: [{ name: '', type: 'uint256' }],
+              stateMutability: 'view',
+              type: 'function',
+            }],
+            functionName: 'allowance',
+            args: [address, KYBERSWAP_ROUTER_ADDRESS],
+          }) as bigint;
+
+          console.log('[Hydrex] KyberSwap Router allowance:', formatUnits(kyberAllowance, 18));
+          console.log('[Hydrex] Sell amount:', formatUnits(sellAmount, 18));
+
+          if (kyberAllowance < sellAmount) {
+            setApprovalStep('permit2'); // Reuse 'permit2' step for Hydrex approval
+            setIsCheckingApproval(false);
+            return;
+          }
+
+          setApprovalStep('ready');
+          setIsCheckingApproval(false);
+          return;
+        }
+
+        // Check ERC20 allowance for Permit2 (for V4 pairs)
         const erc20Allowance = permit2Allowance as bigint | undefined;
         if (!erc20Allowance || erc20Allowance < sellAmount) {
           setApprovalStep('permit2');
@@ -540,7 +921,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     };
 
     checkApprovals();
-  }, [swapTab, address, inputAmount, permit2Allowance, routerAllowanceData, sellTokenAddress, isTokenPair]);
+  }, [swapTab, address, inputAmount, permit2Allowance, routerAllowanceData, sellTokenAddress, isTokenPair, isAerodromePair, isHydrexPair, outputTokenAddress, publicClient, aerodromePoolInfo]);
 
   // Check approvals when buying with wASS (only for token pairs)
   useEffect(() => {
@@ -588,12 +969,104 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     checkWassApprovals();
   }, [swapTab, buyInputCurrency, address, inputAmount, wassPermit2Allowance, wassRouterAllowanceData, isTokenPair]);
 
+  // Check wASS approval for wASS-paired Aerodrome tokens (direct approval to router)
+  useEffect(() => {
+    // Only check when buying on wASS-paired Aerodrome tokens
+    if (swapTab !== 'buy' || !isWassPairedAerodrome) {
+      setWassAerodromeApprovalNeeded(false);
+      return;
+    }
+
+    if (!address || !inputAmount || parseFloat(inputAmount) <= 0) {
+      setWassAerodromeApprovalNeeded(false);
+      return;
+    }
+
+    const checkWassAerodromeApproval = async () => {
+      const buyAmount = parseUnits(inputAmount, 18);
+
+      // Check if this is a CL pool or V2 pool
+      const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+
+      if (isCLPool) {
+        // CL pool: Check approval to Slipstream Router
+        const allowance = wassSlipstreamAllowance as bigint | undefined;
+        const needsApproval = !allowance || allowance < buyAmount;
+        console.log('[wASS-Aerodrome CL] Approval check:', { allowance: allowance?.toString(), buyAmount: buyAmount.toString(), needsApproval });
+        setWassAerodromeApprovalNeeded(needsApproval);
+      } else {
+        // V2 pool: Check approval to Aerodrome Router
+        const allowance = wassAerodromeAllowance as bigint | undefined;
+        const needsApproval = !allowance || allowance < buyAmount;
+        console.log('[wASS-Aerodrome V2] Approval check:', { allowance: allowance?.toString(), buyAmount: buyAmount.toString(), needsApproval });
+        setWassAerodromeApprovalNeeded(needsApproval);
+      }
+    };
+
+    checkWassAerodromeApproval();
+  }, [swapTab, isWassPairedAerodrome, address, inputAmount, wassAerodromeAllowance, wassSlipstreamAllowance, aerodromePoolInfo?.tickSpacing]);
+
+  // Auto-set buyInputCurrency to 'wass' for wASS-paired Aerodrome tokens
+  // (can't use ETH directly - no ETH pool exists)
+  useEffect(() => {
+    if (isWassPairedAerodrome && buyInputCurrency !== 'wass') {
+      console.log('[wASS-paired Aerodrome] Auto-setting buyInputCurrency to wass');
+      setBuyInputCurrency('wass');
+    }
+  }, [isWassPairedAerodrome, buyInputCurrency]);
+
+  // Get DEX type for current selected pair
+  const selectedPairDex = useMemo((): 'v4' | 'aerodrome' | 'hydrex' | undefined => {
+    // Find the pair in allPairs to get its tokenWarsData
+    const pair = allPairs.find(p => p.id === selectedPair.id);
+    return pair?.tokenWarsData?.dex;
+  }, [allPairs, selectedPair.id]);
+
+  // Check if current pair is tradeable in-app (V4, Aerodrome, and Hydrex supported)
+  const isTradeableInApp = useMemo(() => {
+    // Static pairs (wASS/ETH) are always tradeable
+    if (!selectedPair.isDefault) {
+      const pair = allPairs.find(p => p.id === selectedPair.id);
+      // V4, Aerodrome, and Hydrex Token Wars tokens are tradeable in-app
+      if (pair?.isTokenWars && pair?.tokenWarsData?.dex) {
+        const supportedDexes = ['v4', 'aerodrome', 'hydrex'];
+        if (!supportedDexes.includes(pair.tokenWarsData.dex)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }, [selectedPair, allPairs]);
+
+  // Get external DEX URL for non-V4 tokens
+  const externalDexUrl = useMemo(() => {
+    const pair = allPairs.find(p => p.id === selectedPair.id);
+    if (!pair?.tokenWarsData) return null;
+
+    const { dex, poolAddress, dexScreenerUrl } = pair.tokenWarsData;
+
+    if (dex === 'aerodrome' && poolAddress) {
+      // Aerodrome swap URL
+      return `https://aerodrome.finance/swap?to=${pair.token1}`;
+    }
+    if (dex === 'hydrex' && poolAddress) {
+      // Hydrex swap URL - adjust based on actual Hydrex URL structure
+      return `https://hydrex.exchange/swap?token=${pair.token1}`;
+    }
+    // Fallback to DexScreener if available
+    return dexScreenerUrl || null;
+  }, [selectedPair.id, allPairs]);
+
   // Fetch OHLCV data from GeckoTerminal API
-  const fetchOHLCVData = useCallback(async (tf: TimeFrame, poolAddr: string): Promise<OHLCVData[]> => {
+  // All Base DEXes (V4, Aerodrome, Hydrex) use the same 'base' network ID
+  const fetchOHLCVData = useCallback(async (tf: TimeFrame, poolAddr: string, dex?: 'v4' | 'aerodrome' | 'hydrex'): Promise<OHLCVData[]> => {
     // If no pool address available, return empty data
     if (!poolAddr) {
+      console.log('[Chart] No pool address available for chart');
       return [];
     }
+
+    console.log(`[Chart] Fetching OHLCV for pool: ${poolAddr} (dex: ${dex || 'default'})`);
 
     const timeframeMap: Record<TimeFrame, string> = {
       '5m': 'minute',
@@ -614,6 +1087,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     const timeframe = timeframeMap[tf];
     const aggregate = aggregateMap[tf];
 
+    // Use 'base' network for all pools (GeckoTerminal uses same network ID for all Base DEXes)
     const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${poolAddr}/ohlcv/${timeframe}?aggregate=${aggregate}&limit=300&currency=usd`;
 
     const response = await fetch(url);
@@ -740,11 +1214,25 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     };
   }, [isOpen]);
 
+  // Compute effective pool address for chart (use discovered address as fallback for Aerodrome)
+  const effectiveChartPoolAddress = useMemo(() => {
+    const geckoAddr = selectedPair.geckoPoolAddress;
+    // If geckoPoolAddress is valid, use it
+    if (geckoAddr && geckoAddr !== '0x' && geckoAddr.length > 10) {
+      return geckoAddr;
+    }
+    // For Aerodrome pairs, use discovered address
+    if (isAerodromePair && discoveredChartPoolAddress) {
+      return discoveredChartPoolAddress;
+    }
+    return null;
+  }, [selectedPair.geckoPoolAddress, isAerodromePair, discoveredChartPoolAddress]);
+
   // Reset initial data flag when pair or timeframe changes
   useEffect(() => {
     hasInitialDataRef.current = false;
     lastDataRef.current = [];
-  }, [selectedPair.geckoPoolAddress, timeFrame]);
+  }, [effectiveChartPoolAddress, timeFrame]);
 
   // Fetch and update data when timeframe or selected pair changes
   useEffect(() => {
@@ -755,15 +1243,20 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       setIsLoading(true);
       setError(null);
 
-      if (!selectedPair.geckoPoolAddress) {
-        setError('Chart data not yet available for this pair');
+      if (!effectiveChartPoolAddress) {
+        // For Aerodrome pairs, show a more helpful message
+        if (isAerodromePair) {
+          setError('Discovering pool address...');
+        } else {
+          setError('Chart data not yet available for this pair');
+        }
         setIsLoading(false);
         seriesRef.current?.setData([]);
         return;
       }
 
       try {
-        const data = await fetchOHLCVData(timeFrame, selectedPair.geckoPoolAddress);
+        const data = await fetchOHLCVData(timeFrame, effectiveChartPoolAddress, selectedPairDex);
 
         if (data.length === 0) {
           setError('No data available');
@@ -780,10 +1273,17 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         }));
 
         seriesRef.current?.setData(chartData);
-        // Use requestAnimationFrame to ensure fitContent runs after chart processes new data
-        // This fixes the issue where switching pairs leaves the view on the old price range
+        // Use multiple requestAnimationFrame calls to ensure chart has fully processed new data
+        // A single rAF may not be enough as TradingView charts can take multiple frames to render
+        // This fixes the issue where switching pairs shows a blank screen (view stuck on old range)
         requestAnimationFrame(() => {
-          chartRef.current?.timeScale().fitContent();
+          requestAnimationFrame(() => {
+            if (chartRef.current) {
+              chartRef.current.timeScale().fitContent();
+              // Also scroll to the most recent data to ensure visibility
+              chartRef.current.timeScale().scrollToRealTime();
+            }
+          });
         });
         hasInitialDataRef.current = true;
         lastDataRef.current = data;
@@ -807,10 +1307,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     // Incremental update - use series.update() to avoid flicker
     // Per TradingView docs: https://tradingview.github.io/lightweight-charts/tutorials/demos/realtime-updates
     const updateData = async () => {
-      if (!selectedPair.geckoPoolAddress || !hasInitialDataRef.current) return;
+      if (!effectiveChartPoolAddress || !hasInitialDataRef.current) return;
 
       try {
-        const data = await fetchOHLCVData(timeFrame, selectedPair.geckoPoolAddress);
+        const data = await fetchOHLCVData(timeFrame, effectiveChartPoolAddress, selectedPairDex);
         if (data.length === 0) return;
 
         const series = seriesRef.current as ISeriesApi<'Candlestick'>;
@@ -859,10 +1359,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     // Load initial data
     loadInitialData();
 
-    // Dynamic polling interval: 2s when fast polling (after swap), 5s normally
+    // Dynamic polling interval:
+    // - 5s when fast polling (after swap) to quickly show trade impact
+    // - 30s normally to reduce API load (GeckoTerminal has rate limits)
+    // This is a significant reduction from the previous 5s default to avoid rate limiting
     const getPollingInterval = () => {
       const isFastPolling = Date.now() < fastPollingUntil;
-      return isFastPolling ? 2000 : 5000;
+      return isFastPolling ? 5000 : 30000;
     };
 
     // Use incremental updates for polling (no flicker)
@@ -876,7 +1379,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     scheduleNext();
 
     return () => clearTimeout(timeoutId);
-  }, [isOpen, timeFrame, selectedPair, fetchOHLCVData, fastPollingUntil]);
+  }, [isOpen, timeFrame, selectedPair, fetchOHLCVData, fastPollingUntil, selectedPairDex, effectiveChartPoolAddress, isAerodromePair]);
 
   // Fetch quote when input changes
   useEffect(() => {
@@ -910,6 +1413,657 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           const [amountOut] = result.result as [bigint, bigint];
           return amountOut;
         };
+
+        // Helper to sort tokens (Aerodrome stores pools with sorted tokens)
+        const sortTokens = (tokenA: `0x${string}`, tokenB: `0x${string}`): [`0x${string}`, `0x${string}`] => {
+          return tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB] : [tokenB, tokenA];
+        };
+
+        // Helper to check if Aerodrome pool exists and get its address
+        const getAerodromePool = async (
+          tokenA: `0x${string}`,
+          tokenB: `0x${string}`,
+          stable: boolean
+        ): Promise<`0x${string}` | null> => {
+          try {
+            // CRITICAL: Sort tokens before factory lookup
+            // Aerodrome factory stores pools with sorted tokens (lower address first)
+            const [token0, token1] = sortTokens(tokenA, tokenB);
+
+            console.log(`[Aerodrome] getPool lookup: token0=${token0}, token1=${token1}, stable=${stable}`);
+
+            const poolAddress = await publicClient.readContract({
+              address: AERODROME_FACTORY_ADDRESS,
+              abi: AERODROME_FACTORY_ABI,
+              functionName: 'getPool',
+              args: [token0, token1, stable],
+            }) as `0x${string}`;
+
+            // Check if pool exists (not zero address)
+            if (poolAddress && poolAddress !== '0x0000000000000000000000000000000000000000') {
+              console.log(`[Aerodrome] Found pool at ${poolAddress}`);
+              return poolAddress;
+            }
+            console.log(`[Aerodrome] No pool found for ${token0}/${token1} stable=${stable}`);
+            return null;
+          } catch (err) {
+            console.warn(`[Aerodrome] getPool failed for ${tokenA}/${tokenB} stable=${stable}:`, err);
+            return null;
+          }
+        };
+
+        // Aerodrome quote using path-based MixedQuoter (works for both CL and V2 pools)
+        // Path encoding: tokenIn (20 bytes) + filler (3 bytes as int24) + tokenOut (20 bytes)
+        // For CL pools: filler = tickSpacing
+        // For V2 volatile: filler = 0x400000 (4194304)
+        // For V2 stable: filler = 0x200000 (2097152)
+        const getAerodromeQuote = async (
+          tokenIn: `0x${string}`,
+          tokenOut: `0x${string}`,
+          amountIn: bigint
+        ): Promise<{ amountOut: bigint; stable: boolean; poolAddress: `0x${string}`; tickSpacing?: number }> => {
+          let storedPoolAddress = selectedPair.tokenWarsData?.poolAddress as `0x${string}` | undefined;
+          const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+          const V2_VOLATILE_FILLER = 0x400000; // 4194304
+          const V2_STABLE_FILLER = 0x200000;   // 2097152
+
+          console.log('[Aerodrome] Quote request:', {
+            tokenIn,
+            tokenOut,
+            amountIn: formatUnits(amountIn, 18),
+            storedPoolAddress,
+          });
+
+          let amountOut: bigint = 0n;
+          let isStable = false;
+          let poolAddress = storedPoolAddress || ZERO_ADDRESS;
+          let detectedTickSpacing: number | undefined = undefined;
+          let confirmedPoolType: 'cl' | 'v2' | undefined = undefined;
+
+          // VALIDATE stored pool address contains our expected tokens
+          // This prevents using wrong pool when tokenWarsData.poolAddress is stale/incorrect
+          if (storedPoolAddress && storedPoolAddress !== ZERO_ADDRESS) {
+            try {
+              const [poolToken0, poolToken1] = await Promise.all([
+                publicClient.readContract({
+                  address: storedPoolAddress,
+                  abi: AERODROME_POOL_ABI,
+                  functionName: 'token0',
+                }) as Promise<`0x${string}`>,
+                publicClient.readContract({
+                  address: storedPoolAddress,
+                  abi: AERODROME_POOL_ABI,
+                  functionName: 'token1',
+                }) as Promise<`0x${string}`>,
+              ]);
+
+              const token0Lower = poolToken0.toLowerCase();
+              const token1Lower = poolToken1.toLowerCase();
+              const inLower = tokenIn.toLowerCase();
+              const outLower = tokenOut.toLowerCase();
+
+              // Check if pool contains both our tokens (in either order)
+              const poolHasTokenIn = token0Lower === inLower || token1Lower === inLower;
+              const poolHasTokenOut = token0Lower === outLower || token1Lower === outLower;
+
+              if (!poolHasTokenIn || !poolHasTokenOut) {
+                console.log('[Aerodrome] Stored pool address INVALID - tokens do not match:', {
+                  poolToken0,
+                  poolToken1,
+                  expectedTokenIn: tokenIn,
+                  expectedTokenOut: tokenOut,
+                });
+                // Clear the stored pool address to force factory lookup
+                storedPoolAddress = undefined;
+                poolAddress = ZERO_ADDRESS;
+              } else {
+                console.log('[Aerodrome] Stored pool address VALIDATED - tokens match');
+              }
+            } catch (err) {
+              console.log('[Aerodrome] Could not validate stored pool, clearing it:', err);
+              storedPoolAddress = undefined;
+              poolAddress = ZERO_ADDRESS;
+            }
+          }
+
+          // If no stored pool address, try to look it up from the V2 factory
+          // Try both token orderings since getPool may be order-sensitive
+          if (!storedPoolAddress || storedPoolAddress === ZERO_ADDRESS) {
+            console.log('[Aerodrome] No stored pool address, looking up from V2 factory...');
+            console.log('[Aerodrome] tokenIn:', tokenIn, 'tokenOut:', tokenOut);
+
+            // Try volatile pool first with tokenIn, tokenOut order
+            try {
+              const volatilePool = await publicClient.readContract({
+                address: AERODROME_FACTORY_ADDRESS,
+                abi: AERODROME_FACTORY_ABI,
+                functionName: 'getPool',
+                args: [tokenIn, tokenOut, false], // false = volatile
+              }) as `0x${string}`;
+              console.log('[Aerodrome] V2 volatile lookup (in,out):', volatilePool);
+              if (volatilePool && volatilePool !== ZERO_ADDRESS) {
+                storedPoolAddress = volatilePool;
+                poolAddress = volatilePool;
+                isStable = false;
+                confirmedPoolType = 'v2';
+                console.log('[Aerodrome] Found V2 volatile pool:', volatilePool);
+              }
+            } catch (err) {
+              console.log('[Aerodrome] V2 volatile pool lookup (in,out) failed:', err);
+            }
+
+            // Try volatile pool with REVERSED token order
+            if (!storedPoolAddress || storedPoolAddress === ZERO_ADDRESS) {
+              try {
+                const volatilePoolReverse = await publicClient.readContract({
+                  address: AERODROME_FACTORY_ADDRESS,
+                  abi: AERODROME_FACTORY_ABI,
+                  functionName: 'getPool',
+                  args: [tokenOut, tokenIn, false], // REVERSED order
+                }) as `0x${string}`;
+                console.log('[Aerodrome] V2 volatile lookup (out,in):', volatilePoolReverse);
+                if (volatilePoolReverse && volatilePoolReverse !== ZERO_ADDRESS) {
+                  storedPoolAddress = volatilePoolReverse;
+                  poolAddress = volatilePoolReverse;
+                  isStable = false;
+                  confirmedPoolType = 'v2';
+                  console.log('[Aerodrome] Found V2 volatile pool (reversed):', volatilePoolReverse);
+                }
+              } catch (err) {
+                console.log('[Aerodrome] V2 volatile pool lookup (reversed) failed:', err);
+              }
+            }
+
+            // If no volatile pool, try stable with both orderings
+            if (!storedPoolAddress || storedPoolAddress === ZERO_ADDRESS) {
+              try {
+                const stablePool = await publicClient.readContract({
+                  address: AERODROME_FACTORY_ADDRESS,
+                  abi: AERODROME_FACTORY_ABI,
+                  functionName: 'getPool',
+                  args: [tokenIn, tokenOut, true], // true = stable
+                }) as `0x${string}`;
+                console.log('[Aerodrome] V2 stable lookup (in,out):', stablePool);
+                if (stablePool && stablePool !== ZERO_ADDRESS) {
+                  storedPoolAddress = stablePool;
+                  poolAddress = stablePool;
+                  isStable = true;
+                  confirmedPoolType = 'v2';
+                  console.log('[Aerodrome] Found V2 stable pool:', stablePool);
+                }
+              } catch (err) {
+                console.log('[Aerodrome] V2 stable pool lookup failed:', err);
+              }
+            }
+
+            // Try stable with REVERSED order
+            if (!storedPoolAddress || storedPoolAddress === ZERO_ADDRESS) {
+              try {
+                const stablePoolReverse = await publicClient.readContract({
+                  address: AERODROME_FACTORY_ADDRESS,
+                  abi: AERODROME_FACTORY_ABI,
+                  functionName: 'getPool',
+                  args: [tokenOut, tokenIn, true], // REVERSED order
+                }) as `0x${string}`;
+                console.log('[Aerodrome] V2 stable lookup (out,in):', stablePoolReverse);
+                if (stablePoolReverse && stablePoolReverse !== ZERO_ADDRESS) {
+                  storedPoolAddress = stablePoolReverse;
+                  poolAddress = stablePoolReverse;
+                  isStable = true;
+                  confirmedPoolType = 'v2';
+                  console.log('[Aerodrome] Found V2 stable pool (reversed):', stablePoolReverse);
+                }
+              } catch (err) {
+                console.log('[Aerodrome] V2 stable pool lookup (reversed) failed:', err);
+              }
+            }
+          }
+
+          // FIRST: If we have a stored pool address, definitively determine if it's CL or V2
+          if (storedPoolAddress && storedPoolAddress !== ZERO_ADDRESS && confirmedPoolType === undefined) {
+            try {
+              // Try to get tickSpacing - if it exists, it's a CL pool
+              const tickSpacing = await publicClient.readContract({
+                address: storedPoolAddress,
+                abi: AERODROME_CL_POOL_ABI,
+                functionName: 'tickSpacing',
+              }) as number;
+
+              detectedTickSpacing = tickSpacing;
+              confirmedPoolType = 'cl';
+              console.log('[Aerodrome] CONFIRMED CL pool with tickSpacing:', tickSpacing);
+
+              // Use path-based quote for CL pool
+              const tickSpacingHex = toHex(tickSpacing, { size: 3 });
+              const path = concat([tokenIn, tickSpacingHex, tokenOut]);
+
+              try {
+                const result = await publicClient.simulateContract({
+                  address: AERODROME_MIXED_QUOTER_ADDRESS,
+                  abi: AERODROME_MIXED_QUOTER_ABI,
+                  functionName: 'quoteExactInput',
+                  args: [path, amountIn],
+                });
+                const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+                amountOut = quoteResult[0];
+                console.log('[Aerodrome] CL path quote result:', formatUnits(amountOut, 18));
+              } catch (pathErr) {
+                console.log('[Aerodrome] CL path quote failed:', pathErr);
+              }
+            } catch {
+              // Not a CL pool, it's a V2 pool
+              confirmedPoolType = 'v2';
+              console.log('[Aerodrome] CONFIRMED V2 pool (no tickSpacing)');
+              try {
+                isStable = await publicClient.readContract({
+                  address: storedPoolAddress,
+                  abi: AERODROME_POOL_ABI,
+                  functionName: 'stable',
+                }) as boolean;
+                console.log('[Aerodrome] V2 pool stable status:', isStable);
+              } catch {
+                // Default to volatile
+                isStable = false;
+              }
+            }
+          }
+
+          // If we confirmed it's a V2 pool, ONLY try V2 quotes (don't try CL)
+          if (confirmedPoolType === 'v2' && amountOut === 0n) {
+            // FIRST: Try direct pool quote (most reliable when we have pool address)
+            if (storedPoolAddress && storedPoolAddress !== ZERO_ADDRESS) {
+              console.log('[Aerodrome] Trying direct V2 pool getAmountOut FIRST...');
+              try {
+                amountOut = await publicClient.readContract({
+                  address: storedPoolAddress,
+                  abi: AERODROME_POOL_ABI,
+                  functionName: 'getAmountOut',
+                  args: [amountIn, tokenIn],
+                }) as bigint;
+                poolAddress = storedPoolAddress;
+                console.log('[Aerodrome] Direct V2 pool quote SUCCESS:', formatUnits(amountOut, 18));
+              } catch (directErr) {
+                console.error('[Aerodrome] Direct V2 pool quote failed:', directErr);
+              }
+            }
+
+            // Fallback: Try Mixed Quoter V2 volatile path
+            if (amountOut === 0n) {
+              try {
+                console.log('[Aerodrome] Trying V2 volatile path via Mixed Quoter...');
+                const volatileFillerHex = toHex(V2_VOLATILE_FILLER, { size: 3 });
+                const volatilePath = concat([tokenIn, volatileFillerHex, tokenOut]);
+
+                const result = await publicClient.simulateContract({
+                  address: AERODROME_MIXED_QUOTER_ADDRESS,
+                  abi: AERODROME_MIXED_QUOTER_ABI,
+                  functionName: 'quoteExactInput',
+                  args: [volatilePath, amountIn],
+                });
+                const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+                if (quoteResult[0] > 0n) {
+                  amountOut = quoteResult[0];
+                  isStable = false;
+                  console.log('[Aerodrome] V2 volatile quote:', formatUnits(amountOut, 18));
+                }
+              } catch {
+                console.log('[Aerodrome] V2 volatile path failed');
+              }
+            }
+
+            // Fallback: Try Mixed Quoter V2 stable path
+            if (amountOut === 0n) {
+              try {
+                console.log('[Aerodrome] Trying V2 stable path via Mixed Quoter...');
+                const stableFillerHex = toHex(V2_STABLE_FILLER, { size: 3 });
+                const stablePath = concat([tokenIn, stableFillerHex, tokenOut]);
+
+                const result = await publicClient.simulateContract({
+                  address: AERODROME_MIXED_QUOTER_ADDRESS,
+                  abi: AERODROME_MIXED_QUOTER_ABI,
+                  functionName: 'quoteExactInput',
+                  args: [stablePath, amountIn],
+                });
+                const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+                if (quoteResult[0] > 0n) {
+                  amountOut = quoteResult[0];
+                  isStable = true;
+                  console.log('[Aerodrome] V2 stable quote:', formatUnits(amountOut, 18));
+                }
+              } catch {
+                console.log('[Aerodrome] V2 stable path failed');
+              }
+            }
+
+            // FALLBACK: If stored pool quote failed, try factory lookup with both orderings
+            if (amountOut === 0n) {
+              console.log('[Aerodrome] Stored pool quote failed, trying factory lookup as fallback...');
+              console.log('[Aerodrome] Fallback tokenIn:', tokenIn, 'tokenOut:', tokenOut);
+
+              // Helper to try getting quote from a pool
+              const tryPoolQuote = async (pool: `0x${string}`, poolType: string): Promise<boolean> => {
+                try {
+                  const out = await publicClient.readContract({
+                    address: pool,
+                    abi: AERODROME_POOL_ABI,
+                    functionName: 'getAmountOut',
+                    args: [amountIn, tokenIn],
+                  }) as bigint;
+                  if (out > 0n) {
+                    amountOut = out;
+                    poolAddress = pool;
+                    console.log(`[Aerodrome] ${poolType} pool quote SUCCESS:`, formatUnits(out, 18));
+                    return true;
+                  }
+                } catch (err) {
+                  console.log(`[Aerodrome] ${poolType} pool getAmountOut failed:`, err);
+                }
+                return false;
+              };
+
+              // Try volatile pool with both token orderings
+              for (const [a, b] of [[tokenIn, tokenOut], [tokenOut, tokenIn]]) {
+                if (amountOut > 0n) break;
+                try {
+                  const volatilePool = await publicClient.readContract({
+                    address: AERODROME_FACTORY_ADDRESS,
+                    abi: AERODROME_FACTORY_ABI,
+                    functionName: 'getPool',
+                    args: [a, b, false],
+                  }) as `0x${string}`;
+                  console.log(`[Aerodrome] Factory volatile lookup (${a.slice(0,8)},${b.slice(0,8)}):`, volatilePool);
+                  if (volatilePool && volatilePool !== ZERO_ADDRESS) {
+                    isStable = false;
+                    if (await tryPoolQuote(volatilePool, 'Factory volatile')) break;
+                  }
+                } catch (err) {
+                  console.log('[Aerodrome] Factory volatile lookup failed:', err);
+                }
+              }
+
+              // Try stable pool with both token orderings
+              if (amountOut === 0n) {
+                for (const [a, b] of [[tokenIn, tokenOut], [tokenOut, tokenIn]]) {
+                  if (amountOut > 0n) break;
+                  try {
+                    const stablePool = await publicClient.readContract({
+                      address: AERODROME_FACTORY_ADDRESS,
+                      abi: AERODROME_FACTORY_ABI,
+                      functionName: 'getPool',
+                      args: [a, b, true],
+                    }) as `0x${string}`;
+                    console.log(`[Aerodrome] Factory stable lookup (${a.slice(0,8)},${b.slice(0,8)}):`, stablePool);
+                    if (stablePool && stablePool !== ZERO_ADDRESS) {
+                      isStable = true;
+                      if (await tryPoolQuote(stablePool, 'Factory stable')) break;
+                    }
+                  } catch (err) {
+                    console.log('[Aerodrome] Factory stable lookup failed:', err);
+                  }
+                }
+              }
+            }
+
+          }
+
+          // If no confirmed pool type, try discovery (CL first, then V2)
+          if (confirmedPoolType === undefined && amountOut === 0n) {
+            // Common tick spacings for Aerodrome CL pools
+            const tickSpacingsToTry = [2000, 200, 100, 50, 1];
+
+            for (const tickSpacing of tickSpacingsToTry) {
+              try {
+                console.log('[Aerodrome] Trying CL path with tickSpacing:', tickSpacing);
+                const tickSpacingHex = toHex(tickSpacing, { size: 3 });
+                const path = concat([tokenIn, tickSpacingHex, tokenOut]);
+
+                const result = await publicClient.simulateContract({
+                  address: AERODROME_MIXED_QUOTER_ADDRESS,
+                  abi: AERODROME_MIXED_QUOTER_ABI,
+                  functionName: 'quoteExactInput',
+                  args: [path, amountIn],
+                });
+                const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+                if (quoteResult[0] > 0n) {
+                  amountOut = quoteResult[0];
+                  detectedTickSpacing = tickSpacing;
+                  console.log('[Aerodrome] CL quote success! tickSpacing:', tickSpacing, 'amountOut:', formatUnits(amountOut, 18));
+                  break;
+                }
+              } catch {
+                // Try next tickSpacing
+              }
+            }
+          }
+
+          // If still no quote and no confirmed pool type, try V2 paths
+          if (confirmedPoolType === undefined && amountOut === 0n) {
+            // Try volatile V2 path
+            try {
+              console.log('[Aerodrome] Trying V2 volatile path...');
+              const volatileFillerHex = toHex(V2_VOLATILE_FILLER, { size: 3 });
+              const volatilePath = concat([tokenIn, volatileFillerHex, tokenOut]);
+
+              const result = await publicClient.simulateContract({
+                address: AERODROME_MIXED_QUOTER_ADDRESS,
+                abi: AERODROME_MIXED_QUOTER_ABI,
+                functionName: 'quoteExactInput',
+                args: [volatilePath, amountIn],
+              });
+              const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+              if (quoteResult[0] > 0n) {
+                amountOut = quoteResult[0];
+                isStable = false;
+                console.log('[Aerodrome] V2 volatile quote:', formatUnits(amountOut, 18));
+              }
+            } catch {
+              console.log('[Aerodrome] V2 volatile path failed');
+            }
+          }
+
+          if (confirmedPoolType === undefined && amountOut === 0n) {
+            // Try stable V2 path
+            try {
+              console.log('[Aerodrome] Trying V2 stable path...');
+              const stableFillerHex = toHex(V2_STABLE_FILLER, { size: 3 });
+              const stablePath = concat([tokenIn, stableFillerHex, tokenOut]);
+
+              const result = await publicClient.simulateContract({
+                address: AERODROME_MIXED_QUOTER_ADDRESS,
+                abi: AERODROME_MIXED_QUOTER_ABI,
+                functionName: 'quoteExactInput',
+                args: [stablePath, amountIn],
+              });
+              const quoteResult = result.result as [bigint, bigint[], number[], bigint];
+              if (quoteResult[0] > 0n) {
+                amountOut = quoteResult[0];
+                isStable = true;
+                console.log('[Aerodrome] V2 stable quote:', formatUnits(amountOut, 18));
+              }
+            } catch {
+              console.log('[Aerodrome] V2 stable path failed');
+            }
+          }
+
+          // Last resort: direct pool quote if we have stored address
+          if (amountOut === 0n && storedPoolAddress && storedPoolAddress !== ZERO_ADDRESS) {
+            console.log('[Aerodrome] Trying direct pool getAmountOut...');
+            try {
+              amountOut = await publicClient.readContract({
+                address: storedPoolAddress,
+                abi: AERODROME_POOL_ABI,
+                functionName: 'getAmountOut',
+                args: [amountIn, tokenIn],
+              }) as bigint;
+              poolAddress = storedPoolAddress;
+              console.log('[Aerodrome] Direct pool quote:', formatUnits(amountOut, 18));
+            } catch (directErr) {
+              console.error('[Aerodrome] Direct pool quote failed:', directErr);
+            }
+          }
+
+          if (amountOut === 0n) {
+            throw new Error('Quote returned 0 - pool may have insufficient liquidity or unsupported pool type');
+          }
+
+          // If we detected a CL pool but don't have the pool address, look it up from the CL Factory
+          if (detectedTickSpacing !== undefined && detectedTickSpacing > 0 &&
+              (!poolAddress || poolAddress === ZERO_ADDRESS || poolAddress === '0x')) {
+            try {
+              console.log('[Aerodrome] Looking up CL pool address from factory...');
+              const discoveredPool = await publicClient.readContract({
+                address: AERODROME_CL_FACTORY_ADDRESS,
+                abi: AERODROME_CL_FACTORY_ABI,
+                functionName: 'getPool',
+                args: [tokenIn, tokenOut, detectedTickSpacing],
+              }) as `0x${string}`;
+
+              if (discoveredPool && discoveredPool !== ZERO_ADDRESS) {
+                poolAddress = discoveredPool;
+                console.log('[Aerodrome] Discovered CL pool address:', poolAddress);
+              }
+            } catch (lookupErr) {
+              console.log('[Aerodrome] Failed to look up pool address:', lookupErr);
+            }
+          }
+
+          console.log('[Aerodrome] Final quote:', {
+            amountOut: formatUnits(amountOut, 18),
+            stable: isStable,
+            poolAddress,
+            tickSpacing: detectedTickSpacing,
+          });
+
+          return { amountOut, stable: isStable, poolAddress, tickSpacing: detectedTickSpacing };
+        };
+
+        // Aerodrome pair quote
+        // For wASS-paired tokens, we swap wASS ↔ Token instead of ETH ↔ Token
+        if (isAerodromePair && outputTokenAddress) {
+          const baseTokenLabel = isWassPairedAerodrome ? 'wASS' : 'ETH';
+
+          if (swapTab === 'buy') {
+            // Base token → Output Token quote (ETH or wASS → Token)
+            const baseIn = parseUnits(inputAmount, 18); // Both ETH and wASS are 18 decimals
+            console.log(`=== AERODROME BUY QUOTE START (${baseTokenLabel} → Token) ===`);
+            console.log('Input:', inputAmount, baseTokenLabel);
+            console.log('Base token:', aerodromeBaseToken);
+            console.log('Output token:', outputTokenAddress);
+            console.log('isWassPairedAerodrome:', isWassPairedAerodrome);
+            console.log('selectedPair.tokenWarsData:', selectedPair.tokenWarsData);
+
+            try {
+              const { amountOut: tokenOut, stable, poolAddress, tickSpacing } = await getAerodromeQuote(aerodromeBaseToken, outputTokenAddress, baseIn);
+              console.log(`Aerodrome ${baseTokenLabel}→Token quote:`, {
+                tokenOut: formatUnits(tokenOut, 18),
+                baseIn: formatUnits(baseIn, 18),
+                stable,
+                poolAddress,
+                tickSpacing,
+              });
+              setOutputAmount(formatUnits(tokenOut, 18));
+              // Store pool info for swap execution (includes tickSpacing for CL pools)
+              setAerodromePoolInfo({ stable, poolAddress, tickSpacing });
+            } catch (err) {
+              console.error('Aerodrome quote failed:', err);
+              const errorMsg = err instanceof Error ? err.message : 'Unable to get quote';
+              setSwapError(`Aerodrome: ${errorMsg}`);
+              setOutputAmount('');
+              setAerodromePoolInfo(null);
+            }
+          } else {
+            // Token → Base token quote (sell: Token → ETH or wASS)
+            const tokenIn = parseUnits(inputAmount, 18);
+            console.log(`=== AERODROME SELL QUOTE START (Token → ${baseTokenLabel}) ===`);
+            console.log('Input:', inputAmount, 'TOKEN');
+            console.log('Token:', outputTokenAddress);
+            console.log('Base token:', aerodromeBaseToken);
+
+            try {
+              const { amountOut: baseOut, stable, poolAddress, tickSpacing } = await getAerodromeQuote(outputTokenAddress, aerodromeBaseToken, tokenIn);
+              console.log(`Aerodrome Token→${baseTokenLabel} quote:`, {
+                baseOut: formatUnits(baseOut, 18),
+                tokenIn: formatUnits(tokenIn, 18),
+                stable,
+                poolAddress,
+                tickSpacing,
+              });
+              setOutputAmount(formatUnits(baseOut, 18));
+              // Store pool info for swap execution (includes tickSpacing for CL pools)
+              setAerodromePoolInfo({ stable, poolAddress, tickSpacing });
+            } catch (err) {
+              console.error('Aerodrome quote failed:', err);
+              const errorMsg = err instanceof Error ? err.message : 'Unable to get quote';
+              setSwapError(`Aerodrome: ${errorMsg}`);
+              setOutputAmount('');
+              setAerodromePoolInfo(null);
+            }
+          }
+          setIsQuoting(false);
+          return;
+        }
+
+        // Hydrex pair quote using KyberSwap aggregator API
+        if (isHydrexPair && outputTokenAddress) {
+          console.log('=== HYDREX QUOTE START ===');
+          console.log('swapTab:', swapTab);
+          console.log('Input:', inputAmount);
+          console.log('Token:', outputTokenAddress);
+
+          try {
+            let tokenIn: string;
+            let tokenOut: string;
+            let amountInWei: string;
+            let decimalsOut: number;
+
+            if (swapTab === 'buy') {
+              // ETH → Token (buy)
+              tokenIn = KYBERSWAP_NATIVE_TOKEN; // Native ETH
+              tokenOut = outputTokenAddress;
+              amountInWei = parseEther(inputAmount).toString();
+              decimalsOut = 18;
+            } else {
+              // Token → ETH (sell)
+              tokenIn = outputTokenAddress;
+              tokenOut = KYBERSWAP_NATIVE_TOKEN; // Native ETH
+              amountInWei = parseUnits(inputAmount, 18).toString();
+              decimalsOut = 18;
+            }
+
+            console.log('[Hydrex] KyberSwap quote request:', { tokenIn, tokenOut, amountInWei });
+
+            const response = await getKyberSwapQuote(tokenIn, tokenOut, amountInWei, 50);
+
+            if (response.code !== 0 || !response.data) {
+              throw new Error(response.message || 'Failed to get KyberSwap quote');
+            }
+
+            const { routeSummary, routerAddress } = response.data;
+            const amountOutFormatted = formatUnits(BigInt(routeSummary.amountOut), decimalsOut);
+
+            console.log('[Hydrex] Quote result:', {
+              amountOut: amountOutFormatted,
+              amountOutUsd: routeSummary.amountOutUsd,
+              gas: routeSummary.gas,
+              gasUsd: routeSummary.gasUsd,
+              routerAddress,
+            });
+
+            setOutputAmount(amountOutFormatted);
+            // Store route info for swap execution
+            setHydrexRouteInfo({ routeSummary, routerAddress });
+            setSwapError(null);
+          } catch (err) {
+            console.error('[Hydrex] Quote failed:', err);
+            const errorMsg = err instanceof Error ? err.message : 'Unable to get quote';
+            setSwapError(`Hydrex: ${errorMsg}`);
+            setOutputAmount('');
+            setHydrexRouteInfo(null);
+          }
+
+          setIsQuoting(false);
+          return;
+        }
 
         if (isTokenPair && outputTokenAddress) {
           // Token pair quote using actual quoter
@@ -985,15 +2139,39 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   setOutputAmount(formatUnits(wassIn, 18));
                 }
               }
+            } else if (isTokenWarsEthPair) {
+              // Token Wars ETH pair: DIRECT ETH → Token V4 swap (single hop)
+              // These pools have ETH as one side, so no need for multi-hop through wASS
+              const ethIn = parseEther(inputAmount);
+              console.log('=== TOKEN WARS ETH PAIR BUY QUOTE START ===');
+              console.log('Input:', inputAmount, 'ETH');
+              console.log('Direct V4 pool key:', tokenPairPoolKey);
+
+              // Determine direction: ETH → TOKEN
+              // If ETH (0x0) is token0: zeroForOne = true (buying token1 for token0)
+              // If ETH is token1: zeroForOne = false (buying token0 for token1)
+              const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+              const zeroForOne = ethIsToken0; // true = ETH→TOKEN when ETH is token0
+              console.log('ETH is token0:', ethIsToken0, ', zeroForOne:', zeroForOne);
+
+              try {
+                const tokenOut = await getSimulateQuote(tokenPairPoolKey, zeroForOne, ethIn);
+                console.log('Direct V4 quote:', formatUnits(tokenOut, 18), 'TOKEN for', inputAmount, 'ETH');
+                setOutputAmount(formatUnits(tokenOut, 18));
+              } catch (err) {
+                console.error('Token Wars ETH pair quote failed:', err);
+                setSwapError('Unable to get quote for this pool');
+                setOutputAmount('');
+              }
             } else {
-              // Buy with ETH: ETH → wASS → Token (two hops via OTC router's swapToToken)
+              // wASS/TOKEN pair: ETH → wASS → Token (two hops via OTC router's swapToToken)
               //
               // Use the SAME V4 quote approach as the default wASS/ETH pair
               // The swapToToken function has slippage protection (minWassOut, minTokenOut)
               // so we just need a good estimate - V4 quoter provides this
 
               const ethIn = parseEther(inputAmount);
-              console.log('=== BUY QUOTE START ===');
+              console.log('=== BUY QUOTE START (multi-hop) ===');
               console.log('Input:', inputAmount, 'ETH');
 
             // Get pool key for ETH/wASS (same as default pair uses)
@@ -1126,8 +2304,34 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               setOutputAmount(formatUnits(wassOut, 18));
             }
             }
+          } else if (isTokenWarsEthPair) {
+            // Token Wars ETH pair sell: DIRECT Token → ETH V4 quote (single hop)
+            const tokenIn = parseUnits(inputAmount, 18);
+            console.log('=== TOKEN WARS ETH PAIR SELL QUOTE START ===');
+            console.log('Input:', inputAmount, 'TOKEN');
+            console.log('Direct V4 pool key:', tokenPairPoolKey);
+
+            // Determine direction: Token → ETH
+            const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+            const zeroForOne = !ethIsToken0; // Token → ETH
+            console.log('ETH is token0:', ethIsToken0, ', zeroForOne:', zeroForOne);
+
+            try {
+              const ethOut = await getSimulateQuote(tokenPairPoolKey, zeroForOne, tokenIn);
+              console.log('Direct V4 sell quote:', formatEther(ethOut), 'ETH for', formatUnits(tokenIn, 18), 'TOKEN');
+              if (ethOut > 0n) {
+                setOutputAmount(formatEther(ethOut));
+              } else {
+                setSwapError('Unable to get quote for this pool');
+                setOutputAmount('');
+              }
+            } catch (err) {
+              console.error('Token Wars ETH pair sell quote failed:', err);
+              setSwapError('Unable to get quote for this pool');
+              setOutputAmount('');
+            }
           } else {
-            // Sell: Token → wASS or Token → wASS → ETH (multi-hop)
+            // wASS/TOKEN pair Sell: Token → wASS or Token → wASS → ETH (multi-hop)
             const tokenIn = parseUnits(inputAmount, 18);
 
             // Token → wASS direction
@@ -1310,12 +2514,85 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     const debounce = setTimeout(fetchQuote, 300);
     return () => clearTimeout(debounce);
-  }, [inputAmount, swapTab, buyInputCurrency, sellOutputCurrency, publicClient, contracts.nft.address, contracts.nft.abi, isTokenPair, outputTokenAddress, selectedPair]);
+  }, [inputAmount, swapTab, buyInputCurrency, sellOutputCurrency, publicClient, contracts.nft.address, contracts.nft.abi, isTokenPair, isTokenWarsEthPair, isHydrexPair, isAerodromePair, isWassPairedAerodrome, aerodromeBaseToken, outputTokenAddress, selectedPair]);
 
-  // Handle successful transaction
+  // Handle successful transaction (from either writeContract or sendTransaction)
   useEffect(() => {
-    if (isSuccess && txHash) {
-      updateTransaction(txHash, 'success');
+    const successHash = txHash || sendTxHash;
+    if (isSuccess && successHash) {
+      updateTransaction(successHash, 'success');
+
+      // Handle differently based on transaction type
+      if (pendingTxType === 'approval-permit2') {
+        // Permit2 approval succeeded - advance to router approval step
+        console.log('[Approval] Permit2 approval succeeded, advancing to router step');
+        refetchPermit2Allowance();
+        setApprovalStep('router');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-router') {
+        // Router approval succeeded - now ready to sell
+        console.log('[Approval] Router approval succeeded, ready to sell');
+        refetchRouterAllowance();
+        setApprovalStep('ready');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-aerodrome') {
+        // Aerodrome approval succeeded - ready to sell
+        console.log('[Approval] Aerodrome approval succeeded, ready to sell');
+        setApprovalStep('ready');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-hydrex') {
+        // Hydrex/KyberSwap approval succeeded - ready to sell
+        console.log('[Approval] Hydrex/KyberSwap approval succeeded, ready to sell');
+        setApprovalStep('ready');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-wass-aerodrome') {
+        // wASS approval for Aerodrome succeeded - ready to buy
+        console.log('[Approval] wASS approval for Aerodrome succeeded, ready to buy');
+        setWassAerodromeApprovalNeeded(false);
+        refetchWassAerodromeAllowance();
+        refetchWassSlipstreamAllowance();
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-wass-permit2') {
+        // wASS Permit2 approval succeeded - advance to router step
+        console.log('[Approval] wASS Permit2 approval succeeded, advancing to router step');
+        refetchWassPermit2Allowance();
+        setBuyWassApprovalStep('router');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      if (pendingTxType === 'approval-wass-router') {
+        // wASS Router approval succeeded - ready to buy
+        console.log('[Approval] wASS Router approval succeeded, ready to buy');
+        refetchWassRouterAllowance();
+        setBuyWassApprovalStep('ready');
+        setPendingTxType(null);
+        setTimeout(() => resetWrite(), 500);
+        return;
+      }
+
+      // For swaps: full reset
       refetchTokenBalance();
       refetchOutputTokenBalance();
       refetchPermit2Allowance();
@@ -1325,7 +2602,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       setInputAmount('');
       setOutputAmount('');
       setBuyWassApprovalStep('none'); // Reset wASS approval state after successful transaction
-      setTimeout(() => resetWrite(), 2000);
+      setPendingTxType(null);
+      // Reset both hooks to clear state
+      setTimeout(() => {
+        resetWrite();
+        resetSendTx();
+      }, 2000);
       // Enable fast polling mode for faster chart updates after swap
       enableFastPolling();
       // Apply optimistic chart update with last known price
@@ -1336,31 +2618,242 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       onSwapComplete?.();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuccess, txHash, updateTransaction, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance, refetchWassPermit2Allowance, refetchWassRouterAllowance, resetWrite]);
+  }, [isSuccess, txHash, sendTxHash, updateTransaction, refetchTokenBalance, refetchOutputTokenBalance, refetchPermit2Allowance, refetchRouterAllowance, refetchWassPermit2Allowance, refetchWassRouterAllowance, resetWrite, resetSendTx, pendingTxType]);
 
   // Reset on transaction error/cancel to allow retry immediately
   useEffect(() => {
     if (writeError) {
-      console.log('Transaction error/cancel:', writeError.message);
+      console.log('Transaction error/cancel (writeContract):', writeError.message);
       // Reset immediately so button is clickable again
+      setPendingTxType(null);
       resetWrite();
     }
   }, [writeError, resetWrite]);
+
+  // Reset on sendTransaction error/cancel
+  useEffect(() => {
+    if (sendError) {
+      console.log('Transaction error/cancel (sendTransaction):', sendError.message);
+      // Reset immediately so button is clickable again
+      setPendingTxType(null);
+      resetSendTx();
+    }
+  }, [sendError, resetSendTx]);
+
+  // Track sendTransaction hash when it appears (for Hydrex buy)
+  useEffect(() => {
+    if (sendTxHash && pendingTxType === 'swap' && isHydrexPair) {
+      console.log('[Hydrex] Buy tx submitted via sendTransaction:', sendTxHash);
+      addTransaction(sendTxHash, `Buying ${outputTokenSymbol || 'Token'} with ETH via Hydrex`);
+    }
+  }, [sendTxHash, pendingTxType, isHydrexPair, addTransaction, outputTokenSymbol]);
 
   // Handle Buy (OTC for wASS/ETH, swapToToken for token pairs, V4 swap for wASS→Token)
   const handleBuy = () => {
     if (!address || !inputAmount || parseFloat(inputAmount) <= 0) return;
 
     // Handle buying with wASS on token pairs (wASS → Token via V4)
-    if (buyInputCurrency === 'wass' && isTokenPair && outputTokenAddress) {
+    // Skip for Aerodrome pairs - they use their own router (handled below at isAerodromePair check)
+    if (buyInputCurrency === 'wass' && isTokenPair && outputTokenAddress && !isAerodromePair) {
       handleBuyWithWass();
       return;
     }
 
+    setPendingTxType('swap');
     const ethValue = parseEther(inputAmount);
 
-    if (isTokenPair && outputTokenAddress) {
-      // Multi-hop buy: ETH → wASS → Token using swapToToken
+    // Hydrex pair: Use KyberSwap aggregator for swaps
+    if (isHydrexPair && outputTokenAddress && hydrexRouteInfo) {
+      // Reset any stale errors from previous operations
+      resetWrite();
+      resetSendTx();
+      setSwapError(null);
+
+      console.log('=== HYDREX BUY: ETH → Token via KyberSwap ===');
+      console.log('ETH value:', formatEther(ethValue));
+      console.log('Token address:', outputTokenAddress);
+      console.log('Route summary:', hydrexRouteInfo.routeSummary);
+      console.log('Router address:', hydrexRouteInfo.routerAddress);
+
+      // Build swap transaction using KyberSwap API
+      buildKyberSwapTransaction(
+        hydrexRouteInfo.routeSummary,
+        address,
+        address,
+        50, // 0.5% slippage
+        Math.floor(Date.now() / 1000) + 1200 // 20 min deadline
+      ).then((buildResponse) => {
+        if (buildResponse.code !== 0 || !buildResponse.data) {
+          console.error('[Hydrex] Failed to build swap tx:', buildResponse.message);
+          setSwapError(`Hydrex: ${buildResponse.message || 'Failed to build transaction'}`);
+          setPendingTxType(null);
+          return;
+        }
+
+        const { data: encodedData, routerAddress } = buildResponse.data;
+        console.log('[Hydrex] Swap tx built:', { routerAddress, dataLength: encodedData.length });
+        console.log('[Hydrex] Sending buy transaction via sendTransaction hook...');
+
+        // Execute the swap with raw calldata using sendTransaction
+        sendTransaction({
+          to: routerAddress as `0x${string}`,
+          data: encodedData as `0x${string}`,
+          value: ethValue,
+        });
+
+        // Note: Transaction tracking happens via sendTxHash in useEffect
+      }).catch((err) => {
+        console.error('[Hydrex] Build error:', err);
+        setSwapError(`Hydrex: ${err instanceof Error ? err.message : 'Build failed'}`);
+        setPendingTxType(null);
+      });
+
+      return;
+    }
+
+    // Aerodrome pair: Use Slipstream SwapRouter for CL pools, V2 Router for V2 pools
+    if (isAerodromePair && outputTokenAddress) {
+      const minTokensOut = outputAmount ? parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18) : 0n; // 5% slippage
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
+
+      // Check if this is a CL pool (has tickSpacing) or V2 pool
+      const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+      const poolStable = aerodromePoolInfo?.stable ?? false;
+
+      // Determine base token (wASS for wASS-paired, WETH for ETH-paired)
+      const baseToken = aerodromeBaseToken;
+      const isWassBase = isWassPairedAerodrome;
+      const baseTokenLabel = isWassBase ? 'wASS' : 'ETH';
+
+      console.log(`=== AERODROME BUY: ${baseTokenLabel} → Token ===`);
+      console.log(`${baseTokenLabel} value:`, formatEther(ethValue));
+      console.log('Token address:', outputTokenAddress);
+      console.log('Min tokens out:', formatUnits(minTokensOut, 18));
+      console.log('Pool type:', isCLPool ? `CL (tickSpacing=${aerodromePoolInfo?.tickSpacing})` : (poolStable ? 'V2 stable' : 'V2 volatile'));
+      console.log('Pool address:', aerodromePoolInfo?.poolAddress);
+      console.log('Is wASS-paired:', isWassBase);
+
+      if (isCLPool) {
+        // CL Pool: Use Slipstream SwapRouter.exactInputSingle
+        console.log('Using Slipstream SwapRouter:', SLIPSTREAM_SWAP_ROUTER_ADDRESS);
+
+        const swapParams = {
+          tokenIn: baseToken,
+          tokenOut: outputTokenAddress,
+          tickSpacing: aerodromePoolInfo!.tickSpacing!,
+          recipient: address,
+          deadline: deadline,
+          amountIn: ethValue,
+          amountOutMinimum: minTokensOut,
+          sqrtPriceLimitX96: 0n, // No price limit
+        };
+
+        console.log('Swap params:', swapParams);
+
+        if (isWassBase) {
+          // wASS-paired: Token-to-token swap, no ETH value
+          writeContract({
+            address: SLIPSTREAM_SWAP_ROUTER_ADDRESS,
+            abi: SLIPSTREAM_SWAP_ROUTER_ABI,
+            functionName: 'exactInputSingle',
+            args: [swapParams],
+          });
+        } else {
+          // ETH-paired: Send ETH value
+          writeContract({
+            address: SLIPSTREAM_SWAP_ROUTER_ADDRESS,
+            abi: SLIPSTREAM_SWAP_ROUTER_ABI,
+            functionName: 'exactInputSingle',
+            args: [swapParams],
+            value: ethValue,
+          });
+        }
+      } else {
+        // V2 Pool
+        console.log('Using V2 Router:', AERODROME_ROUTER_ADDRESS);
+
+        const routes: AerodromeRoute[] = [{
+          from: baseToken,
+          to: outputTokenAddress,
+          stable: poolStable,
+          factory: AERODROME_FACTORY_ADDRESS,
+        }];
+
+        console.log('Route:', routes);
+
+        if (isWassBase) {
+          // wASS-paired: Use swapExactTokensForTokens (token-to-token)
+          writeContract({
+            address: AERODROME_ROUTER_ADDRESS,
+            abi: AERODROME_ROUTER_ABI,
+            functionName: 'swapExactTokensForTokens',
+            args: [ethValue, minTokensOut, routes as readonly { from: `0x${string}`; to: `0x${string}`; stable: boolean; factory: `0x${string}`; }[], address, deadline],
+          });
+        } else {
+          // ETH-paired: Use swapExactETHForTokens
+          writeContract({
+            address: AERODROME_ROUTER_ADDRESS,
+            abi: AERODROME_ROUTER_ABI,
+            functionName: 'swapExactETHForTokens',
+            args: [minTokensOut, routes as readonly { from: `0x${string}`; to: `0x${string}`; stable: boolean; factory: `0x${string}`; }[], address, deadline],
+            value: ethValue,
+          });
+        }
+      }
+
+      if (txHash) {
+        addTransaction(txHash, `Buying ${outputTokenSymbol || 'Token'}`);
+      }
+      return;
+    }
+
+    if (isTokenWarsEthPair && outputTokenAddress) {
+      // Token Wars ETH pair: DIRECT V4 swap (ETH → Token, single hop)
+      // Use Universal Router with V4 commands
+      const minTokensOut = outputAmount ? parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18) : 0n; // 5% slippage
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
+
+      // Build pool key for ETH/Token pair
+      const ethPoolKey = {
+        currency0: selectedPair.token0,
+        currency1: selectedPair.token1,
+        fee: selectedPair.fee,
+        tickSpacing: selectedPair.tickSpacing,
+        hooks: selectedPair.hook,
+      };
+
+      // Determine direction: ETH → TOKEN
+      const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+      const zeroForOne = ethIsToken0;
+
+      console.log('=== TOKEN WARS ETH PAIR BUY (Direct V4) ===');
+      console.log('ETH value:', formatEther(ethValue));
+      console.log('Pool key:', JSON.stringify(ethPoolKey, null, 2));
+      console.log('ETH is token0:', ethIsToken0);
+      console.log('zeroForOne:', zeroForOne);
+      console.log('minTokensOut:', formatUnits(minTokensOut, 18));
+
+      // Build V4 swap calldata for ETH → Token
+      const { commands, inputs } = buildV4SwapCalldataForEthBuy(
+        ethValue,
+        minTokensOut,
+        ethPoolKey,
+        zeroForOne
+      );
+
+      writeContract({
+        address: UNIVERSAL_ROUTER_ADDRESS,
+        abi: UNIVERSAL_ROUTER_ABI,
+        functionName: 'execute',
+        args: [commands, inputs, deadline],
+        value: ethValue,
+      });
+
+      if (txHash) {
+        addTransaction(txHash, `Buying ${outputTokenSymbol || 'Token'}`);
+      }
+    } else if (isTokenPair && outputTokenAddress) {
+      // wASS/TOKEN pair: Multi-hop buy: ETH → wASS → Token using swapToToken
       // Use 0 for min amounts to avoid slippage issues during testing
       const minTokensOut = 0n;
       const minWassOut = 0n;
@@ -1377,7 +2870,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         hooks: selectedPair.hook,
       };
 
-      console.log('=== TOKEN PAIR BUY via OTC ===');
+      console.log('=== wASS/TOKEN PAIR BUY via OTC (multi-hop) ===');
       console.log('ETH value:', formatEther(ethValue));
       console.log('Pool key:', outputPoolKey);
       console.log('wassIsToken0:', wassIsToken0);
@@ -1418,6 +2911,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     if (!address || !inputAmount || !outputTokenAddress || !publicClient) return;
 
     try {
+      setPendingTxType('swap');
       const wassAmount = parseUnits(inputAmount, 18);
       // TEMPORARY: Use 0 minOut to test if swap works at all (bypasses slippage check)
       // Normal: parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18)
@@ -1589,6 +3083,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     if (!address) return;
 
     try {
+      setPendingTxType('approval-permit2');
       writeContract({
         address: sellTokenAddress,
         abi: contracts.token.abi,
@@ -1602,6 +3097,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     } catch (err) {
       console.error('Permit2 approval error:', err);
       setSwapError('Failed to approve Permit2');
+      setPendingTxType(null);
     }
   };
 
@@ -1614,6 +3110,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       // Note: uint48 max is 281,474,976,710,655 which fits in a JS number
       const expiration = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // 1 year
 
+      setPendingTxType('approval-router');
       writeContract({
         address: PERMIT2_ADDRESS,
         abi: PERMIT2_ABI,
@@ -1627,6 +3124,111 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     } catch (err) {
       console.error('Router approval error:', err);
       setSwapError('Failed to approve Router');
+      setPendingTxType(null);
+    }
+  };
+
+  // Handle Aerodrome Router Approval (for selling on Aerodrome)
+  // Uses Slipstream SwapRouter for CL pools, V2 Router for V2 pools
+  const handleApproveAerodrome = async () => {
+    if (!address || !outputTokenAddress) return;
+
+    // Determine which router to approve based on pool type
+    const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+    const routerToApprove = isCLPool ? SLIPSTREAM_SWAP_ROUTER_ADDRESS : AERODROME_ROUTER_ADDRESS;
+    const routerName = isCLPool ? 'Slipstream' : 'Aerodrome';
+
+    console.log(`Approving ${routerName} Router:`, routerToApprove);
+
+    try {
+      setPendingTxType('approval-aerodrome');
+      writeContract({
+        address: outputTokenAddress,
+        abi: [{
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+          ],
+          name: 'approve',
+          outputs: [{ name: '', type: 'bool' }],
+          stateMutability: 'nonpayable',
+          type: 'function',
+        }],
+        functionName: 'approve',
+        args: [routerToApprove, maxUint160],
+      });
+
+      if (txHash) {
+        addTransaction(txHash, `Approving ${outputTokenSymbol || 'Token'} for ${routerName}`);
+      }
+    } catch (err) {
+      console.error(`${routerName} approval error:`, err);
+      setSwapError(`Failed to approve for ${routerName}`);
+      setPendingTxType(null);
+    }
+  };
+
+  // Handle Hydrex/KyberSwap Router Approval (for selling on Hydrex)
+  const handleApproveHydrex = async () => {
+    if (!address || !outputTokenAddress) return;
+
+    console.log('[Hydrex] Approving KyberSwap Router:', KYBERSWAP_ROUTER_ADDRESS);
+
+    try {
+      setPendingTxType('approval-hydrex');
+      writeContract({
+        address: outputTokenAddress,
+        abi: [{
+          inputs: [
+            { name: 'spender', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+          ],
+          name: 'approve',
+          outputs: [{ name: '', type: 'bool' }],
+          stateMutability: 'nonpayable',
+          type: 'function',
+        }],
+        functionName: 'approve',
+        args: [KYBERSWAP_ROUTER_ADDRESS, maxUint160],
+      });
+
+      if (txHash) {
+        addTransaction(txHash, `Approving ${outputTokenSymbol || 'Token'} for Hydrex`);
+      }
+    } catch (err) {
+      console.error('[Hydrex] Approval error:', err);
+      setSwapError('Failed to approve for Hydrex');
+      setPendingTxType(null);
+    }
+  };
+
+  // Handle wASS approval for Aerodrome (for buying with wASS on wASS-paired Aerodrome tokens)
+  const handleApproveWassAerodrome = async () => {
+    if (!address) return;
+
+    // Check if this is a CL pool or V2 pool
+    const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+    const routerAddress = isCLPool ? SLIPSTREAM_SWAP_ROUTER_ADDRESS : AERODROME_ROUTER_ADDRESS;
+    const routerName = isCLPool ? 'Slipstream' : 'Aerodrome';
+
+    console.log(`[wASS-Aerodrome] Approving wASS to ${routerName} Router:`, routerAddress);
+
+    try {
+      setPendingTxType('approval-wass-aerodrome');
+      writeContract({
+        address: WASS_TOKEN_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [routerAddress, maxUint160],
+      });
+
+      if (txHash) {
+        addTransaction(txHash, `Approving wASS for ${routerName}`);
+      }
+    } catch (err) {
+      console.error('[wASS-Aerodrome] Approval error:', err);
+      setSwapError(`Failed to approve wASS for ${routerName}`);
+      setPendingTxType(null);
     }
   };
 
@@ -1635,6 +3237,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     if (!address) return;
 
     try {
+      setPendingTxType('approval-wass-permit2');
       writeContract({
         address: contracts.token.address as `0x${string}`,
         abi: contracts.token.abi,
@@ -1648,6 +3251,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     } catch (err) {
       console.error('wASS Permit2 approval error:', err);
       setSwapError('Failed to approve wASS');
+      setPendingTxType(null);
     }
   };
 
@@ -1658,6 +3262,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     try {
       const expiration = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // 1 year
 
+      setPendingTxType('approval-wass-router');
       writeContract({
         address: PERMIT2_ADDRESS,
         abi: PERMIT2_ABI,
@@ -1671,6 +3276,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     } catch (err) {
       console.error('wASS Router approval error:', err);
       setSwapError('Failed to approve Router for wASS');
+      setPendingTxType(null);
     }
   };
 
@@ -1906,6 +3512,248 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     // Commands: just V4_SWAP
     const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
+
+    return { commands, inputs: [v4InputData] };
+  }, []);
+
+  // Build V4 swap calldata for Token Wars ETH pairs: ETH -> Token (single-hop)
+  // For buying tokens with ETH in Token Wars pools (no hook, 1% fee)
+  const buildV4SwapCalldataForEthBuy = useCallback((
+    amountIn: bigint,
+    minAmountOut: bigint,
+    key: { currency0: `0x${string}`; currency1: `0x${string}`; fee: number; tickSpacing: number; hooks: `0x${string}` },
+    zeroForOne: boolean // true if ETH is token0 (ETH -> Token), false if ETH is token1
+  ): { commands: `0x${string}`; inputs: `0x${string}`[] } => {
+    console.log('[buildV4SwapCalldataForEthBuy] Building calldata');
+    console.log('[buildV4SwapCalldataForEthBuy] poolKey:', JSON.stringify(key, null, 2));
+    console.log('[buildV4SwapCalldataForEthBuy] zeroForOne:', zeroForOne);
+    console.log('[buildV4SwapCalldataForEthBuy] amountIn:', amountIn.toString());
+    console.log('[buildV4SwapCalldataForEthBuy] minAmountOut:', minAmountOut.toString());
+
+    // Encode the actions for V4Router: SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
+    const actions = new Uint8Array([SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL]);
+
+    // Encode SWAP_EXACT_IN_SINGLE params
+    const swapParams = encodeFunctionData({
+      abi: [{
+        name: 'swap',
+        type: 'function',
+        inputs: [{
+          name: 'params',
+          type: 'tuple',
+          components: [
+            { name: 'poolKey', type: 'tuple', components: [
+              { name: 'currency0', type: 'address' },
+              { name: 'currency1', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'tickSpacing', type: 'int24' },
+              { name: 'hooks', type: 'address' },
+            ]},
+            { name: 'zeroForOne', type: 'bool' },
+            { name: 'amountIn', type: 'uint128' },
+            { name: 'amountOutMinimum', type: 'uint128' },
+            { name: 'hookData', type: 'bytes' },
+          ],
+        }],
+        outputs: [],
+      }],
+      functionName: 'swap',
+      args: [{
+        poolKey: {
+          currency0: key.currency0,
+          currency1: key.currency1,
+          fee: key.fee,
+          tickSpacing: key.tickSpacing,
+          hooks: key.hooks,
+        },
+        zeroForOne: zeroForOne,
+        amountIn: amountIn,
+        amountOutMinimum: minAmountOut,
+        hookData: '0x' as `0x${string}`,
+      }],
+    });
+    const swapParamsData = ('0x' + swapParams.slice(10)) as `0x${string}`;
+
+    // Determine which currency is ETH (input) and which is Token (output)
+    const ethCurrency = zeroForOne ? key.currency0 : key.currency1;
+    const tokenCurrency = zeroForOne ? key.currency1 : key.currency0;
+
+    // Encode SETTLE_ALL params: settle ETH (the input)
+    const settleParams = encodeFunctionData({
+      abi: [{
+        name: 'settle',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'maxAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'settle',
+      args: [ethCurrency, amountIn],
+    });
+    const settleParamsData = ('0x' + settleParams.slice(10)) as `0x${string}`;
+
+    // Encode TAKE_ALL params: take Token (the output)
+    const takeParams = encodeFunctionData({
+      abi: [{
+        name: 'take',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'minAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'take',
+      args: [tokenCurrency, minAmountOut],
+    });
+    const takeParamsData = ('0x' + takeParams.slice(10)) as `0x${string}`;
+
+    // Build the V4 swap input
+    const v4Input = encodeFunctionData({
+      abi: [{
+        name: 'v4Swap',
+        type: 'function',
+        inputs: [
+          { name: 'actions', type: 'bytes' },
+          { name: 'params', type: 'bytes[]' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'v4Swap',
+      args: [
+        ('0x' + Buffer.from(actions).toString('hex')) as `0x${string}`,
+        [swapParamsData, settleParamsData, takeParamsData],
+      ],
+    });
+    const v4InputData = ('0x' + v4Input.slice(10)) as `0x${string}`;
+
+    // Commands: just V4_SWAP
+    const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
+
+    console.log('[buildV4SwapCalldataForEthBuy] commands:', commands);
+    console.log('[buildV4SwapCalldataForEthBuy] inputs[0] length:', v4InputData.length);
+
+    return { commands, inputs: [v4InputData] };
+  }, []);
+
+  // Build V4 swap calldata for Token Wars ETH pairs: Token -> ETH (single-hop sell)
+  // For selling tokens for ETH in Token Wars pools (needs Permit2 for input token)
+  const buildV4SwapCalldataForTokenSell = useCallback((
+    amountIn: bigint,
+    minAmountOut: bigint,
+    key: { currency0: `0x${string}`; currency1: `0x${string}`; fee: number; tickSpacing: number; hooks: `0x${string}` },
+    zeroForOne: boolean, // direction based on token positions
+    inputToken: `0x${string}` // the token being sold (not ETH)
+  ): { commands: `0x${string}`; inputs: `0x${string}`[] } => {
+    console.log('[buildV4SwapCalldataForTokenSell] Building calldata');
+    console.log('[buildV4SwapCalldataForTokenSell] poolKey:', JSON.stringify(key, null, 2));
+    console.log('[buildV4SwapCalldataForTokenSell] zeroForOne:', zeroForOne);
+    console.log('[buildV4SwapCalldataForTokenSell] amountIn:', amountIn.toString());
+    console.log('[buildV4SwapCalldataForTokenSell] minAmountOut:', minAmountOut.toString());
+    console.log('[buildV4SwapCalldataForTokenSell] inputToken:', inputToken);
+
+    // Encode the actions for V4Router: SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
+    const actions = new Uint8Array([SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL]);
+
+    // Encode SWAP_EXACT_IN_SINGLE params
+    const swapParams = encodeFunctionData({
+      abi: [{
+        name: 'swap',
+        type: 'function',
+        inputs: [{
+          name: 'params',
+          type: 'tuple',
+          components: [
+            { name: 'poolKey', type: 'tuple', components: [
+              { name: 'currency0', type: 'address' },
+              { name: 'currency1', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'tickSpacing', type: 'int24' },
+              { name: 'hooks', type: 'address' },
+            ]},
+            { name: 'zeroForOne', type: 'bool' },
+            { name: 'amountIn', type: 'uint128' },
+            { name: 'amountOutMinimum', type: 'uint128' },
+            { name: 'hookData', type: 'bytes' },
+          ],
+        }],
+        outputs: [],
+      }],
+      functionName: 'swap',
+      args: [{
+        poolKey: {
+          currency0: key.currency0,
+          currency1: key.currency1,
+          fee: key.fee,
+          tickSpacing: key.tickSpacing,
+          hooks: key.hooks,
+        },
+        zeroForOne: zeroForOne,
+        amountIn: amountIn,
+        amountOutMinimum: minAmountOut,
+        hookData: '0x' as `0x${string}`,
+      }],
+    });
+    const swapParamsData = ('0x' + swapParams.slice(10)) as `0x${string}`;
+
+    // Encode SETTLE_ALL params: settle the input Token (uses Permit2)
+    const settleParams = encodeFunctionData({
+      abi: [{
+        name: 'settle',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'maxAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'settle',
+      args: [inputToken, amountIn],
+    });
+    const settleParamsData = ('0x' + settleParams.slice(10)) as `0x${string}`;
+
+    // Encode TAKE_ALL params: take ETH (the output)
+    const takeParams = encodeFunctionData({
+      abi: [{
+        name: 'take',
+        type: 'function',
+        inputs: [
+          { name: 'currency', type: 'address' },
+          { name: 'minAmount', type: 'uint256' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'take',
+      args: [ETH_ADDRESS, minAmountOut],
+    });
+    const takeParamsData = ('0x' + takeParams.slice(10)) as `0x${string}`;
+
+    // Build the V4 swap input
+    const v4Input = encodeFunctionData({
+      abi: [{
+        name: 'v4Swap',
+        type: 'function',
+        inputs: [
+          { name: 'actions', type: 'bytes' },
+          { name: 'params', type: 'bytes[]' },
+        ],
+        outputs: [],
+      }],
+      functionName: 'v4Swap',
+      args: [
+        ('0x' + Buffer.from(actions).toString('hex')) as `0x${string}`,
+        [swapParamsData, settleParamsData, takeParamsData],
+      ],
+    });
+    const v4InputData = ('0x' + v4Input.slice(10)) as `0x${string}`;
+
+    // Commands: just V4_SWAP
+    const commands = ('0x' + V4_SWAP.toString(16).padStart(2, '0')) as `0x${string}`;
+
+    console.log('[buildV4SwapCalldataForTokenSell] commands:', commands);
+    console.log('[buildV4SwapCalldataForTokenSell] inputs[0] length:', v4InputData.length);
 
     return { commands, inputs: [v4InputData] };
   }, []);
@@ -2220,6 +4068,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     }
 
     try {
+      setPendingTxType('swap');
       const sellAmount = parseUnits(inputAmount, 18);
       // TEMPORARY: Use 0 minOut to test if swap works at all (bypasses slippage check)
       // Normal: outputAmount ? parseEther((parseFloat(outputAmount) * 0.95).toString()) : 0n
@@ -2227,8 +4076,205 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       console.log('⚠️ TESTING MODE: minEthOut = 0 (no slippage protection)');
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
 
-      if (isTokenPair && outputTokenAddress) {
-        // Token pair sell: either single-hop to wASS or multi-hop to ETH
+      // Hydrex pair: Use KyberSwap aggregator for sells
+      if (isHydrexPair && outputTokenAddress && hydrexRouteInfo) {
+        // Reset any stale errors from previous operations
+        resetWrite();
+        resetSendTx();
+        setSwapError(null);
+
+        console.log('=== HYDREX SELL: Token → ETH via KyberSwap ===');
+        console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
+        console.log('Token address:', outputTokenAddress);
+        console.log('Route summary:', hydrexRouteInfo.routeSummary);
+        console.log('Router address:', hydrexRouteInfo.routerAddress);
+
+        // Build swap transaction using KyberSwap API
+        const buildResponse = await buildKyberSwapTransaction(
+          hydrexRouteInfo.routeSummary,
+          address,
+          address,
+          50, // 0.5% slippage
+          Math.floor(Date.now() / 1000) + 1200 // 20 min deadline
+        );
+
+        if (buildResponse.code !== 0 || !buildResponse.data) {
+          console.error('[Hydrex] Failed to build swap tx:', buildResponse.message);
+          setSwapError(`Hydrex: ${buildResponse.message || 'Failed to build transaction'}`);
+          setPendingTxType(null);
+          return;
+        }
+
+        const { data: encodedData, routerAddress } = buildResponse.data;
+        console.log('[Hydrex] Swap tx built:', { routerAddress, dataLength: encodedData.length });
+        console.log('[Hydrex] encodedData starts with:', encodedData.slice(0, 20));
+        console.log('[Hydrex] encodedData type:', typeof encodedData);
+
+        // Execute the swap with raw calldata using walletClient directly
+        // We use walletClient.sendTransaction() to bypass wagmi hooks that try to encode ABI functions
+        if (!walletClient) {
+          console.error('[Hydrex] No wallet client available');
+          setSwapError('Wallet not connected');
+          setPendingTxType(null);
+          return;
+        }
+
+        try {
+          console.log('[Hydrex] Sending sell transaction via walletClient.sendTransaction...');
+          const hash = await walletClient.sendTransaction({
+            to: routerAddress as `0x${string}`,
+            data: encodedData as `0x${string}`,
+            account: walletClient.account,
+            chain: walletClient.chain,
+          });
+          console.log('[Hydrex] Sell tx hash:', hash);
+          addTransaction(hash, `Selling ${outputTokenSymbol || 'Token'} for ETH via Hydrex`);
+          // Transaction submitted successfully - state will be updated by useWaitForTransactionReceipt
+          // Reset pending type since we're using walletClient directly (no wagmi hooks tracking this)
+          setPendingTxType(null);
+          // Trigger refetch after a delay to update balances
+          setTimeout(() => {
+            refetchTokenBalance();
+            refetchOutputTokenBalance();
+          }, 3000);
+        } catch (err) {
+          console.error('[Hydrex] Sell tx error:', err);
+          const errorMessage = err instanceof Error ? err.message : 'Transaction failed';
+          // Check for user rejection
+          if (errorMessage.toLowerCase().includes('reject') || errorMessage.toLowerCase().includes('denied')) {
+            setSwapError('Transaction cancelled');
+          } else {
+            setSwapError(`Hydrex: ${errorMessage}`);
+          }
+          setPendingTxType(null);
+        }
+        return;
+      }
+
+      // Aerodrome pair: Use Slipstream SwapRouter for CL pools, V2 Router for V2 pools
+      if (isAerodromePair && outputTokenAddress) {
+        // Check if this is a CL pool (has tickSpacing) or V2 pool
+        const isCLPool = aerodromePoolInfo?.tickSpacing !== undefined && aerodromePoolInfo.tickSpacing > 0;
+        const poolStable = aerodromePoolInfo?.stable ?? false;
+
+        // Determine base token (wASS for wASS-paired, WETH for ETH-paired)
+        const baseToken = aerodromeBaseToken;
+        const isWassBase = isWassPairedAerodrome;
+        const baseTokenLabel = isWassBase ? 'wASS' : 'ETH';
+
+        console.log(`=== AERODROME SELL: Token → ${baseTokenLabel} ===`);
+        console.log('Pool type:', isCLPool ? `CL (tickSpacing=${aerodromePoolInfo?.tickSpacing})` : (poolStable ? 'V2 stable' : 'V2 volatile'));
+        console.log('Pool address:', aerodromePoolInfo?.poolAddress || 'unknown');
+        console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
+        console.log('Token address:', outputTokenAddress);
+        console.log(`Min ${baseTokenLabel} out:`, formatEther(minEthOut));
+        console.log('Is wASS-paired:', isWassBase);
+
+        if (isCLPool) {
+          // CL Pool: Use Slipstream SwapRouter.exactInputSingle
+          console.log('Using Slipstream SwapRouter:', SLIPSTREAM_SWAP_ROUTER_ADDRESS);
+
+          const swapParams = {
+            tokenIn: outputTokenAddress, // The token being sold
+            tokenOut: baseToken, // WETH or wASS depending on pair
+            tickSpacing: aerodromePoolInfo!.tickSpacing!,
+            recipient: address, // User receives WETH or wASS
+            deadline: deadline,
+            amountIn: sellAmount,
+            amountOutMinimum: minEthOut,
+            sqrtPriceLimitX96: 0n, // No price limit
+          };
+
+          console.log('Swap params:', swapParams);
+
+          writeContract({
+            address: SLIPSTREAM_SWAP_ROUTER_ADDRESS,
+            abi: SLIPSTREAM_SWAP_ROUTER_ABI,
+            functionName: 'exactInputSingle',
+            args: [swapParams],
+          });
+        } else {
+          // V2 Pool
+          console.log('Using V2 Router:', AERODROME_ROUTER_ADDRESS);
+
+          const routes: AerodromeRoute[] = [{
+            from: outputTokenAddress, // The token being sold
+            to: baseToken, // WETH or wASS depending on pair
+            stable: poolStable, // Use detected pool type (volatile/stable)
+            factory: AERODROME_FACTORY_ADDRESS,
+          }];
+
+          console.log('Route:', routes);
+
+          if (isWassBase) {
+            // wASS-paired: Use swapExactTokensForTokens (token-to-token)
+            writeContract({
+              address: AERODROME_ROUTER_ADDRESS,
+              abi: AERODROME_ROUTER_ABI,
+              functionName: 'swapExactTokensForTokens',
+              args: [sellAmount, minEthOut, routes as readonly { from: `0x${string}`; to: `0x${string}`; stable: boolean; factory: `0x${string}`; }[], address, deadline],
+            });
+          } else {
+            // ETH-paired: Use swapExactTokensForETH
+            writeContract({
+              address: AERODROME_ROUTER_ADDRESS,
+              abi: AERODROME_ROUTER_ABI,
+              functionName: 'swapExactTokensForETH',
+              args: [sellAmount, minEthOut, routes as readonly { from: `0x${string}`; to: `0x${string}`; stable: boolean; factory: `0x${string}`; }[], address, deadline],
+            });
+          }
+        }
+
+        if (txHash) {
+          addTransaction(txHash, `Selling ${outputTokenSymbol || 'Token'} for ${baseTokenLabel}`);
+        }
+        return;
+      }
+
+      if (isTokenWarsEthPair && outputTokenAddress) {
+        // Token Wars ETH pair: DIRECT Token → ETH V4 swap (single hop)
+        const ethPoolKey = {
+          currency0: selectedPair.token0,
+          currency1: selectedPair.token1,
+          fee: selectedPair.fee,
+          tickSpacing: selectedPair.tickSpacing,
+          hooks: selectedPair.hook,
+        };
+
+        // Determine direction: Token → ETH
+        // If ETH is token0: selling token1 for token0, zeroForOne = false
+        // If ETH is token1: selling token0 for token1, zeroForOne = true
+        const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+        const zeroForOne = !ethIsToken0; // Token → ETH
+
+        console.log('=== TOKEN WARS ETH PAIR SELL (Direct V4) ===');
+        console.log('Pool key:', JSON.stringify(ethPoolKey, null, 2));
+        console.log('ETH is token0:', ethIsToken0);
+        console.log('zeroForOne:', zeroForOne);
+        console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
+        console.log('Min ETH out:', formatEther(minEthOut));
+
+        // Build V4 swap calldata for Token → ETH (opposite direction of buy)
+        const { commands, inputs } = buildV4SwapCalldataForTokenSell(
+          sellAmount,
+          minEthOut,
+          ethPoolKey,
+          zeroForOne,
+          outputTokenAddress
+        );
+
+        writeContract({
+          address: UNIVERSAL_ROUTER_ADDRESS,
+          abi: UNIVERSAL_ROUTER_ABI,
+          functionName: 'execute',
+          args: [commands, inputs, deadline],
+        });
+
+        if (txHash) {
+          addTransaction(txHash, `Selling ${outputTokenSymbol || 'Token'} for ETH`);
+        }
+      } else if (isTokenPair && outputTokenAddress) {
+        // wASS/TOKEN pair sell: either single-hop to wASS or multi-hop to ETH
         const tokenPoolKey = {
           currency0: selectedPair.token0,
           currency1: selectedPair.token1,
@@ -2571,7 +4617,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       overflow: 'hidden',
                     }}
                   >
-                    {[...TOKEN_PAIRS]
+                    {[...allPairs]
                       .sort((a, b) => {
                         if (a.isDefault && !b.isDefault) return -1;
                         if (!a.isDefault && b.isDefault) return 1;
@@ -2612,11 +4658,119 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 )}
               </div>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>Swap</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>
+              {isTradeableInApp ? 'Swap' : `Trade on ${selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'DEX'}`}
+            </span>
           </div>
 
           {/* Swap Section - in horizontal left panel */}
           <div style={{ padding: '16px', flex: 1, overflow: 'hidden' }}>
+            {/* External DEX Link - shown for non-V4 tokens (Aerodrome, Hydrex) */}
+            {!isTradeableInApp && externalDexUrl && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', justifyContent: 'center', height: '100%', padding: 20 }}>
+                <div style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  background: selectedPairDex === 'aerodrome' ? 'rgba(0, 148, 255, 0.15)' : 'rgba(255, 107, 0, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 8
+                }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#0094FF' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
+                    This token trades on {selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'an external DEX'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)', marginBottom: 16 }}>
+                    Click below to swap on the native DEX
+                  </div>
+                </div>
+                <a
+                  href={externalDexUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '14px 32px',
+                    background: selectedPairDex === 'aerodrome'
+                      ? 'linear-gradient(135deg, rgba(0, 148, 255, 0.9), rgba(0, 100, 200, 0.9))'
+                      : 'linear-gradient(135deg, rgba(255, 107, 0, 0.9), rgba(200, 80, 0, 0.9))',
+                    borderRadius: 12,
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                    fontSize: 15,
+                    color: '#fff',
+                    boxShadow: selectedPairDex === 'aerodrome'
+                      ? '0 4px 16px rgba(0, 148, 255, 0.3)'
+                      : '0 4px 16px rgba(255, 107, 0, 0.3)',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = selectedPairDex === 'aerodrome'
+                      ? '0 6px 20px rgba(0, 148, 255, 0.4)'
+                      : '0 6px 20px rgba(255, 107, 0, 0.4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = selectedPairDex === 'aerodrome'
+                      ? '0 4px 16px rgba(0, 148, 255, 0.3)'
+                      : '0 4px 16px rgba(255, 107, 0, 0.3)';
+                  }}
+                >
+                  Trade on {selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'DEX'}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </a>
+                {/* Also show DexScreener link if available */}
+                {(() => {
+                  const pair = allPairs.find(p => p.id === selectedPair.id);
+                  const dexScreenerUrl = pair?.tokenWarsData?.dexScreenerUrl;
+                  if (dexScreenerUrl) {
+                    return (
+                      <a
+                        href={dexScreenerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          color: 'rgba(255, 255, 255, 0.5)',
+                          textDecoration: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        View on DexScreener
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                      </a>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
+
+            {/* Regular Swap UI - shown for V4 tokens */}
+            {isTradeableInApp && (
+              <>
             {/* Buy/Sell Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
               <button
@@ -2695,8 +4849,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     fontWeight: 500,
                   }}
                 />
-                {/* Currency toggle for buy mode on token pairs */}
-                {swapTab === 'buy' && isTokenPair && (
+                {/* Currency toggle for buy mode on token pairs (hide for wASS-paired Aerodrome - wASS only) */}
+                {swapTab === 'buy' && isTokenPair && !isWassPairedAerodrome && (
                   <button
                     onClick={() => {
                       setBuyInputCurrency(buyInputCurrency === 'eth' ? 'wass' : 'eth');
@@ -2791,8 +4945,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   {isQuoting ? 'Loading...' : outputAmount || '0.0'}
                 </span>
-                {/* Sell output currency toggle for token pairs */}
-                {swapTab === 'sell' && isTokenPair && (
+                {/* Sell output currency toggle for wASS/TOKEN pairs only (not Token Wars ETH pairs) */}
+                {/* Token Wars ETH pairs can ONLY sell to ETH since there's no wASS in the pool */}
+                {swapTab === 'sell' && isTokenPair && !isTokenWarsEthPair && (
                   <button
                     onClick={() => {
                       setSellOutputCurrency(sellOutputCurrency === 'wass' ? 'eth' : 'wass');
@@ -2819,17 +4974,21 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <img
                     src={swapTab === 'buy'
-                      ? (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')
-                      : (isTokenPair
-                        ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                        : '/Images/Ether.png')}
-                    alt={swapTab === 'buy' ? 'Token' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS')}
+                      ? (isTokenPair && outputTokenAddress
+                        ? (getTokenImage(outputTokenAddress) || '/Images/Token.png')
+                        : '/Images/Token.png')
+                      : (isTokenWarsEthPair
+                        ? '/Images/Ether.png' // Token Wars ETH pairs always sell to ETH
+                        : (isTokenPair
+                          ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                          : '/Images/Ether.png'))}
+                    alt={swapTab === 'buy' ? (outputTokenSymbol || 'Token') : (isTokenWarsEthPair ? 'ETH' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'))}
                     style={{ width: 18, height: 18 }}
                   />
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
                     {swapTab === 'buy'
                       ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')
-                      : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH')}
+                      : (isTokenWarsEthPair ? 'ETH' : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH'))}
                   </span>
                 </div>
               </div>
@@ -2864,8 +5023,47 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   Connect wallet to buy
                 </div>
+              ) : isWassPairedAerodrome && wassAerodromeApprovalNeeded ? (
+                // wASS-paired Aerodrome: Need direct wASS approval to router
+                <button
+                  onClick={handleApproveWassAerodrome}
+                  disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                  style={{
+                    width: '100%',
+                    padding: 14,
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                    border: 'none',
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isBusy ? 'Approving...' : 'Approve wASS for Aerodrome'}
+                </button>
+              ) : isWassPairedAerodrome ? (
+                // wASS-paired Aerodrome: Approved, show buy button
+                <button
+                  onClick={handleBuy}
+                  disabled={isBusy || isQuoting || !canBuy}
+                  style={{
+                    width: '100%',
+                    padding: 14,
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    border: 'none',
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
+                    opacity: !canBuy ? 0.5 : 1,
+                  }}
+                >
+                  {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${outputTokenSymbol || 'Token'} with wASS`}
+                </button>
               ) : buyInputCurrency === 'wass' && isTokenPair ? (
-                // Buying with wASS - show approval flow
+                // Token Wars V4: Buying with wASS - show Permit2 approval flow
                 isCheckingBuyWassApproval ? (
                   <button
                     disabled
@@ -3006,6 +5204,44 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               >
                 {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
+            ) : approvalStep === 'permit2' && isAerodromePair ? (
+              // Aerodrome: Single approval step directly to Aerodrome Router
+              <button
+                onClick={handleApproveAerodrome}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(0, 148, 255, 0.8)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : `Approve ${outputTokenSymbol || 'Token'}`}
+              </button>
+            ) : approvalStep === 'permit2' && isHydrexPair ? (
+              // Hydrex: Single approval step directly to KyberSwap Router
+              <button
+                onClick={handleApproveHydrex}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 14,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(138, 43, 226, 0.8)',
+                  border: 'none',
+                  borderRadius: 10,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : `Approve ${outputTokenSymbol || 'Token'} for Hydrex`}
+              </button>
             ) : approvalStep === 'permit2' ? (
               <button
                 onClick={handleApprovePermit2}
@@ -3061,6 +5297,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               >
                 {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
+            )}
+            </>
             )}
           </div>
 
@@ -3440,7 +5678,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     }}
                   >
                     {/* Sort: ETH pairs first, then by best % gains */}
-                    {[...TOKEN_PAIRS]
+                    {[...allPairs]
                       .sort((a, b) => {
                         // ETH pairs (isDefault) always first
                         if (a.isDefault && !b.isDefault) return -1;
@@ -3648,6 +5886,64 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
           {/* Swap Section */}
           <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(16, 185, 129, 0.15)' }}>
+            {/* External DEX Link - shown for non-V4 tokens (Aerodrome, Hydrex) */}
+            {!isTradeableInApp && externalDexUrl && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: 16 }}>
+                <div style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  background: selectedPairDex === 'aerodrome' ? 'rgba(0, 148, 255, 0.15)' : 'rgba(255, 107, 0, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#0094FF' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
+                    Trade on {selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'DEX'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
+                    This token trades on an external DEX
+                  </div>
+                </div>
+                <a
+                  href={externalDexUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '10px 24px',
+                    background: selectedPairDex === 'aerodrome'
+                      ? 'linear-gradient(135deg, rgba(0, 148, 255, 0.9), rgba(0, 100, 200, 0.9))'
+                      : 'linear-gradient(135deg, rgba(255, 107, 0, 0.9), rgba(200, 80, 0, 0.9))',
+                    borderRadius: 10,
+                    textDecoration: 'none',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    color: '#fff',
+                  }}
+                >
+                  Swap
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </a>
+              </div>
+            )}
+
+            {/* Regular Swap UI - shown for V4 tokens */}
+            {isTradeableInApp && (
+              <>
             {/* Buy/Sell Tabs */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
               <button
@@ -3726,8 +6022,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     fontWeight: 500,
                   }}
                 />
-                {/* Currency toggle for buy mode on token pairs */}
-                {swapTab === 'buy' && isTokenPair && (
+                {/* Currency toggle for buy mode on token pairs (hide for wASS-paired Aerodrome - wASS only) */}
+                {swapTab === 'buy' && isTokenPair && !isWassPairedAerodrome && (
                   <button
                     onClick={() => {
                       setBuyInputCurrency(buyInputCurrency === 'eth' ? 'wass' : 'eth');
@@ -3822,8 +6118,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   {isQuoting ? 'Loading...' : outputAmount || '0.0'}
                 </span>
-                {/* Sell output currency toggle for token pairs */}
-                {swapTab === 'sell' && isTokenPair && (
+                {/* Sell output currency toggle for wASS/TOKEN pairs only (not Token Wars ETH pairs) */}
+                {/* Token Wars ETH pairs can ONLY sell to ETH since there's no wASS in the pool */}
+                {swapTab === 'sell' && isTokenPair && !isTokenWarsEthPair && (
                   <button
                     onClick={() => {
                       setSellOutputCurrency(sellOutputCurrency === 'wass' ? 'eth' : 'wass');
@@ -3851,16 +6148,18 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   <img
                     src={swapTab === 'buy'
                       ? (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')
-                      : (isTokenPair
-                        ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                        : '/Images/Ether.png')}
-                    alt={swapTab === 'buy' ? 'Token' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS')}
+                      : (isTokenWarsEthPair
+                        ? '/Images/Ether.png' // Token Wars ETH pairs always sell to ETH
+                        : (isTokenPair
+                          ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
+                          : '/Images/Ether.png'))}
+                    alt={swapTab === 'buy' ? 'Token' : (isTokenWarsEthPair ? 'ETH' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'))}
                     style={{ width: 16, height: 16 }}
                   />
                   <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
                     {swapTab === 'buy'
                       ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')
-                      : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH')}
+                      : (isTokenWarsEthPair ? 'ETH' : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH'))}
                   </span>
                 </div>
               </div>
@@ -3895,8 +6194,47 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 }}>
                   Connect wallet to buy
                 </div>
+              ) : isWassPairedAerodrome && wassAerodromeApprovalNeeded ? (
+                // wASS-paired Aerodrome: Need direct wASS approval to router
+                <button
+                  onClick={handleApproveWassAerodrome}
+                  disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isBusy ? 'Approving...' : 'Approve wASS for Aerodrome'}
+                </button>
+              ) : isWassPairedAerodrome ? (
+                // wASS-paired Aerodrome: Approved, show buy button
+                <button
+                  onClick={handleBuy}
+                  disabled={isBusy || isQuoting || !canBuy}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
+                    opacity: !canBuy ? 0.5 : 1,
+                  }}
+                >
+                  {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${outputTokenSymbol || 'Token'} with wASS`}
+                </button>
               ) : buyInputCurrency === 'wass' && isTokenPair ? (
-                // Buying with wASS - show approval flow
+                // Token Wars V4: Buying with wASS - show Permit2 approval flow
                 isCheckingBuyWassApproval ? (
                   <button
                     disabled
@@ -4038,6 +6376,44 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               >
                 {isBusy ? 'Processing...' : `Approve & Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
+            ) : approvalStep === 'permit2' && isAerodromePair ? (
+              // Aerodrome: Single approval step directly to Aerodrome Router
+              <button
+                onClick={handleApproveAerodrome}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(0, 148, 255, 0.8)',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : `Approve ${outputTokenSymbol || 'Token'}`}
+              </button>
+            ) : approvalStep === 'permit2' && isHydrexPair ? (
+              // Hydrex: Single approval step directly to KyberSwap Router
+              <button
+                onClick={handleApproveHydrex}
+                disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: 12,
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(138, 43, 226, 0.8)',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isBusy ? 'Approving...' : `Approve ${outputTokenSymbol || 'Token'} for Hydrex`}
+              </button>
             ) : approvalStep === 'permit2' ? (
               // Regular wallet: Step 1 - Approve Token for Permit2
               <button
@@ -4097,7 +6473,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 {isBusy ? 'Selling...' : isQuoting ? 'Getting quote...' : `Sell ${isTokenPair ? `${outputTokenSymbol || 'Token'} for ${sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'}` : 'wASS'}`}
               </button>
             )}
-
+            </>
+            )}
           </div>
 
           {/* Footer */}

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserPositionsResponse, ClaimResult, ClaimableResponse } from '@/types/clankerdome';
 
+// Prediction Markets API
 const API_BASE_URL = 'https://api.applesnakes.com';
 
 interface UseUserPositionsOptions {

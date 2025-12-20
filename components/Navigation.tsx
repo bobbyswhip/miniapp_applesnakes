@@ -594,12 +594,13 @@ export function Navigation() {
       </div>
     </nav>
 
-    {/* SwapWrapModal - Universal NFT Hub */}
+    {/* SwapWrapModal - NFT Hub (Buy Only) */}
     <SwapWrapModal
       isOpen={showNFTHub}
       onClose={closeNFTHub}
       nftContractAddress={contracts.nft.address}
-      initialMode={nftHubMode}
+      initialMode="buy"
+      buyOnly={true}
     />
 
     </>

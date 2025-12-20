@@ -133,9 +133,10 @@ export function useX402Fetch() {
       body?: unknown;
       formData?: FormData;
       customAmount?: number; // For launch, allow custom amount in USDC
+      useLocalProxy?: boolean; // Use local API proxy instead of external API directly
     } = {}
   ): Promise<X402Response<T>> => {
-    const { method = 'POST', body, formData, customAmount } = options;
+    const { method = 'POST', body, formData, customAmount, useLocalProxy = false } = options;
 
     if (!isConnected || !address) {
       return { success: false, error: 'Wallet not connected' };
@@ -146,7 +147,8 @@ export function useX402Fetch() {
     setStatusMessage('');
 
     try {
-      const url = `${X402_CONFIG.API_BASE_URL}${endpoint}`;
+      // Use local proxy for endpoints that need to avoid CORS, otherwise use external API
+      const url = useLocalProxy ? endpoint : `${X402_CONFIG.API_BASE_URL}${endpoint}`;
 
       // Step 1: Make initial request
       console.log(`[X402] Initial request to ${url}`);

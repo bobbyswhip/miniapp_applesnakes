@@ -7,91 +7,64 @@ import { usePredictionMarket } from '@/hooks/usePredictionMarket';
 import { usePlaceBet } from '@/hooks/usePlaceBet';
 import { useClaim, useClaimable } from '@/hooks/useUserPositions';
 import { SELLOUT_LABELS } from '@/types/clankerdome';
+import { formatTimeRemaining, formatUSDC, formatOdds } from '@/lib/prediction-market-utils';
 
 interface PredictionMarketPanelProps {
   marketId: string;
+  warId?: string;
   onClose?: () => void;
 }
 
-export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPanelProps) {
+export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMarketPanelProps) {
   const { address, isConnected } = useAccount();
   const [selectedOutcome, setSelectedOutcome] = useState<number | null>(null);
   const [selectedSide, setSelectedSide] = useState<'yes' | 'no'>('yes');
   const [amount, setAmount] = useState('');
   const [txStatus, setTxStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
-  const [timeLeft, setTimeLeft] = useState('');
+  const [timeLeftDisplay, setTimeLeftDisplay] = useState('');
 
   const {
     market,
-    activity,
-    loading,
-    error,
-    refresh,
-    isActive,
-    isResolved,
-    totalPool,
-    totalBets,
-    uniqueBettors,
     outcomes,
-    resolvedOutcome,
-    timeRemaining,
-  } = usePredictionMarket(marketId, {
-    walletAddress: address,
-    includeActivity: true,
-    autoRefresh: true,
-    refreshInterval: 5000,
-  });
+    marketLoading,
+    marketError,
+    positions,
+    canBet,
+    getTimeRemaining,
+    refreshAll,
+    handleBet,
+    betLoading,
+    betError,
+    clearErrors,
+  } = usePredictionMarket(marketId, { warId, autoRefresh: true });
 
-  const { placeBet, loading: betting, error: betError, clearError } = usePlaceBet();
   const { claim, loading: claiming, error: claimError } = useClaim();
-  const { claims: claimablePositions, totalClaimable, refresh: refreshClaimable } = useClaimable(address || null);
+  const { claims: claimablePositions, refresh: refreshClaimable } = useClaimable(address || null);
 
   // Live countdown
   useEffect(() => {
-    if (!timeRemaining || timeRemaining <= 0) {
-      setTimeLeft('Ended');
-      return;
-    }
-
     const updateTime = () => {
-      const remaining = Math.max(0, timeRemaining * 1000);
-      if (remaining <= 0) {
-        setTimeLeft('Ended');
-        return;
-      }
-
-      const hours = Math.floor(remaining / (1000 * 60 * 60));
-      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-
-      if (hours > 0) setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
-      else if (minutes > 0) setTimeLeft(`${minutes}m ${seconds}s`);
-      else setTimeLeft(`${seconds}s`);
+      const remaining = getTimeRemaining();
+      setTimeLeftDisplay(formatTimeRemaining(remaining));
     };
 
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
-  }, [timeRemaining]);
+  }, [getTimeRemaining]);
 
   const handlePlaceBet = async () => {
     if (selectedOutcome === null || !amount || !marketId) return;
 
     setTxStatus('pending');
-    clearError();
+    clearErrors();
 
-    const result = await placeBet({
-      marketId,
-      outcomeIndex: selectedOutcome,
-      side: selectedSide,
-      amountUsdc: parseFloat(amount),
-    });
+    const result = await handleBet(selectedOutcome, selectedSide, parseFloat(amount));
 
-    if (result) {
+    if (result?.success) {
       setTxStatus('success');
       setAmount('');
       setSelectedOutcome(null);
-      refresh();
       setTimeout(() => setTxStatus('idle'), 3000);
     } else {
       setTxStatus('error');
@@ -106,7 +79,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
 
     if (result) {
       setTxStatus('success');
-      refresh();
+      refreshAll();
       refreshClaimable();
       setTimeout(() => setTxStatus('idle'), 3000);
     } else {
@@ -115,7 +88,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
   };
 
   // Get selected outcome data
-  const selectedOutcomeData = outcomes.find(o => o.outcomeIndex === selectedOutcome);
+  const selectedOutcomeData = outcomes.find(o => o.index === selectedOutcome);
   const potentialPayout = selectedOutcomeData && amount
     ? parseFloat(amount) * (selectedSide === 'yes'
         ? selectedOutcomeData.yesOdds
@@ -126,7 +99,12 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
   const marketClaimable = claimablePositions.filter((c: { marketId: string }) => c.marketId === marketId);
   const hasClaimable = marketClaimable.length > 0;
 
-  if (loading) {
+  // Derived values
+  const isActive = market?.isActive && market?.status === 'active';
+  const isResolved = market?.status === 'resolved';
+  const totalPool = market?.totalPool ?? 0;
+
+  if (marketLoading) {
     return (
       <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
         <div className="animate-pulse space-y-4">
@@ -138,10 +116,10 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
     );
   }
 
-  if (error || !market) {
+  if (marketError || !market) {
     return (
       <div className="bg-gray-900 rounded-2xl border border-red-500/50 p-6">
-        <p className="text-red-400">{error || 'Failed to load market'}</p>
+        <p className="text-red-400">{marketError || 'Failed to load market'}</p>
         {onClose && (
           <button onClick={onClose} className="mt-4 text-cyan-400 hover:underline">
             ← Back
@@ -151,7 +129,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
     );
   }
 
-  const title = market.market.title || 'Prediction Market';
+  const title = market.title || 'Prediction Market';
 
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-700 overflow-hidden">
@@ -165,8 +143,8 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
               </button>
             )}
             <h2 className="text-2xl font-bold text-white">{title}</h2>
-            {market.market.description && (
-              <p className="text-gray-400 mt-1">{market.market.description}</p>
+            {market.description && (
+              <p className="text-gray-400 mt-1">{market.description}</p>
             )}
           </div>
           <div className="text-right">
@@ -181,24 +159,16 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="text-center">
             <p className="text-gray-400 text-sm">Total Pool</p>
-            <p className="text-xl font-bold text-green-400">${totalPool.toLocaleString()}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-gray-400 text-sm">Total Bets</p>
-            <p className="text-xl font-bold text-white">{totalBets}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-gray-400 text-sm">Bettors</p>
-            <p className="text-xl font-bold text-white">{uniqueBettors}</p>
+            <p className="text-xl font-bold text-green-400">{formatUSDC(totalPool)}</p>
           </div>
           <div className="text-center">
             <p className="text-gray-400 text-sm">Time Left</p>
             <p className={`text-xl font-bold font-mono ${
-              timeLeft === 'Ended' ? 'text-red-400' : 'text-cyan-400'
-            }`}>{timeLeft}</p>
+              timeLeftDisplay === 'Ended' ? 'text-red-400' : 'text-cyan-400'
+            }`}>{timeLeftDisplay}</p>
           </div>
         </div>
       </div>
@@ -208,12 +178,12 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
         <h3 className="text-lg font-semibold text-white mb-4">Outcomes</h3>
         <div className="space-y-4">
           {outcomes.map((outcome) => {
-            const isWinner = isResolved && outcome.outcomeIndex === resolvedOutcome;
-            const isSelected = selectedOutcome === outcome.outcomeIndex;
+            const isWinner = isResolved && outcome.index === market.resolvedOutcome;
+            const isSelected = selectedOutcome === outcome.index;
 
             return (
               <div
-                key={outcome.outcomeIndex}
+                key={outcome.index}
                 className={`rounded-xl border-2 transition-all overflow-hidden ${
                   isWinner
                     ? 'border-green-500 bg-green-500/10'
@@ -229,25 +199,25 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                       <span className={`text-lg font-medium ${
                         isWinner ? 'text-green-400' : 'text-white'
                       }`}>
-                        {outcome.label || SELLOUT_LABELS[outcome.outcomeIndex]}
+                        {outcome.label || SELLOUT_LABELS[outcome.index] || `Outcome ${outcome.index}`}
                       </span>
                       {isWinner && (
                         <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-sm">
-                          🏆 Winner
+                          Winner
                         </span>
                       )}
                     </div>
                     <span className="text-gray-400">
-                      ${outcome.totalPool.toFixed(2)} pool
+                      {formatUSDC(outcome.totalPool)} pool
                     </span>
                   </div>
 
                   {/* YES/NO Betting Options */}
-                  {isActive && (
+                  {canBet && (
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => {
-                          setSelectedOutcome(outcome.outcomeIndex);
+                          setSelectedOutcome(outcome.index);
                           setSelectedSide('yes');
                         }}
                         className={`p-4 rounded-lg border-2 transition-all ${
@@ -259,19 +229,21 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                         <div className="text-center">
                           <div className="text-2xl font-bold mb-1">YES</div>
                           <div className="text-sm opacity-80">
-                            {outcome.yesProbability.toFixed(1)}% chance
+                            {(outcome.yesProbability * 100).toFixed(1)}% chance
                           </div>
                           <div className="text-lg font-medium mt-1">
-                            {outcome.yesOdds.toFixed(2)}x odds
+                            {formatOdds(outcome.yesOdds)}
                           </div>
-                          <div className="text-xs opacity-60 mt-1">
-                            ${outcome.yesPool.toFixed(2)} pool
-                          </div>
+                          {outcome.yesPool !== undefined && (
+                            <div className="text-xs opacity-60 mt-1">
+                              {formatUSDC(outcome.yesPool)} pool
+                            </div>
+                          )}
                         </div>
                       </button>
                       <button
                         onClick={() => {
-                          setSelectedOutcome(outcome.outcomeIndex);
+                          setSelectedOutcome(outcome.index);
                           setSelectedSide('no');
                         }}
                         className={`p-4 rounded-lg border-2 transition-all ${
@@ -283,14 +255,16 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                         <div className="text-center">
                           <div className="text-2xl font-bold mb-1">NO</div>
                           <div className="text-sm opacity-80">
-                            {outcome.noProbability.toFixed(1)}% chance
+                            {(outcome.noProbability * 100).toFixed(1)}% chance
                           </div>
                           <div className="text-lg font-medium mt-1">
-                            {outcome.noOdds.toFixed(2)}x odds
+                            {formatOdds(outcome.noOdds)}
                           </div>
-                          <div className="text-xs opacity-60 mt-1">
-                            ${outcome.noPool.toFixed(2)} pool
-                          </div>
+                          {outcome.noPool !== undefined && (
+                            <div className="text-xs opacity-60 mt-1">
+                              {formatUSDC(outcome.noPool)} pool
+                            </div>
+                          )}
                         </div>
                       </button>
                     </div>
@@ -302,12 +276,12 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                       <div className={`p-3 rounded-lg text-center ${
                         isWinner ? 'bg-green-500/30 text-green-400' : 'bg-gray-700/50 text-gray-500'
                       }`}>
-                        YES: {outcome.yesProbability.toFixed(1)}%
+                        YES: {(outcome.yesProbability * 100).toFixed(1)}%
                       </div>
                       <div className={`p-3 rounded-lg text-center ${
                         !isWinner ? 'bg-red-500/30 text-red-400' : 'bg-gray-700/50 text-gray-500'
                       }`}>
-                        NO: {outcome.noProbability.toFixed(1)}%
+                        NO: {(outcome.noProbability * 100).toFixed(1)}%
                       </div>
                     </div>
                   )}
@@ -318,15 +292,44 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
         </div>
       </div>
 
+      {/* User Positions */}
+      {isConnected && positions.length > 0 && (
+        <div className="p-6 border-t border-gray-700">
+          <h3 className="text-lg font-semibold text-white mb-4">Your Positions</h3>
+          <div className="space-y-2">
+            {positions.map((pos, idx) => (
+              <div key={idx} className="p-3 bg-gray-800 rounded-lg flex justify-between items-center">
+                <div>
+                  <span className={`px-2 py-0.5 rounded text-sm mr-2 ${
+                    pos.side === 'yes' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {pos.side.toUpperCase()}
+                  </span>
+                  <span className="text-gray-300">
+                    {outcomes.find(o => o.index === pos.outcomeIndex)?.label || `Outcome ${pos.outcomeIndex}`}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="text-white font-medium">{pos.shares.toFixed(4)} shares</div>
+                  <div className={`text-sm ${pos.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {pos.profitLoss >= 0 ? '+' : ''}{formatUSDC(pos.profitLoss)} ({pos.profitLossPercent.toFixed(1)}%)
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Trading Panel */}
       {isConnected && (
         <div className="p-6 border-t border-gray-700 bg-gray-800/50">
           {/* Claimable Winnings */}
           {hasClaimable && (
             <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-xl">
-              <p className="text-green-400 font-medium mb-2">🎉 You have winnings to claim!</p>
+              <p className="text-green-400 font-medium mb-2">You have winnings to claim!</p>
               <div className="text-white mb-3">
-                Total claimable: ${marketClaimable.reduce((sum: number, c: { potentialPayout: number }) => sum + c.potentialPayout, 0).toFixed(2)}
+                Total claimable: {formatUSDC(marketClaimable.reduce((sum: number, c: { potentialPayout: number }) => sum + c.potentialPayout, 0))}
               </div>
               <button
                 onClick={handleClaim}
@@ -339,7 +342,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
           )}
 
           {/* Bet Form */}
-          {isActive && selectedOutcome !== null && (
+          {canBet && selectedOutcome !== null && (
             <div className="p-4 bg-gray-900 rounded-xl border border-blue-500/50">
               <div className="flex items-center gap-2 mb-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-bold ${
@@ -348,7 +351,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                   {selectedSide.toUpperCase()}
                 </span>
                 <span className="text-white font-medium">
-                  {SELLOUT_LABELS[selectedOutcome]}
+                  {outcomes.find(o => o.index === selectedOutcome)?.label || SELLOUT_LABELS[selectedOutcome] || `Outcome ${selectedOutcome}`}
                 </span>
               </div>
 
@@ -389,12 +392,12 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
                 <div className="mb-4 p-3 bg-gray-800 rounded-lg">
                   <div className="flex justify-between">
                     <span className="text-gray-400">Potential Payout</span>
-                    <span className="text-white font-bold">${potentialPayout.toFixed(2)}</span>
+                    <span className="text-white font-bold">{formatUSDC(potentialPayout)}</span>
                   </div>
                   <div className="flex justify-between text-sm mt-1">
                     <span className="text-gray-500">Odds</span>
                     <span className="text-gray-400">
-                      {selectedSide === 'yes' ? selectedOutcomeData?.yesOdds.toFixed(2) : selectedOutcomeData?.noOdds.toFixed(2)}x
+                      {formatOdds(selectedSide === 'yes' ? selectedOutcomeData?.yesOdds ?? 0 : selectedOutcomeData?.noOdds ?? 0)}
                     </span>
                   </div>
                 </div>
@@ -403,16 +406,16 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
               {/* Place Bet Button */}
               <button
                 onClick={handlePlaceBet}
-                disabled={betting || !amount || parseFloat(amount) < 1}
+                disabled={betLoading || !amount || parseFloat(amount) < 1}
                 className={`w-full py-4 font-bold text-lg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   selectedSide === 'yes'
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white'
                     : 'bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-400 hover:to-pink-400 text-white'
                 }`}
               >
-                {betting
+                {betLoading
                   ? 'Placing Bet...'
-                  : `Bet $${amount || '0'} ${selectedSide.toUpperCase()}`}
+                  : `Bet ${formatUSDC(parseFloat(amount) || 0)} ${selectedSide.toUpperCase()}`}
               </button>
             </div>
           )}
@@ -420,7 +423,7 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
           {/* Transaction Status */}
           {txStatus === 'success' && (
             <div className="mt-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-              <p className="text-green-400 text-sm">✓ Transaction successful!</p>
+              <p className="text-green-400 text-sm">Transaction successful!</p>
             </div>
           )}
           {(txStatus === 'error' || betError || claimError) && (
@@ -432,55 +435,9 @@ export function PredictionMarketPanel({ marketId, onClose }: PredictionMarketPan
       )}
 
       {/* Connect Wallet Prompt */}
-      {!isConnected && isActive && (
+      {!isConnected && canBet && (
         <div className="p-6 border-t border-gray-700 bg-gray-800/50 text-center">
           <p className="text-gray-400 mb-4">Connect your wallet to place bets</p>
-        </div>
-      )}
-
-      {/* Activity Feed */}
-      {activity && activity.recentBets.length > 0 && (
-        <div className="p-6 border-t border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
-
-          {/* Momentum Indicator */}
-          {activity.momentum && (
-            <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Market Momentum</span>
-                <span className={`font-medium ${
-                  activity.momentum.trend === 'bullish' ? 'text-green-400' :
-                  activity.momentum.trend === 'bearish' ? 'text-red-400' :
-                  'text-gray-400'
-                }`}>
-                  {activity.momentum.trend === 'bullish' ? '📈' :
-                   activity.momentum.trend === 'bearish' ? '📉' : '➡️'}
-                  {' '}{activity.momentum.yesPercent.toFixed(0)}% YES / {activity.momentum.noPercent.toFixed(0)}% NO
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Recent Bets */}
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {activity.recentBets.slice(0, 10).map((bet) => (
-              <div
-                key={bet.id}
-                className={`p-2 rounded-lg flex justify-between items-center ${
-                  bet.side === 'yes' ? 'bg-green-500/10' : 'bg-red-500/10'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>{bet.sideEmoji}</span>
-                  <span className="text-gray-300">{bet.wallet}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-white font-medium">{bet.formattedAmount}</span>
-                  <span className="text-gray-500 text-sm ml-2">{bet.timeAgo}</span>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

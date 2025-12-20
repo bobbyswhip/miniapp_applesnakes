@@ -9,6 +9,7 @@ export interface OpenSeaListing {
   currency: string;
   seller: string;
   orderHash: string;
+  protocolAddress: string;  // Seaport contract address for fulfillment
   imageUrl: string;
   name: string;
   openseaUrl: string;

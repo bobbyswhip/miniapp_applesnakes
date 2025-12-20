@@ -1507,7 +1507,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   NFT Hub
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
-                  Buy or wrap your NFTs
+                  {buyOnly ? 'Buy an NFT instantly' : 'Buy or wrap your NFTs'}
                 </div>
               </div>
             </div>

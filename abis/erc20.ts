@@ -1,82 +1,83 @@
 /**
  * Standard ERC20 Token ABI
+ * Modern format with stateMutability (Solidity 0.8+ compatible)
  * Includes common functions: balanceOf, transfer, approve, allowance, totalSupply
  */
 export const ERC20_ABI = [
   {
-    constant: true,
     inputs: [],
     name: 'name',
     outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [],
     name: 'symbol',
     outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [],
     name: 'decimals',
     outputs: [{ name: '', type: 'uint8' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [],
     name: 'totalSupply',
     outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ name: '_owner', type: 'address' }],
+    inputs: [{ name: 'account', type: 'address' }],
     name: 'balanceOf',
-    outputs: [{ name: 'balance', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: false,
     inputs: [
-      { name: '_to', type: 'address' },
-      { name: '_value', type: 'uint256' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
     ],
     name: 'transfer',
     outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: false,
     inputs: [
-      { name: '_from', type: 'address' },
-      { name: '_to', type: 'address' },
-      { name: '_value', type: 'uint256' },
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'value', type: 'uint256' },
     ],
     name: 'transferFrom',
     outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: false,
     inputs: [
-      { name: '_spender', type: 'address' },
-      { name: '_value', type: 'uint256' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
     ],
     name: 'approve',
     outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [
-      { name: '_owner', type: 'address' },
-      { name: '_spender', type: 'address' },
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
     ],
     name: 'allowance',
     outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
   {

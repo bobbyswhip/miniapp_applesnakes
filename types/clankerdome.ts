@@ -312,3 +312,151 @@ export interface ClankerdomeStats {
   totalRaisedUsdc: number;
   totalParticipants: number;
 }
+
+// ====================================
+// Sell Shares Types
+// ====================================
+
+// Sell request params
+export interface SellParams {
+  marketId: string;
+  outcomeIndex: number;
+  side: 'yes' | 'no';
+  sharesToSell: number;
+  walletAddress: string;
+}
+
+// Sell response
+export interface SellResponse {
+  success: boolean;
+  message: string;
+  sale: {
+    marketId: string;
+    outcomeIndex: number;
+    side: 'yes' | 'no';
+    sharesSold: number;
+    usdcReturned: number;
+    price: number;
+    txHash: string;
+    txIdentifier: string;
+  };
+  remainingPosition: {
+    shares: number;
+    totalCost: number;
+    averagePrice: number;
+  };
+}
+
+// Sell error response
+export interface SellErrorResponse {
+  success: false;
+  error: string;
+  code: 'COOLDOWN_ACTIVE' | 'TX_PENDING' | 'USDC_SEND_FAILED' | 'INSUFFICIENT_SHARES';
+  waitMs?: number;
+  pendingTxHash?: string;
+}
+
+// Sell status check response
+export interface SellStatusResponse {
+  success: boolean;
+  wallet: string;
+  status: {
+    cooldownActive: boolean;
+    cooldownWaitMs: number;
+    pendingTx: boolean;
+    pendingTxHash?: string;
+  };
+  positions: Array<{
+    marketId: string;
+    outcomeIndex: number;
+    side: 'yes' | 'no';
+    shares: number;
+    totalCost: number;
+    averagePrice: number;
+    currentPrice: number;
+    estimatedValue: number;
+    canSell: boolean;
+  }>;
+  minSellValue: number;
+}
+
+// ====================================
+// Transaction History Types
+// ====================================
+
+// Transaction action types
+export type TransactionAction = 'buy' | 'sell' | 'seed' | 'claim' | 'refund';
+
+// Single transaction record
+export interface PredictionTransaction {
+  id: number;
+  marketId: string;
+  outcomeIndex: number;
+  wallet: string;
+  side: 'yes' | 'no';
+  action: TransactionAction;
+  shares: number;
+  amount: number;
+  price: number;
+  txIdentifier: string;
+  timestamp: number;
+  date: string;
+}
+
+// Transaction history response
+export interface TransactionHistoryResponse {
+  success: boolean;
+  query: {
+    wallet?: string;
+    marketId?: string;
+    limit: number;
+    action?: TransactionAction;
+  };
+  stats: {
+    totalTransactions: number;
+    totalBuys: number;
+    totalSells: number;
+    totalBuyVolume: number;
+    totalSellVolume: number;
+  };
+  transactions: PredictionTransaction[];
+  markets: Record<string, {
+    id: string;
+    title: string;
+    marketType: string;
+    status: string;
+  }>;
+}
+
+// ====================================
+// Market Data Types (for betting UI)
+// ====================================
+
+// Market summary for betting
+export interface BettingMarketSummary {
+  success: boolean;
+  market: {
+    id: string;
+    title: string;
+    status: MarketStatus;
+    endsAt: number;
+    isActive: boolean;
+    totalPool: number;
+    marketType: string;
+  };
+  outcomes: Array<{
+    index: number;
+    label: string;
+    yesOdds: number;
+    noOdds: number;
+    yesProbability: number;
+    noProbability: number;
+    totalPool: number;
+  }>;
+  payment: {
+    minAmount: number;
+    maxAmount: number;
+    currency: string;
+    network: string;
+  };
+}

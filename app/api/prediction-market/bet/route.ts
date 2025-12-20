@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// Prediction Markets API
 const API_BASE_URL = 'https://api.applesnakes.com';
 
 export async function POST(request: NextRequest) {

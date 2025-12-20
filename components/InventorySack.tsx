@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, useReadContract, useBalance, usePublicClient, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { base } from 'wagmi/chains';
-import { formatEther, formatUnits } from 'viem';
-import { getContracts, getNFTMetadataUrl, getNFTImageUrl, QUOTER_ADDRESS, QUOTER_ABI, TOKEN_PAIRS, getDefaultPair, TokenPairConfig, ETH_ADDRESS, WASS_TOKEN_ADDRESS, getAllTokenAddresses } from '@/config';
+import { formatEther, formatUnits, keccak256, encodeAbiParameters } from 'viem';
+import { getContracts, getNFTMetadataUrl, getNFTImageUrl, QUOTER_ADDRESS, QUOTER_ABI, TOKEN_PAIRS, getDefaultPair, TokenPairConfig, ETH_ADDRESS, WASS_TOKEN_ADDRESS, getAllTokenAddresses, HOOK_ADDRESS, WASS_PAIR_HOOK_ADDRESS } from '@/config';
 import { useMultipleTokenInfo } from '@/hooks/useTokenInfo';
+import { useLaunchedTokens, LaunchedToken } from '@/hooks/useLaunchedTokens';
 import { useNFTContext } from '@/contexts/NFTContext';
 import { useInventory, InventoryTab } from '@/contexts/InventoryContext';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
@@ -22,13 +23,69 @@ interface TxOverlay {
 import { useBatchTransaction } from '@/hooks/useBatchTransaction';
 import { UserNFT, NFTType } from '@/hooks/useUserNFTs';
 import { useOpenSeaListings, OpenSeaListing } from '@/hooks/useOpenSeaListings';
+import { useOpenSeaBuy } from '@/hooks/useOpenSeaBuy';
 import { useWTokensNFTsCache } from '@/hooks/useWTokensNFTsCache';
 import { parseEther } from 'viem';
 import { SwapWrapModal } from './SwapWrapModal';
 import { ChartModal } from './ChartModal';
-import { VerifiedTokenLauncher } from './VerifiedTokenLauncher';
-import { Clankerdome } from './Clankerdome';
+import Link from 'next/link';
+import { TokenWars } from './TokenWars';
+import { ListingModal } from './ListingModal';
+import { TraitSwapper } from './TraitSwapper';
+import { useBuyWithWass, useBuyWithEth, useQuoteEthForListing, useWassBalance, useWassAllowance, useApproveWass } from '@/hooks/useMarketplace';
 import { usePoolTrades, formatRelativeTime, truncateAddress } from '@/hooks/usePoolTrades';
+import { useBatchIdentities } from '@/hooks/useBatchIdentities';
+import {
+  useItemsWithBalances,
+  useBuyPresale,
+  useBuyPresaleWithEth,
+  useBuyFromCurve,
+  useBuyFromCurveWithEth,
+  useSellToCurve,
+  useBuyQuote,
+  useSellQuote,
+  useCurveInfo,
+  useWassAllowanceForItems,
+} from '@/hooks/useBondedItems';
+import { useItemBridge } from '@/hooks/useItemBridge';
+import { TokenPhase, BondedItem, formatWass, parseWass } from '@/types/bonded-items';
+
+// LOCAL price formatter - DIRECT MATH, no library dependencies
+// Handles both 18-decimal (presale) and 36-decimal (bonding curve) prices
+function formatItemPrice(price: bigint | number | string | undefined, decimals: number = 2): string {
+  if (price === undefined || price === null) return '0.00';
+
+  // Convert to string first to preserve precision
+  let priceStr: string;
+  if (typeof price === 'bigint') {
+    priceStr = price.toString();
+  } else if (typeof price === 'number') {
+    priceStr = Math.floor(price).toString();
+  } else {
+    priceStr = String(price).split('.')[0];
+  }
+
+  // Detect scaling: bonding curve prices have 36 digits (double-scaled by 1e36)
+  // Presale prices have ~18 digits (scaled by 1e18)
+  // If length > 30, it's a bonding curve price - divide by 1e36
+  // Otherwise, divide by 1e18
+  const PRESALE_DECIMALS = 18;
+  const CURVE_DECIMALS = 36;
+  const weiDecimals = priceStr.length > 30 ? CURVE_DECIMALS : PRESALE_DECIMALS;
+
+  // Pad with leading zeros if needed
+  while (priceStr.length <= weiDecimals) {
+    priceStr = '0' + priceStr;
+  }
+
+  // Insert decimal point at the right position
+  const integerPart = priceStr.slice(0, -weiDecimals) || '0';
+  const decimalPart = priceStr.slice(-weiDecimals);
+
+  // Combine and parse
+  const result = parseFloat(`${integerPart}.${decimalPart}`);
+  return result.toFixed(decimals);
+}
 
 // Extended NFT type to include staking status
 interface InventoryNFT extends UserNFT {
@@ -55,8 +112,58 @@ const getLocalNFTType = (tokenId: number, name: string): 'snake' | 'egg' | 'huma
 type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'price-desc';
 type FilterType = 'all' | 'human' | 'snake' | 'egg';
 type TradingView = 'swap' | 'launch';
-type LaunchTab = 'instant' | 'clankerdome';
 type ExchangeSubTab = 'pool' | 'wass';
+
+// Unified listing type for combining OpenSea (ETH) and wASS marketplace listings
+type UnifiedListing = {
+  type: 'opensea' | 'wass';
+  tokenId: number;
+  name: string;
+  imageUrl: string;
+  seller: string;
+  priceRaw: string; // Original price in native currency
+  priceUsd: number; // Calculated USD value for sorting
+  nftType: 'human' | 'snake' | 'egg';
+  // OpenSea specific fields
+  orderHash?: string;
+  protocolAddress?: string;
+  openseaUrl?: string;
+  priceWei?: string;
+  // wASS marketplace specific fields
+  collection?: string;
+  active?: boolean;
+};
+
+// Extended pair type that combines static TOKEN_PAIRS with Token Wars launched tokens
+interface ExtendedTokenPair extends TokenPairConfig {
+  // Token Wars specific metadata (only present for launched tokens)
+  tokenWarsData?: {
+    name: string;
+    symbol: string;
+    imageUrl: string | null;
+    totalRaisedUsdc: number;
+    participantCount: number;
+    launchedAt: number;
+    dex: 'v4' | 'aerodrome' | 'hydrex';
+    pairType: 'eth' | 'wass';
+    dexScreenerUrl: string | null;
+    basescanUrl: string | null;
+    warId: string;
+    poolAddress?: string; // Original pool address (for Aerodrome/Hydrex swaps)
+  };
+  // Flag to identify source
+  isTokenWars?: boolean;
+}
+
+// Helper to convert IPFS URLs to HTTP gateway URLs
+function getImageUrlFromIPFS(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('ipfs://')) {
+    const hash = url.replace('ipfs://', '');
+    return `https://ipfs.io/ipfs/${hash}`;
+  }
+  return url;
+}
 
 export function InventorySack() {
   const router = useRouter();
@@ -70,11 +177,19 @@ export function InventorySack() {
 
   // New OpenSea-style state
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [sortBy, setSortBy] = useState<SortOption>('price-asc');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [showFilters, setShowFilters] = useState(true);
   const [gridSize, setGridSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [showBuyModal, setShowBuyModal] = useState(false);
+
+  // Listing Modal state (for marketplace listing)
+  const [selectedNFTForListing, setSelectedNFTForListing] = useState<InventoryNFT | null>(null);
+  const [showListingModal, setShowListingModal] = useState(false);
+
+  // Trait Swapper Modal state (for editing NFT traits)
+  const [selectedNFTForTraits, setSelectedNFTForTraits] = useState<InventoryNFT | null>(null);
+  const [showTraitSwapper, setShowTraitSwapper] = useState(false);
 
   const { isOpen, setIsOpen, initialTab, clearInitialTab, openBreed, setShowBreed } = useInventory();
   const { address: userAddress, isConnected, isReconnecting } = useAccount();
@@ -90,10 +205,449 @@ export function InventorySack() {
   const publicClient = usePublicClient({ chainId: base.id });
 
   // OpenSea listings for marketplace tab
-  const { listings: openSeaListings, isLoading: listingsLoading, floorPrice, totalListings, refetch: refetchListings } = useOpenSeaListings(100);
+  const { listings: openSeaListings, isLoading: listingsLoading, floorPrice, refetch: refetchListings } = useOpenSeaListings(100);
+
+  // Our marketplace listings (wASS marketplace)
+  const [marketplaceListings, setMarketplaceListings] = useState<Array<{
+    collection: string;
+    tokenId: string;
+    seller: string;
+    price: string;
+    priceFormatted: string;
+    active: boolean;
+    name?: string;
+    imageUrl?: string;
+    nftType?: string;
+  }>>([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [ethPerWass, setEthPerWass] = useState<number | null>(null);
+
+  // Fetch ETH/wASS exchange rate from V4 quoter
+  const fetchEthExchangeRate = useCallback(async () => {
+    if (!publicClient || !contracts) return;
+
+    try {
+      const probeAmount = parseEther('0.0001');
+
+      // Get pool configuration from NFT contract
+      const [poolIdRaw, hookAddress] = await Promise.all([
+        publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'poolIdRaw',
+          args: [],
+        }) as Promise<`0x${string}`>,
+        publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'hook',
+          args: [],
+        }) as Promise<`0x${string}`>,
+      ]);
+
+      // Get the full PoolKey from the hook contract
+      const poolKey = await publicClient.readContract({
+        address: hookAddress,
+        abi: [
+          {
+            inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+            name: 'getPoolKey',
+            outputs: [
+              {
+                components: [
+                  { internalType: 'address', name: 'currency0', type: 'address' },
+                  { internalType: 'address', name: 'currency1', type: 'address' },
+                  { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                  { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                  { internalType: 'address', name: 'hooks', type: 'address' },
+                ],
+                internalType: 'tuple',
+                name: '',
+                type: 'tuple',
+              },
+            ],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ],
+        functionName: 'getPoolKey',
+        args: [poolIdRaw],
+      }) as unknown as {
+        currency0: `0x${string}`;
+        currency1: `0x${string}`;
+        fee: number;
+        tickSpacing: number;
+        hooks: `0x${string}`;
+      };
+
+      // Get quote for probe amount (ETH -> wASS)
+      const result = await publicClient.simulateContract({
+        address: QUOTER_ADDRESS,
+        abi: QUOTER_ABI,
+        functionName: 'quoteExactInputSingle',
+        args: [
+          {
+            poolKey: poolKey,
+            zeroForOne: true,
+            exactAmount: BigInt(probeAmount.toString()),
+            hookData: '0x',
+          },
+        ],
+      });
+
+      const [amountOut] = result.result as [bigint, bigint];
+      const tokensForProbe = parseFloat(formatUnits(amountOut, 18));
+      const rate = 0.0001 / tokensForProbe;
+      setEthPerWass(rate);
+      console.log(`📈 ETH/wASS rate: ${rate.toFixed(8)} ETH per wASS`);
+    } catch (error) {
+      console.error('Failed to fetch ETH exchange rate:', error);
+    }
+  }, [publicClient, contracts]);
+
+  const fetchMarketplaceListings = useCallback(async () => {
+    setMarketplaceLoading(true);
+    try {
+      const response = await fetch('/api/marketplace/listings');
+      if (response.ok) {
+        const data = await response.json();
+        setMarketplaceListings(data.listings || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch marketplace listings:', err);
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  }, []);
+
+  // V4 Quoter: Calculate ETH needed for a specific wASS amount
+  const quoteEthForWassAmount = useCallback(async (wassAmount: bigint): Promise<{ ethNeeded: string; minWassOut: bigint }> => {
+    if (!publicClient) {
+      throw new Error('Public client not available');
+    }
+
+    try {
+      // Use a probe amount to get current price ratio
+      const probeAmount = parseEther('0.0001');
+
+      // Step 1: Get pool configuration from NFT contract
+      const [poolIdRaw, hookAddress] = await Promise.all([
+        publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'poolIdRaw',
+          args: [],
+        }) as Promise<`0x${string}`>,
+        publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'hook',
+          args: [],
+        }) as Promise<`0x${string}`>,
+      ]);
+
+      // Step 2: Get the full PoolKey from the hook contract
+      const poolKey = await publicClient.readContract({
+        address: hookAddress,
+        abi: [
+          {
+            inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+            name: 'getPoolKey',
+            outputs: [
+              {
+                components: [
+                  { internalType: 'address', name: 'currency0', type: 'address' },
+                  { internalType: 'address', name: 'currency1', type: 'address' },
+                  { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                  { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                  { internalType: 'address', name: 'hooks', type: 'address' },
+                ],
+                internalType: 'tuple',
+                name: '',
+                type: 'tuple',
+              },
+            ],
+            stateMutability: 'view',
+            type: 'function',
+          },
+        ],
+        functionName: 'getPoolKey',
+        args: [poolIdRaw],
+      }) as unknown as {
+        currency0: `0x${string}`;
+        currency1: `0x${string}`;
+        fee: number;
+        tickSpacing: number;
+        hooks: `0x${string}`;
+      };
+
+      // Step 3: Get quote for probe amount (ETH -> wASS)
+      const result = await publicClient.simulateContract({
+        address: QUOTER_ADDRESS,
+        abi: QUOTER_ABI,
+        functionName: 'quoteExactInputSingle',
+        args: [
+          {
+            poolKey: poolKey,
+            zeroForOne: true, // ETH -> Token
+            exactAmount: BigInt(probeAmount.toString()),
+            hookData: '0x',
+          },
+        ],
+      });
+
+      // Extract token amount from quote
+      const [amountOut] = result.result as [bigint, bigint];
+      const tokensForProbe = parseFloat(formatUnits(amountOut, 18));
+
+      // Calculate ETH per wASS ratio
+      const ethPerWass = 0.0001 / tokensForProbe;
+
+      // Calculate ETH needed with 10% buffer for slippage
+      const wassAmountFloat = parseFloat(formatUnits(wassAmount, 18));
+      const ethNeeded = ethPerWass * wassAmountFloat * 1.10;
+
+      // Calculate minWassOut (5% slippage tolerance)
+      const minWassOut = (wassAmount * 95n) / 100n;
+
+      console.log(`💰 V4 Quote for ${wassAmountFloat.toFixed(4)} wASS:`);
+      console.log(`  Probe: 0.0001 ETH → ${tokensForProbe.toFixed(4)} wASS`);
+      console.log(`  Ratio: ${ethPerWass.toFixed(8)} ETH per wASS`);
+      console.log(`  ETH needed (with 10% buffer): ${ethNeeded.toFixed(8)} ETH`);
+
+      return { ethNeeded: ethNeeded.toFixed(8), minWassOut };
+    } catch (error) {
+      console.error('Failed to quote ETH for wASS:', error);
+      throw error;
+    }
+  }, [publicClient, contracts]);
+
+  // Fetch marketplace listings when listings tab is active
+  useEffect(() => {
+    if (isOpen && activeTab === 'listings') {
+      fetchMarketplaceListings();
+      fetchEthExchangeRate();
+    }
+  }, [isOpen, activeTab, fetchMarketplaceListings, fetchEthExchangeRate]);
+
+  // Combined listings sorted by USD value
+  const unifiedListings = useMemo((): UnifiedListing[] => {
+    // Get current prices from window globals (set by Navigation.tsx)
+    const ethPriceUsd = typeof window !== 'undefined' ? (window as unknown as { __ETH_PRICE_USD__?: number }).__ETH_PRICE_USD__ || 0 : 0;
+    const wassPriceUsd = typeof window !== 'undefined' ? (window as unknown as { __TOKEN_PRICE_USD__?: number }).__TOKEN_PRICE_USD__ || 0 : 0;
+
+    // Convert OpenSea listings to unified format
+    const openseaUnified: UnifiedListing[] = openSeaListings.map(listing => ({
+      type: 'opensea' as const,
+      tokenId: listing.tokenId,
+      name: listing.name,
+      imageUrl: listing.imageUrl,
+      seller: listing.seller,
+      priceRaw: listing.price,
+      priceUsd: parseFloat(listing.price) * ethPriceUsd,
+      nftType: getLocalNFTType(listing.tokenId, listing.name),
+      orderHash: listing.orderHash,
+      protocolAddress: listing.protocolAddress,
+      openseaUrl: listing.openseaUrl,
+      priceWei: listing.priceWei,
+    }));
+
+    // Convert wASS marketplace listings to unified format
+    const wassUnified: UnifiedListing[] = marketplaceListings.map(listing => ({
+      type: 'wass' as const,
+      tokenId: parseInt(listing.tokenId),
+      name: listing.name || `AppleSnake #${listing.tokenId}`,
+      imageUrl: listing.imageUrl || getNFTImageUrl(parseInt(listing.tokenId)),
+      seller: listing.seller,
+      priceRaw: listing.priceFormatted,
+      priceUsd: parseFloat(listing.priceFormatted) * wassPriceUsd,
+      nftType: (listing.nftType as 'human' | 'snake' | 'egg') || getLocalNFTType(parseInt(listing.tokenId), listing.name || ''),
+      collection: listing.collection,
+      active: listing.active,
+    }));
+
+    // Combine both
+    return [...openseaUnified, ...wassUnified];
+  }, [openSeaListings, marketplaceListings]);
+
+  // Extract unique seller addresses from all listings for Basename resolution
+  const sellerAddresses = useMemo(() => {
+    return unifiedListings.map(listing => listing.seller);
+  }, [unifiedListings]);
+
+  // Batch fetch seller Basenames
+  const { getIdentity: getSellerIdentity } = useBatchIdentities(sellerAddresses);
+
+  // OpenSea buy functionality
+  const { buyListing, isLoading: isBuyingFromOpenSea, error: openSeaBuyError, clearError: clearOpenSeaBuyError } = useOpenSeaBuy();
+  const [buyingOrderHash, setBuyingOrderHash] = useState<string | null>(null);
+
+  // wASS Marketplace buy functionality
+  const { buyWithWass, isPending: isBuyingWithWass, isConfirming: isConfirmingWassBuy, isSuccess: wassBuySuccess, error: wassBuyError, reset: resetWassBuy } = useBuyWithWass();
+  const { buyWithEth, isPending: isBuyingWithEth, isConfirming: isConfirmingEthBuy, isSuccess: ethBuySuccess, error: ethBuyError, reset: resetEthBuy } = useBuyWithEth();
+  const { balance: wassBalance, balanceFormatted: wassBalanceFormatted, refetch: refetchWassBalance } = useWassBalance();
+  const { allowance: wassAllowance, refetch: refetchWassAllowance } = useWassAllowance();
+  const { approveWass, isPending: isApprovingWass, isConfirming: isConfirmingWassApproval, isSuccess: wassApprovalSuccess, error: wassApprovalError, reset: resetWassApproval } = useApproveWass();
+  const [buyingMarketplaceTokenId, setBuyingMarketplaceTokenId] = useState<string | null>(null);
 
   // wTokens pool NFTs for "Buy from Contract" option
   const { nfts: poolNFTs, isLoading: poolNFTsLoading } = useWTokensNFTsCache(false, false);
+
+  // BondedItems - ERC1155 items with presales + bonding curves
+  const { items: bondedItems, presaleItems, tradingItems, rareItems, ownedItems, stats: itemStats, isLoading: itemsLoading, refetch: refetchItems } = useItemsWithBalances();
+  const { buyPresaleWithWass, isPending: isPresaleBuying, isApproving: isPresaleApproving, reset: resetPresale } = useBuyPresale();
+  const { buyPresaleWithEth, isPending: isPresaleBuyingEth, reset: resetPresaleEth } = useBuyPresaleWithEth();
+  const { buyFromCurve, isPending: isCurveBuying, isApproving: isCurveApproving, reset: resetCurveBuy } = useBuyFromCurve();
+  const { buyFromCurveWithEth, isPending: isCurveBuyingEth, reset: resetCurveEth } = useBuyFromCurveWithEth();
+  const { sellToCurve, isPending: isCurveSelling, isApproving: isSellApproving, reset: resetCurveSell } = useSellToCurve();
+  const [selectedBondedItem, setSelectedBondedItem] = useState<(BondedItem & { userBalance: bigint }) | null>(null);
+  const [itemAction, setItemAction] = useState<'buy' | 'sell' | null>(null);
+  const [itemAmount, setItemAmount] = useState('1');
+  const [itemFilter, setItemFilter] = useState<'all' | 'presale' | 'trading' | 'owned'>('all');
+  const [itemSort, setItemSort] = useState<'price-asc' | 'price-desc' | 'volume-high'>('volume-high'); // Default: highest volume first
+  const [itemCategory, setItemCategory] = useState<string>('all'); // Category filter: all, shirt, pants, necklace, hat, etc.
+  const [itemPaymentMethod, setItemPaymentMethod] = useState<'wass' | 'eth'>('wass');
+
+  // Quote hooks for accurate bonding curve pricing
+  const quoteTokenId = selectedBondedItem?.tokenId ?? 0;
+  const quoteAmount = BigInt(parseInt(itemAmount) || 0);
+  const { quote: buyQuote } = useBuyQuote(quoteTokenId, quoteAmount);
+  const { quote: sellQuote } = useSellQuote(quoteTokenId, quoteAmount);
+
+  // Curve info for pool details (only for curve phase items)
+  const { curveInfo } = useCurveInfo(quoteTokenId);
+
+  // Item category definitions (detect from item name)
+  const ITEM_CATEGORIES = useMemo(() => [
+    { id: 'all', label: '🏠 All', match: () => true },
+    { id: 'shirt', label: '👕 Shirts', match: (name: string) => /shirt|top|tee|blouse/i.test(name) },
+    { id: 'pants', label: '👖 Pants', match: (name: string) => /pants|jeans|shorts|trousers/i.test(name) },
+    { id: 'hat', label: '🎩 Hats', match: (name: string) => /hat|cap|crown|helmet|headband/i.test(name) },
+    { id: 'necklace', label: '📿 Necklaces', match: (name: string) => /necklace|chain|pendant|collar/i.test(name) },
+    { id: 'glasses', label: '👓 Glasses', match: (name: string) => /glasses|shades|goggles|spectacles/i.test(name) },
+    { id: 'weapon', label: '⚔️ Weapons', match: (name: string) => /sword|staff|wand|axe|weapon|blade/i.test(name) },
+    { id: 'accessory', label: '💎 Accessories', match: (name: string) => /ring|bracelet|earring|accessory|badge/i.test(name) },
+  ], []);
+
+  // Get counts for each category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: bondedItems.length };
+    ITEM_CATEGORIES.slice(1).forEach(cat => {
+      counts[cat.id] = bondedItems.filter(item => cat.match(item.name || '')).length;
+    });
+    return counts;
+  }, [bondedItems, ITEM_CATEGORIES]);
+
+  // Normalize price for sorting - bonding curve prices are 1e36, presale are 1e18
+  const normalizePrice = useCallback((price: bigint): bigint => {
+    const priceStr = price.toString();
+    // Bonding curve prices have ~36 digits (1e36 scale), presale have ~18 digits (1e18 scale)
+    // Normalize to 1e18 scale for consistent sorting
+    if (priceStr.length > 30) {
+      return price / BigInt(1e18); // Scale down 1e36 to 1e18
+    }
+    return price;
+  }, []);
+
+  // Filtered and sorted items for display (excludes rare items - those are marketplace only)
+  const displayedItems = useMemo(() => {
+    // Step 1: Filter by phase (presale, trading, owned, all) - exclude rare items from trading tab
+    // Combine presale + trading for 'all' to show them mixed by price
+    let items = itemFilter === 'all' ? [...presaleItems, ...tradingItems]
+      : itemFilter === 'presale' ? presaleItems
+      : itemFilter === 'trading' ? tradingItems
+      : ownedItems.filter(item => item.phase !== 3); // Exclude rare from owned too
+
+    // Step 2: Filter by category
+    if (itemCategory !== 'all') {
+      const categoryDef = ITEM_CATEGORIES.find(c => c.id === itemCategory);
+      if (categoryDef) {
+        items = items.filter(item => categoryDef.match(item.name || ''));
+      }
+    }
+
+    // Step 3: Sort by price or volume
+    // Volume calculation:
+    // - Presale items: presaleSold * presalePrice (total sales * cost per item)
+    // - Bonding curve items: stats.totalVolume (from contract)
+    const getItemVolume = (item: typeof items[0]): bigint => {
+      if (item.phase === 2 && item.stats?.totalVolume) {
+        // Bonding curve: use totalVolume from stats
+        return item.stats.totalVolume;
+      }
+      // Presale: calculate volume as totalSales * totalCost
+      return (item.presaleSold || 0n) * (item.presalePrice || 0n);
+    };
+
+    return [...items].sort((a, b) => {
+      if (itemSort === 'volume-high') {
+        // Sort by volume: highest to lowest
+        const volumeA = getItemVolume(a);
+        const volumeB = getItemVolume(b);
+        return volumeB > volumeA ? 1 : volumeB < volumeA ? -1 : 0;
+      }
+      // Sort by price
+      const priceA = normalizePrice(a.currentPrice || 0n);
+      const priceB = normalizePrice(b.currentPrice || 0n);
+      if (itemSort === 'price-asc') {
+        return priceA < priceB ? -1 : priceA > priceB ? 1 : 0;
+      } else {
+        return priceB < priceA ? -1 : priceB > priceA ? 1 : 0;
+      }
+    });
+  }, [presaleItems, tradingItems, ownedItems, itemFilter, itemCategory, itemSort, ITEM_CATEGORIES, normalizePrice]);
+
+  // Close handler for item modal - resets all states and hook states
+  const closeItemModal = useCallback(() => {
+    setSelectedBondedItem(null);
+    setItemAction(null);
+    setItemAmount('1');
+    setItemPaymentMethod('wass');
+    // Reset all hook states to allow re-clicking buttons
+    resetPresale();
+    resetPresaleEth();
+    resetCurveBuy();
+    resetCurveEth();
+    resetCurveSell();
+  }, [resetPresale, resetPresaleEth, resetCurveBuy, resetCurveEth, resetCurveSell]);
+
+  // Item Bridge v1.02 - for depositing items to trait editor (with AUTO-FULFIL)
+  const {
+    isApproved: isBridgeApproved,
+    isLoading: isBridgePending,
+    error: bridgeError,
+    offChainBalance,
+    totalOffChainItems,
+    fulfilCooldown,
+    withdrawCooldown,
+    canBridge,
+    canFulfil,
+    canWithdraw,
+    approve: approveBridge,
+    bridgeIn, // Auto-handles: approval → deposit → fulfil
+    fulfilDeposits: fulfilBridge, // Manual fulfil if auto-fulfil fails
+    requestWithdraw,
+    loadOffChainBalance: refetchBridge,
+    reset: resetBridge,
+  } = useItemBridge();
+  // Map v1.02 state to v1.01 names for UI compatibility
+  const bridgedBalance = offChainBalance;
+  const totalBridgedItems = totalOffChainItems;
+  // Legacy flags for UI (simplified since bridgeIn now handles approval internally)
+  const isBridgeApproving = false; // Approval is handled inside bridgeIn
+  const isBridgingIn = isBridgePending;
+  const isFulfilling = false; // Fulfil is automatic now
+  const isWithdrawing = isBridgePending;
+  const [selectedForBridge, setSelectedForBridge] = useState<{ tokenId: number; amount: number }[]>([]);
+  const [bridgeAction, setBridgeAction] = useState<'in' | 'out' | null>(null);
+
+  // Compute total listings count aggregating all sources (OpenSea + Pool + wASS Marketplace)
+  const totalListingsCount = useMemo(() => {
+    const openSeaCount = openSeaListings.length;
+    const poolCount = poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0;
+    const wassMarketCount = marketplaceListings.length;
+    return openSeaCount + poolCount + wassMarketCount;
+  }, [openSeaListings.length, poolNFTs, marketplaceListings.length]);
 
   // Current pool address for trade history (updated by ChartModal when pair changes)
   const [currentPoolAddress, setCurrentPoolAddress] = useState<string | undefined>(undefined);
@@ -101,11 +655,17 @@ export function InventorySack() {
   // Selected pair ID for sidebar (controls ChartModal's selected pair)
   const [selectedPairId, setSelectedPairId] = useState<string>(getDefaultPair().id);
 
+  // Clicked token from TradingTerminal - used as fallback when pair not in combinedPairs yet
+  const [clickedToken, setClickedToken] = useState<LaunchedToken | null>(null);
+
   // Trading tab view mode - 'swap' for trading interface, 'launch' for token launcher
   const [tradingView, setTradingView] = useState<TradingView>('swap');
 
-  // Launch tab view - 'instant' for VerifiedTokenLauncher, 'clankerdome' for 24-hour presale parties
-  const [launchTab, setLaunchTab] = useState<LaunchTab>('instant');
+  // Fetch launched tokens from Token Wars for trading pairs
+  const { tokens: launchedTokens, loading: launchedTokensLoading } = useLaunchedTokens({
+    limit: 50,
+    refreshInterval: 60000, // Refresh every minute
+  });
 
   // Exchange tab sub-view - 'pool' for NFT ↔ Pool swap, 'wass' for NFT ↔ $wASS wrap/unwrap
   const [exchangeSubTab, setExchangeSubTab] = useState<ExchangeSubTab>('pool');
@@ -126,19 +686,221 @@ export function InventorySack() {
   const allTokenAddresses = useMemo(() => getAllTokenAddresses(), []);
   const { tokenInfos } = useMultipleTokenInfo(allTokenAddresses);
 
-  // Helper to get token symbol from address
+  // Helper function to compute Uniswap V4 pool ID from pool key parameters
+  // Pool ID = keccak256(abi.encode(currency0, currency1, fee, tickSpacing, hooks))
+  const computeV4PoolId = useCallback((
+    currency0: `0x${string}`,
+    currency1: `0x${string}`,
+    fee: number,
+    tickSpacing: number,
+    hooks: `0x${string}`
+  ): string => {
+    // Ensure currency0 < currency1 (V4 requirement)
+    const [sortedCurrency0, sortedCurrency1] = currency0.toLowerCase() < currency1.toLowerCase()
+      ? [currency0, currency1]
+      : [currency1, currency0];
+
+    const encoded = encodeAbiParameters(
+      [
+        { type: 'address', name: 'currency0' },
+        { type: 'address', name: 'currency1' },
+        { type: 'uint24', name: 'fee' },
+        { type: 'int24', name: 'tickSpacing' },
+        { type: 'address', name: 'hooks' },
+      ],
+      [sortedCurrency0, sortedCurrency1, fee, tickSpacing, hooks]
+    );
+    return keccak256(encoded);
+  }, []);
+
+  // Combine static TOKEN_PAIRS with dynamic Token Wars launched tokens
+  const combinedPairs: ExtendedTokenPair[] = useMemo(() => {
+    // Start with static TOKEN_PAIRS (converted to ExtendedTokenPair)
+    const staticPairs: ExtendedTokenPair[] = TOKEN_PAIRS.map(pair => ({
+      ...pair,
+      isTokenWars: false,
+    }));
+
+    // Convert Token Wars launched tokens to ExtendedTokenPair format
+    // Include V4, Aerodrome, and Hydrex tokens - each has different pool address handling
+    const tokenWarsPairs: ExtendedTokenPair[] = launchedTokens
+      .map((token): ExtendedTokenPair => {
+        const token0 = token.pair === 'wass' ? WASS_TOKEN_ADDRESS : ETH_ADDRESS;
+        const token1 = token.tokenAddress as `0x${string}`;
+
+        // V4 pools need computed pool ID, Aerodrome/Hydrex use poolAddress directly
+        let geckoPoolAddress: string;
+
+        // Token Wars V4 pool parameters depend on pair type:
+        // - ETH pairs: Use NO HOOK (0x0), as they're direct vanilla V4 pools
+        // - wASS pairs: Use WASS_PAIR_HOOK_ADDRESS, same as static wASS/TOKEN pairs
+        // Both use 0.3% fee (3000) and tickSpacing 60 to match static pairs
+        const isWassPair = token.pair === 'wass';
+        const hook: `0x${string}` = isWassPair
+          ? WASS_PAIR_HOOK_ADDRESS
+          : '0x0000000000000000000000000000000000000000';
+        const fee = 3000; // Token Wars V4 uses 0.3% fee (same as static pairs)
+        const tickSpacing = 60; // Standard tick spacing for 0.3% pools
+
+        if (token.dex === 'v4') {
+          // V4 Token Wars: Compute pool ID with correct parameters based on pair type
+          geckoPoolAddress = computeV4PoolId(token0, token1, fee, tickSpacing, hook);
+          console.log(`[TokenWars V4] Computed pool ID for ${token.symbol}:`, geckoPoolAddress, { fee, tickSpacing, hook, isWassPair });
+        } else {
+          // Aerodrome/Hydrex: Use the poolAddress directly from API
+          // GeckoTerminal can track these pools by their contract address
+          geckoPoolAddress = token.poolAddress;
+          console.log(`[TokenWars ${token.dex}] Using pool address for ${token.symbol}:`, geckoPoolAddress);
+        }
+
+        return {
+          id: `tw-${token.warId}`, // Unique ID prefix for Token Wars
+          token0,
+          token1,
+          hook,
+          fee,
+          tickSpacing,
+          geckoPoolAddress,
+          isDefault: false,
+          isTokenWars: true,
+          tokenWarsData: {
+            name: token.name,
+            symbol: token.symbol,
+            imageUrl: token.imageUrl,
+            totalRaisedUsdc: token.totalRaisedUsdc,
+            participantCount: token.participantCount,
+            launchedAt: token.launchedAt,
+            dex: token.dex,
+            pairType: token.pair,
+            dexScreenerUrl: token.dexScreenerUrl,
+            basescanUrl: token.basescanUrl,
+            warId: token.warId,
+            poolAddress: token.poolAddress, // Store original pool address for swaps
+          },
+        };
+      });
+
+    return [...staticPairs, ...tokenWarsPairs];
+  }, [launchedTokens, computeV4PoolId]);
+
+  // Get the currently selected pair data (for passing to ChartModal)
+  // Uses clickedToken as fallback when pair isn't in combinedPairs yet (timing issue)
+  const selectedPairData = useMemo((): ExtendedTokenPair | undefined => {
+    const pair = combinedPairs.find(pair => pair.id === selectedPairId);
+    if (selectedPairId?.startsWith('tw-') && pair) {
+      console.log(`[SelectedPair] Found Token Wars pair:`, {
+        id: pair.id,
+        isTokenWars: pair.isTokenWars,
+        geckoPoolAddress: pair.geckoPoolAddress,
+        tokenWarsData: pair.tokenWarsData,
+      });
+      return pair;
+    } else if (selectedPairId?.startsWith('tw-') && !pair && clickedToken) {
+      // FALLBACK: Create pair from clickedToken when not in combinedPairs yet
+      console.warn(`[SelectedPair] Token Wars pair NOT FOUND: ${selectedPairId}, using clickedToken fallback`);
+      const token0 = clickedToken.pair === 'wass' ? WASS_TOKEN_ADDRESS : ETH_ADDRESS;
+      const token1 = clickedToken.tokenAddress as `0x${string}`;
+
+      // Token Wars V4 pool parameters depend on pair type:
+      // - ETH pairs: Use NO HOOK, as they're direct vanilla V4 pools
+      // - wASS pairs: Use WASS_PAIR_HOOK_ADDRESS, same as static wASS/TOKEN pairs
+      const isWassPair = clickedToken.pair === 'wass';
+      const hook: `0x${string}` = isWassPair
+        ? WASS_PAIR_HOOK_ADDRESS
+        : '0x0000000000000000000000000000000000000000' as `0x${string}`;
+      const TW_FEE = 3000; // 0.3% fee (same as static pairs)
+      const TW_TICK_SPACING = 60; // Standard tick spacing for 0.3% pools
+
+      // Use poolAddress directly for Aerodrome/Hydrex (it's the LP contract address)
+      // For V4 Token Wars: compute pool ID with correct parameters
+      const geckoPoolAddress = clickedToken.dex === 'v4'
+        ? computeV4PoolId(token0, token1, TW_FEE, TW_TICK_SPACING, hook)
+        : clickedToken.poolAddress;
+
+      console.log(`[SelectedPair] Created fallback pair from clickedToken:`, {
+        symbol: clickedToken.symbol,
+        dex: clickedToken.dex,
+        poolAddress: clickedToken.poolAddress,
+        geckoPoolAddress,
+        fee: TW_FEE,
+        tickSpacing: TW_TICK_SPACING,
+        hook,
+        isWassPair,
+      });
+
+      const fallbackPair: ExtendedTokenPair = {
+        id: `tw-${clickedToken.warId}`,
+        token0,
+        token1,
+        hook,
+        fee: TW_FEE,
+        tickSpacing: TW_TICK_SPACING,
+        geckoPoolAddress,
+        isDefault: false,
+        isTokenWars: true,
+        tokenWarsData: {
+          name: clickedToken.name,
+          symbol: clickedToken.symbol,
+          imageUrl: clickedToken.imageUrl,
+          totalRaisedUsdc: clickedToken.totalRaisedUsdc,
+          participantCount: clickedToken.participantCount,
+          launchedAt: clickedToken.launchedAt,
+          dex: clickedToken.dex,
+          pairType: clickedToken.pair,
+          dexScreenerUrl: clickedToken.dexScreenerUrl,
+          basescanUrl: clickedToken.basescanUrl,
+          warId: clickedToken.warId,
+          poolAddress: clickedToken.poolAddress,
+        },
+      };
+      return fallbackPair;
+    }
+    return pair;
+  }, [combinedPairs, selectedPairId, clickedToken, computeV4PoolId]);
+
+  // Create a map of Token Wars token addresses to their image URLs
+  const tokenWarsImageMap = useMemo(() => {
+    const map = new Map<string, string>();
+    launchedTokens.forEach(token => {
+      if (token.imageUrl) {
+        const imageUrl = getImageUrlFromIPFS(token.imageUrl);
+        if (imageUrl) {
+          map.set(token.tokenAddress.toLowerCase(), imageUrl);
+        }
+      }
+    });
+    return map;
+  }, [launchedTokens]);
+
+  // Create a map of Token Wars token addresses to their symbols
+  const tokenWarsSymbolMap = useMemo(() => {
+    const map = new Map<string, string>();
+    launchedTokens.forEach(token => {
+      map.set(token.tokenAddress.toLowerCase(), token.symbol);
+    });
+    return map;
+  }, [launchedTokens]);
+
+  // Helper to get token symbol from address (with Token Wars support)
   const getTokenSymbol = useCallback((address: `0x${string}`): string => {
     if (address === ETH_ADDRESS) return 'ETH';
+    // Check Token Wars tokens first
+    const twSymbol = tokenWarsSymbolMap.get(address.toLowerCase());
+    if (twSymbol) return twSymbol;
+    // Fall back to token info from RPC
     const info = tokenInfos.get(address.toLowerCase());
     return info?.symbol || `${address.slice(0, 6)}...`;
-  }, [tokenInfos]);
+  }, [tokenInfos, tokenWarsSymbolMap]);
 
-  // Helper to get token image - returns image path or null if no known image
+  // Helper to get token image - returns image path or null if no known image (with Token Wars support)
   const getTokenImage = useCallback((address: `0x${string}`): string | null => {
     if (address === ETH_ADDRESS) return '/Images/Ether.png';
     if (address.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) return '/Images/Token.png';
+    // Check Token Wars tokens
+    const twImage = tokenWarsImageMap.get(address.toLowerCase());
+    if (twImage) return twImage;
     return null; // Unknown token, no image
-  }, []);
+  }, [tokenWarsImageMap]);
 
   // Helper to get display name for a pair (text only)
   const getPairDisplayName = useCallback((pair: TokenPairConfig): string => {
@@ -146,6 +908,22 @@ export function InventorySack() {
     const symbol1 = getTokenSymbol(pair.token1);
     return `${symbol0}/${symbol1}`;
   }, [getTokenSymbol]);
+
+  // Memoized additionalPairs for ChartModal to prevent unnecessary re-renders
+  // This prevents ChartModal from re-fetching price data when InventorySack re-renders
+  const chartModalAdditionalPairs = useMemo(() => {
+    return combinedPairs.filter(p => p.isTokenWars).map(p => ({
+      ...p,
+      tokenWarsData: p.tokenWarsData ? {
+        name: p.tokenWarsData.name,
+        symbol: p.tokenWarsData.symbol,
+        imageUrl: p.tokenWarsData.imageUrl,
+        dex: p.tokenWarsData.dex, // Pass DEX type for swap handling
+        poolAddress: p.tokenWarsData.poolAddress, // Pass pool address for Aerodrome/Hydrex
+        dexScreenerUrl: p.tokenWarsData.dexScreenerUrl, // Pass DEX screener URL
+      } : undefined,
+    }));
+  }, [combinedPairs]);
 
   // Track viewport width for responsive scaling
   useEffect(() => {
@@ -202,61 +980,107 @@ export function InventorySack() {
   }, []);
 
   // Fetch price changes for all pairs (24h) when on trading tab
+  // Now fetches for ALL combinedPairs (static + Token Wars) to avoid duplicate API calls in ChartModal
   useEffect(() => {
     if (activeTab !== 'trading') return;
 
     const fetchAllPairChanges = async () => {
       const changes = new Map<string, number>();
 
-      await Promise.all(
-        TOKEN_PAIRS.map(async (pair) => {
-          if (!pair.geckoPoolAddress) {
-            changes.set(pair.id, 0);
-            return;
-          }
+      // Batch pairs into groups of 3 to avoid rate limiting
+      const batchSize = 3;
+      const pairs = combinedPairs.filter(p => p.geckoPoolAddress);
 
-          try {
-            const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${pair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
-            const response = await fetch(url);
+      for (let i = 0; i < pairs.length; i += batchSize) {
+        const batch = pairs.slice(i, i + batchSize);
 
-            if (!response.ok) {
-              changes.set(pair.id, 0);
-              return;
-            }
+        await Promise.all(
+          batch.map(async (pair) => {
+            try {
+              // Use 'base' network for all pools (GeckoTerminal doesn't have separate DEX network IDs)
+              const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${pair.geckoPoolAddress}/ohlcv/hour?aggregate=1&limit=24&currency=usd`;
+              const response = await fetch(url);
 
-            const json = await response.json();
-            const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+              if (!response.ok) {
+                changes.set(pair.id, 0);
+                return;
+              }
 
-            if (ohlcvList.length >= 2) {
-              const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0;
-              const newestPrice = ohlcvList[0]?.[4] || 0;
-              if (oldestPrice > 0) {
-                const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
-                changes.set(pair.id, percentChange);
+              const json = await response.json();
+              const ohlcvList = json?.data?.attributes?.ohlcv_list || [];
+
+              if (ohlcvList.length >= 2) {
+                const oldestPrice = ohlcvList[ohlcvList.length - 1]?.[1] || 0;
+                const newestPrice = ohlcvList[0]?.[4] || 0;
+                if (oldestPrice > 0) {
+                  const percentChange = ((newestPrice - oldestPrice) / oldestPrice) * 100;
+                  changes.set(pair.id, percentChange);
+                } else {
+                  changes.set(pair.id, 0);
+                }
               } else {
                 changes.set(pair.id, 0);
               }
-            } else {
+            } catch {
               changes.set(pair.id, 0);
             }
-          } catch {
-            changes.set(pair.id, 0);
-          }
-        })
-      );
+          })
+        );
+
+        // Small delay between batches to avoid rate limiting
+        if (i + batchSize < pairs.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      // Also set 0 for pairs without geckoPoolAddress
+      combinedPairs.forEach(pair => {
+        if (!pair.geckoPoolAddress && !changes.has(pair.id)) {
+          changes.set(pair.id, 0);
+        }
+      });
 
       setAllPairChanges(changes);
     };
 
     fetchAllPairChanges();
-  }, [activeTab]);
+  }, [activeTab, combinedPairs]);
 
-  // Handle sidebar pair selection
-  const handleSidebarPairSelect = useCallback((pair: TokenPairConfig) => {
+  // Handle sidebar pair selection (supports both static and Token Wars pairs)
+  const handleSidebarPairSelect = useCallback((pair: ExtendedTokenPair) => {
     setSelectedPairId(pair.id);
     if (pair.geckoPoolAddress) {
       setCurrentPoolAddress(pair.geckoPoolAddress);
     }
+  }, []);
+
+  // Handle Trade button click from TradingTerminal (launched tokens list)
+  // Switches to swap view and selects the token's trading pair
+  const handleTradeToken = useCallback((token: LaunchedToken) => {
+    // Switch to swap view from launch view
+    setTradingView('swap');
+
+    // Select the pair for this token (Token Wars pairs have ID format: tw-{warId})
+    const pairId = `tw-${token.warId}`;
+    setSelectedPairId(pairId);
+
+    // Store the clicked token for fallback if it's not in combinedPairs yet
+    setClickedToken(token);
+
+    // Update pool address for trade history
+    if (token.poolAddress) {
+      setCurrentPoolAddress(token.poolAddress);
+    }
+
+    // Debug logging for token wars routing
+    console.log(`[TradeToken] Token clicked:`, {
+      symbol: token.symbol,
+      warId: token.warId,
+      pairId,
+      dex: token.dex,
+      poolAddress: token.poolAddress,
+      tokenAddress: token.tokenAddress,
+    });
   }, []);
 
   // Pool trades for transaction history in Trading tab
@@ -806,6 +1630,147 @@ export function InventorySack() {
     setShowBuyModal(true);
   };
 
+  // Handle buying an OpenSea listing directly
+  const handleBuyOpenSeaListing = async (listing: OpenSeaListing) => {
+    setBuyingOrderHash(listing.orderHash);
+    clearOpenSeaBuyError();
+
+    try {
+      const result = await buyListing(listing);
+
+      if (result.success) {
+        // Show success overlay
+        if (result.txHash) {
+          showTxOverlay(result.txHash as `0x${string}`, `Purchased ${listing.name}!`);
+          updateTxOverlay('success');
+        }
+        // Refresh listings after successful purchase
+        refetchListings();
+        refetchNFTs();
+      } else {
+        // Show error overlay
+        console.error('[OpenSeaBuy] Failed:', result.error);
+      }
+    } catch (err) {
+      console.error('[OpenSeaBuy] Error:', err);
+    } finally {
+      setBuyingOrderHash(null);
+    }
+  };
+
+  // Handle buying from our wASS marketplace
+  const handleBuyMarketplaceListing = async (listing: typeof marketplaceListings[0]) => {
+    setBuyingMarketplaceTokenId(listing.tokenId);
+    resetWassBuy();
+    resetEthBuy();
+    resetWassApproval();
+
+    try {
+      const priceWei = BigInt(listing.price);
+
+      // Check if user has enough wASS balance
+      if (wassBalance >= priceWei) {
+        // Check if allowance is sufficient
+        if (wassAllowance >= priceWei) {
+          // Buy directly with wASS
+          await buyWithWass(listing.collection as `0x${string}`, BigInt(listing.tokenId));
+        } else {
+          // Need to approve first - approve max amount
+          await approveWass();
+        }
+      } else {
+        // Insufficient wASS - use ETH instead via V4 swap
+        console.log('[MarketplaceBuy] Insufficient wASS, using ETH...');
+
+        try {
+          // Get ETH quote for the wASS price using V4 quoter
+          const { ethNeeded, minWassOut } = await quoteEthForWassAmount(priceWei);
+          console.log(`[MarketplaceBuy] ETH quote: ${ethNeeded} ETH for ${listing.priceFormatted} wASS`);
+
+          // Execute buyWithEth with quoted amount
+          // Hook signature: (collection, tokenId, ethAmount: string, minWassOut: bigint)
+          await buyWithEth(
+            listing.collection as `0x${string}`,
+            BigInt(listing.tokenId),
+            ethNeeded,
+            minWassOut
+          );
+        } catch (quoteErr) {
+          console.error('[MarketplaceBuy] ETH quote/buy failed:', quoteErr);
+          setBuyingMarketplaceTokenId(null);
+        }
+      }
+    } catch (err) {
+      console.error('[MarketplaceBuy] Error:', err);
+      setBuyingMarketplaceTokenId(null);
+    }
+  };
+
+  // Handle wASS approval success - wait for confirmation then proceed to buy
+  useEffect(() => {
+    if (wassApprovalSuccess && !isConfirmingWassApproval && buyingMarketplaceTokenId) {
+      // Approval is fully confirmed on-chain, now refetch allowance and buy
+      const proceedToBuy = async () => {
+        // Wait a moment for chain state to propagate, then refetch allowance
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await refetchWassAllowance();
+
+        // Find the listing and buy
+        const listing = marketplaceListings.find(l => l.tokenId === buyingMarketplaceTokenId);
+        if (listing) {
+          buyWithWass(listing.collection as `0x${string}`, BigInt(listing.tokenId));
+        }
+      };
+      proceedToBuy();
+    }
+  }, [wassApprovalSuccess, isConfirmingWassApproval, buyingMarketplaceTokenId, marketplaceListings, refetchWassAllowance, buyWithWass]);
+
+  // Handle marketplace buy success (wASS)
+  useEffect(() => {
+    if (wassBuySuccess && buyingMarketplaceTokenId) {
+      // Refresh data
+      fetchMarketplaceListings();
+      refetchNFTs();
+      refetchWassBalance();
+      setBuyingMarketplaceTokenId(null);
+    }
+  }, [wassBuySuccess, buyingMarketplaceTokenId, fetchMarketplaceListings, refetchNFTs, refetchWassBalance]);
+
+  // Handle marketplace buy success (ETH)
+  useEffect(() => {
+    if (ethBuySuccess && buyingMarketplaceTokenId) {
+      // Refresh data
+      fetchMarketplaceListings();
+      refetchNFTs();
+      refetchWassBalance();
+      setBuyingMarketplaceTokenId(null);
+    }
+  }, [ethBuySuccess, buyingMarketplaceTokenId, fetchMarketplaceListings, refetchNFTs, refetchWassBalance]);
+
+  // Handle marketplace buy error (wASS) - reset loading state
+  useEffect(() => {
+    if (wassBuyError && buyingMarketplaceTokenId) {
+      console.error('[MarketplaceBuy] wASS transaction failed:', wassBuyError);
+      setBuyingMarketplaceTokenId(null);
+    }
+  }, [wassBuyError, buyingMarketplaceTokenId]);
+
+  // Handle marketplace buy error (ETH) - reset loading state
+  useEffect(() => {
+    if (ethBuyError && buyingMarketplaceTokenId) {
+      console.error('[MarketplaceBuy] ETH transaction failed:', ethBuyError);
+      setBuyingMarketplaceTokenId(null);
+    }
+  }, [ethBuyError, buyingMarketplaceTokenId]);
+
+  // Handle wASS approval error - reset loading state
+  useEffect(() => {
+    if (wassApprovalError && buyingMarketplaceTokenId) {
+      console.error('[MarketplaceBuy] wASS approval failed:', wassApprovalError);
+      setBuyingMarketplaceTokenId(null);
+    }
+  }, [wassApprovalError, buyingMarketplaceTokenId]);
+
   // Helper to show transaction overlay
   const showTxOverlay = (hash: `0x${string}`, message: string) => {
     setTxOverlay({
@@ -1264,8 +2229,8 @@ export function InventorySack() {
                 }`}
               >
                 <span className="font-medium text-sm sm:text-base">Market</span>
-                {totalListings > 0 && (
-                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListings}</span>
+                {totalListingsCount > 0 && (
+                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListingsCount}</span>
                 )}
                 {effectiveFloorPrice && (
                   <span className={`inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
@@ -1273,6 +2238,16 @@ export function InventorySack() {
                     <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => handleTabChange('items')}
+                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
+                  activeTab === 'items'
+                    ? 'border-purple-500 text-purple-400'
+                    : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <span className="font-medium text-sm sm:text-base">📦 Items</span>
               </button>
               <button
                 onClick={() => handleTabChange('exchange')}
@@ -1380,14 +2355,28 @@ export function InventorySack() {
                           <h3 className="font-semibold text-white">Token Pairs</h3>
                         </div>
 
-                        {/* Token Pairs List - Dynamic from TOKEN_PAIRS config */}
+                        {/* Token Pairs List - Combines static pairs with Token Wars launches */}
                         <div>
                           <h4 className="text-sm font-medium text-gray-400 mb-3">Available Pairs</h4>
+                          {launchedTokensLoading && combinedPairs.length === TOKEN_PAIRS.length && (
+                            <div className="text-xs text-gray-500 mb-2">Loading Token Wars pairs...</div>
+                          )}
                           <div className="space-y-2">
-                            {TOKEN_PAIRS
+                            {combinedPairs
                               .sort((a, b) => {
+                                // Primary pool always first
                                 if (a.isDefault && !b.isDefault) return -1;
                                 if (!a.isDefault && b.isDefault) return 1;
+                                // Static pairs before Token Wars
+                                if (!a.isTokenWars && b.isTokenWars) return -1;
+                                if (a.isTokenWars && !b.isTokenWars) return 1;
+                                // Token Wars sorted by raised amount (most raised first)
+                                if (a.isTokenWars && b.isTokenWars) {
+                                  const aRaised = a.tokenWarsData?.totalRaisedUsdc || 0;
+                                  const bRaised = b.tokenWarsData?.totalRaisedUsdc || 0;
+                                  return bRaised - aRaised;
+                                }
+                                // Static pairs sorted by price change
                                 const aChange = allPairChanges.get(a.id) || 0;
                                 const bChange = allPairChanges.get(b.id) || 0;
                                 return bChange - aChange;
@@ -1395,18 +2384,23 @@ export function InventorySack() {
                               .map((pair) => {
                                 const pairChange = allPairChanges.get(pair.id);
                                 const isSelected = selectedPairId === pair.id;
+                                const twData = pair.tokenWarsData;
                                 return (
                                   <button
                                     key={pair.id}
                                     onClick={() => handleSidebarPairSelect(pair)}
                                     className={`w-full block p-3 rounded-lg border transition-all text-left ${
                                       isSelected
-                                        ? 'bg-emerald-500/20 border-emerald-500/50'
-                                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
+                                        ? pair.isTokenWars
+                                          ? 'bg-purple-500/20 border-purple-500/50'
+                                          : 'bg-emerald-500/20 border-emerald-500/50'
+                                        : pair.isTokenWars
+                                          ? 'bg-purple-900/20 border-purple-700/50 hover:bg-purple-800/30 hover:border-purple-600/50'
+                                          : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className={`font-medium flex items-center gap-1 ${isSelected ? 'text-emerald-400' : 'text-white'}`}>
+                                      <span className={`font-medium flex items-center gap-1 ${isSelected ? (pair.isTokenWars ? 'text-purple-400' : 'text-emerald-400') : 'text-white'}`}>
                                         {(() => {
                                           const img0 = getTokenImage(pair.token0);
                                           const img1 = getTokenImage(pair.token1);
@@ -1415,13 +2409,13 @@ export function InventorySack() {
                                           return (
                                             <>
                                               {img0 ? (
-                                                <img src={img0} alt={symbol0} className="w-4 h-4" />
+                                                <img src={img0} alt={symbol0} className="w-4 h-4 rounded-full" />
                                               ) : (
                                                 <span className="text-xs">{symbol0}</span>
                                               )}
                                               <span className="text-gray-500">/</span>
                                               {img1 ? (
-                                                <img src={img1} alt={symbol1} className="w-4 h-4" />
+                                                <img src={img1} alt={symbol1} className="w-4 h-4 rounded-full" />
                                               ) : (
                                                 <span className="text-xs">{symbol1}</span>
                                               )}
@@ -1429,7 +2423,18 @@ export function InventorySack() {
                                           );
                                         })()}
                                       </span>
-                                      {pairChange !== undefined && (
+                                      {/* Show price change for static pairs, or DEX badge for launched tokens */}
+                                      {pair.isTokenWars ? (
+                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                          pair.tokenWarsData?.dex === 'aerodrome'
+                                            ? 'bg-blue-500/20 text-blue-400'
+                                            : pair.tokenWarsData?.dex === 'hydrex'
+                                              ? 'bg-orange-500/20 text-orange-400'
+                                              : 'bg-purple-500/20 text-purple-400'
+                                        }`}>
+                                          {pair.tokenWarsData?.dex === 'aerodrome' ? 'AERO' : pair.tokenWarsData?.dex === 'hydrex' ? 'HYDREX' : 'V4'}
+                                        </span>
+                                      ) : pairChange !== undefined && (
                                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                           pairChange >= 0
                                             ? 'text-emerald-400 bg-emerald-500/20'
@@ -1439,10 +2444,56 @@ export function InventorySack() {
                                         </span>
                                       )}
                                     </div>
-                                    <div className="flex items-center justify-between text-xs text-gray-400">
-                                      <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
-                                      <span>1% fee</span>
-                                    </div>
+                                    {/* Token Wars specific info */}
+                                    {twData ? (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-gray-400 truncate">{twData.name}</span>
+                                          <span className="text-green-400 font-medium">${twData.totalRaisedUsdc.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
+                                          <span>{twData.participantCount} participants</span>
+                                          <span className="flex items-center gap-1">
+                                            {twData.pairType === 'wass' ? (
+                                              <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
+                                            ) : (
+                                              <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
+                                            )}
+                                            <span>{twData.pairType.toUpperCase()} pair</span>
+                                          </span>
+                                        </div>
+                                        {/* External links for Token Wars tokens */}
+                                        <div className="flex items-center gap-1 mt-1">
+                                          {twData.dexScreenerUrl && (
+                                            <a
+                                              href={twData.dexScreenerUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="text-[9px] px-1.5 py-0.5 bg-green-600/30 text-green-400 rounded hover:bg-green-600/50"
+                                            >
+                                              Chart
+                                            </a>
+                                          )}
+                                          {twData.basescanUrl && (
+                                            <a
+                                              href={twData.basescanUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="text-[9px] px-1.5 py-0.5 bg-gray-600/30 text-gray-400 rounded hover:bg-gray-600/50"
+                                            >
+                                              Scan
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-between text-xs text-gray-400">
+                                        <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
+                                        <span>1% fee</span>
+                                      </div>
+                                    )}
                                   </button>
                                 );
                               })}
@@ -1450,83 +2501,130 @@ export function InventorySack() {
                         </div>
                       </>
                     ) : (
-                      /* ===== LAUNCH VIEW SIDEBAR ===== */
+                      /* ===== LAUNCH VIEW SIDEBAR - Same Available Pairs as Swap, clicks open Swap view ===== */
                       <>
-                        {/* Launch Header */}
+                        {/* Trading Header */}
                         <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-white">Verified Launcher</h3>
-                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full">AI Verified</span>
+                          <h3 className="font-semibold text-white">Token Pairs</h3>
+                          <span className="text-xs text-gray-500">Click to trade</span>
                         </div>
 
-                        {/* 2-Step Flow */}
-                        <div className="p-3 bg-purple-950/30 border border-purple-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 mb-3">
-                            <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
-                            <span className="text-sm font-medium text-purple-400">2-Step Launch</span>
-                          </div>
+                        {/* Token Pairs List - Same as swap view but clicks switch to swap */}
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-400 mb-3">Available Pairs</h4>
+                          {launchedTokensLoading && combinedPairs.length === TOKEN_PAIRS.length && (
+                            <div className="text-xs text-gray-500 mb-2">Loading Token Wars pairs...</div>
+                          )}
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="w-5 h-5 flex items-center justify-center bg-blue-500/20 text-blue-400 rounded-full text-xs font-bold">1</span>
-                              <span className="text-gray-300">Verify & upload image</span>
-                              <span className="ml-auto text-blue-400">$0.50</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="w-5 h-5 flex items-center justify-center bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold">2</span>
-                              <span className="text-gray-300">Launch token</span>
-                              <span className="ml-auto text-purple-400">$5+</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Token Info */}
-                        <div className="p-3 bg-gray-800 border border-gray-700 rounded-lg space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">Starting MCap</span>
-                            <span className="text-white font-medium">~$10</span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">Pool Fee</span>
-                            <span className="text-white font-medium">0.3% + 0.7% hook</span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">Paired With</span>
-                            <span className="text-emerald-400 font-medium">WASS</span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-700">
-                            <span className="text-gray-400">Payment</span>
-                            <span className="text-blue-400 font-medium">USDC on Base</span>
-                          </div>
-                        </div>
-
-                        {/* Art Style Requirement */}
-                        <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <svg className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <div>
-                              <p className="text-xs text-amber-400 font-medium mb-1">AppleSnakes Art Style</p>
-                              <p className="text-xs text-gray-400 leading-relaxed">
-                                Images must match AppleSnakes art style to pass AI verification.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Dev Buy Info */}
-                        <div className="p-3 bg-green-950/30 border border-green-500/30 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <svg className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <div>
-                              <p className="text-xs text-green-400 font-medium mb-1">Dev Buy Budget</p>
-                              <p className="text-xs text-gray-400 leading-relaxed">
-                                Launch payment ($5+ USDC) becomes your dev buy automatically.
-                              </p>
-                            </div>
+                            {combinedPairs
+                              .sort((a, b) => {
+                                // Primary pool always first
+                                if (a.isDefault && !b.isDefault) return -1;
+                                if (!a.isDefault && b.isDefault) return 1;
+                                // Static pairs before Token Wars
+                                if (!a.isTokenWars && b.isTokenWars) return -1;
+                                if (a.isTokenWars && !b.isTokenWars) return 1;
+                                // Token Wars sorted by raised amount (most raised first)
+                                if (a.isTokenWars && b.isTokenWars) {
+                                  const aRaised = a.tokenWarsData?.totalRaisedUsdc || 0;
+                                  const bRaised = b.tokenWarsData?.totalRaisedUsdc || 0;
+                                  return bRaised - aRaised;
+                                }
+                                // Static pairs sorted by price change
+                                const aChange = allPairChanges.get(a.id) || 0;
+                                const bChange = allPairChanges.get(b.id) || 0;
+                                return bChange - aChange;
+                              })
+                              .map((pair) => {
+                                const pairChange = allPairChanges.get(pair.id);
+                                const twData = pair.tokenWarsData;
+                                return (
+                                  <button
+                                    key={pair.id}
+                                    onClick={() => {
+                                      // Switch to swap view and select this pair
+                                      handleSidebarPairSelect(pair);
+                                      setTradingView('swap');
+                                    }}
+                                    className={`w-full block p-3 rounded-lg border transition-all text-left ${
+                                      pair.isTokenWars
+                                        ? 'bg-purple-900/20 border-purple-700/50 hover:bg-purple-800/30 hover:border-purple-600/50'
+                                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className={`font-medium flex items-center gap-1 text-white`}>
+                                        {(() => {
+                                          const img0 = getTokenImage(pair.token0);
+                                          const img1 = getTokenImage(pair.token1);
+                                          const symbol0 = getTokenSymbol(pair.token0);
+                                          const symbol1 = getTokenSymbol(pair.token1);
+                                          return (
+                                            <>
+                                              {img0 ? (
+                                                <img src={img0} alt={symbol0} className="w-4 h-4 rounded-full" />
+                                              ) : (
+                                                <span className="text-xs">{symbol0}</span>
+                                              )}
+                                              <span className="text-gray-500">/</span>
+                                              {img1 ? (
+                                                <img src={img1} alt={symbol1} className="w-4 h-4 rounded-full" />
+                                              ) : (
+                                                <span className="text-xs">{symbol1}</span>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </span>
+                                      {/* Show price change for static pairs, or DEX badge for launched tokens */}
+                                      {pair.isTokenWars ? (
+                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                                          pair.tokenWarsData?.dex === 'aerodrome'
+                                            ? 'bg-blue-500/20 text-blue-400'
+                                            : pair.tokenWarsData?.dex === 'hydrex'
+                                              ? 'bg-orange-500/20 text-orange-400'
+                                              : 'bg-purple-500/20 text-purple-400'
+                                        }`}>
+                                          {pair.tokenWarsData?.dex === 'aerodrome' ? 'AERO' : pair.tokenWarsData?.dex === 'hydrex' ? 'HYDREX' : 'V4'}
+                                        </span>
+                                      ) : pairChange !== undefined && (
+                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                          pairChange >= 0
+                                            ? 'text-emerald-400 bg-emerald-500/20'
+                                            : 'text-red-400 bg-red-500/20'
+                                        }`}>
+                                          {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Token Wars specific info */}
+                                    {twData ? (
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-gray-400 truncate">{twData.name}</span>
+                                          <span className="text-green-400 font-medium">${twData.totalRaisedUsdc.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
+                                          <span>{twData.participantCount} participants</span>
+                                          <span className="flex items-center gap-1">
+                                            {twData.pairType === 'wass' ? (
+                                              <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
+                                            ) : (
+                                              <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
+                                            )}
+                                            <span>{twData.pairType.toUpperCase()} pair</span>
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-between text-xs text-gray-400">
+                                        <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
+                                        <span>1% fee</span>
+                                      </div>
+                                    )}
+                                  </button>
+                                );
+                              })}
                           </div>
                         </div>
                       </>
@@ -1810,6 +2908,20 @@ export function InventorySack() {
                             View Details
                           </div>
                         </div>
+
+                        {/* Edit Traits Button - only show for humans (not snakes or eggs) */}
+                        {!isEgg && !isJailed && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedNFTForTraits(nft);
+                              setShowTraitSwapper(true);
+                            }}
+                            className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-purple-500/80 hover:bg-purple-500 backdrop-blur-md text-white text-xs font-medium border border-purple-400/50"
+                          >
+                            ✨ Edit
+                          </button>
+                        )}
                       </div>
 
                       {/* Card Info */}
@@ -1859,14 +2971,14 @@ export function InventorySack() {
                     </div>
                     <p className="mt-4 text-gray-400">Loading marketplace listings...</p>
                   </div>
-                ) : openSeaListings.length === 0 && poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length === 0 ? (
+                ) : openSeaListings.length === 0 && poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length === 0 && marketplaceListings.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
                     <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-green-500/20 via-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-green-500/30 mb-6">
                       <span className="text-4xl">🏪</span>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">No Active Listings</h2>
                     <p className="text-gray-400 max-w-md mb-6">
-                      No NFTs are currently listed for sale on OpenSea or in the pool. Check back later!
+                      No NFTs are currently listed for sale. Check back later!
                     </p>
                     <a
                       href="https://opensea.io/collection/applesnakes"
@@ -1883,18 +2995,28 @@ export function InventorySack() {
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h2 className="text-xl font-bold text-white">Marketplace</h2>
-                        <p className="text-sm text-gray-400 flex items-center gap-1">
-                          {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0)} listings available
+                        <p className="text-sm text-gray-400 flex items-center gap-1 flex-wrap">
+                          {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0) + marketplaceListings.length} listings available
                           {effectiveFloorPrice && (
                             <span className="flex items-center gap-1 ml-1">
                               • Floor: {effectiveFloorPrice}
                               <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5 inline" />
                             </span>
                           )}
+                          {marketplaceListings.length > 0 && (
+                            <span className="flex items-center gap-1 ml-1">
+                              • {marketplaceListings.length}
+                              <img src="/Images/Token.png" alt="wASS" className="w-3.5 h-3.5 inline" />
+                              wASS
+                            </span>
+                          )}
                         </p>
                       </div>
                       <button
-                        onClick={() => refetchListings()}
+                        onClick={() => {
+                          refetchListings();
+                          fetchMarketplaceListings();
+                        }}
                         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 transition-all"
                       >
                         <span>↻</span>
@@ -1904,12 +3026,12 @@ export function InventorySack() {
 
                     {/* Listings Grid */}
                     <div className={`grid ${gridClasses[gridSize]} gap-4`}>
-                      {/* Contract "Buy from Pool" Option - shows a human from wTokens pool */}
+                      {/* Contract "Buy from Pool" Option - ALWAYS shows when filter allows */}
                       {(() => {
                         // Only show pool option if human filter is active or all filter
                         if (filterType !== 'all' && filterType !== 'human') return null;
 
-                        // Find the first human NFT from the pool that matches search
+                        // Find the first human NFT from the pool that matches search (for preview image)
                         const poolHuman = poolNFTs.find(nft => {
                           const localType = getLocalNFTType(nft.tokenId, nft.name);
                           if (localType !== 'human') return false;
@@ -1923,7 +3045,8 @@ export function InventorySack() {
                           return true;
                         });
 
-                        if (!poolHuman) return null;
+                        // Count available humans in pool
+                        const humansInPool = poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length;
 
                         // Show real quote price from quoter, or loading state
                         const contractPriceDisplay = isFetchingQuote
@@ -1932,11 +3055,18 @@ export function InventorySack() {
                             ? parseFloat(buyQuotePrice).toFixed(4)
                             : '~0.001';
 
+                        // Always show Buy from Pool card - even during loading
+                        // This ensures users always see this option
                         return (
                           <button
                             key="contract-buy"
                             onClick={handleBuyNFT}
-                            className="group relative rounded-2xl bg-gray-900 border-2 border-cyan-500/50 hover:border-cyan-400 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left"
+                            disabled={poolNFTsLoading || humansInPool === 0}
+                            className={`group relative rounded-2xl bg-gray-900 border-2 border-cyan-500/50 hover:border-cyan-400 transition-all duration-200 text-left ${
+                              poolNFTsLoading || humansInPool === 0
+                                ? 'opacity-70 cursor-wait'
+                                : 'hover:scale-[1.02] hover:-translate-y-1'
+                            }`}
                             style={{
                               minWidth: '128px',
                               boxShadow: '0 4px 16px rgba(6, 182, 212, 0.2)',
@@ -1944,27 +3074,32 @@ export function InventorySack() {
                           >
                             {/* Image Container */}
                             <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
-                              <img
-                                src={poolHuman.imageUrl}
-                                alt={poolHuman.name}
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                              />
+                              {poolNFTsLoading ? (
+                                // Loading skeleton
+                                <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-gray-900 animate-pulse flex items-center justify-center">
+                                  <div className="text-4xl animate-bounce">🔄</div>
+                                </div>
+                              ) : poolHuman ? (
+                                <img
+                                  src={poolHuman.imageUrl}
+                                  alt={poolHuman.name}
+                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                />
+                              ) : (
+                                // No humans available placeholder
+                                <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-gray-900 flex items-center justify-center">
+                                  <div className="text-4xl">👤</div>
+                                </div>
+                              )}
 
                               {/* Gradient Overlay */}
                               <div className="absolute inset-0 bg-gradient-to-t from-cyan-900/60 via-transparent to-transparent" />
 
-                              {/* Contract Badge */}
-                              <div className="absolute top-3 left-3">
-                                <span className="px-2.5 py-1.5 rounded-lg bg-cyan-500/90 text-white text-sm font-bold backdrop-blur-sm flex items-center gap-1.5">
-                                  <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
-                                  <span>Instant</span>
-                                </span>
-                              </div>
-
-                              {/* "Featured" Badge */}
-                              <div className="absolute top-3 right-3">
-                                <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm">
-                                  🏆 Contract
+                              {/* ETH Price Badge */}
+                              <div className="absolute top-2 left-2">
+                                <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                  <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                                  <span>{contractPriceDisplay}</span>
                                 </span>
                               </div>
 
@@ -1981,10 +3116,12 @@ export function InventorySack() {
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <h3 className="font-semibold text-white truncate text-sm">Buy from Pool</h3>
-                                  <p className="text-xs text-gray-400">{poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length} humans available</p>
+                                  <p className="text-xs text-gray-400">
+                                    {poolNFTsLoading ? 'Loading...' : `${humansInPool} humans available`}
+                                  </p>
                                 </div>
                                 <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-cyan-500/20 text-cyan-400">
-                                  Ξ {contractPriceDisplay}
+                                  Instant
                                 </span>
                               </div>
                               <p className="text-xs text-gray-500">
@@ -1995,94 +3132,954 @@ export function InventorySack() {
                         );
                       })()}
 
-                      {openSeaListings
-                        .filter((listing) => {
-                          // Apply type filter
-                          if (filterType !== 'all') {
-                            const listingType = getLocalNFTType(listing.tokenId, listing.name);
-                            if (listingType !== filterType) return false;
-                          }
-                          // Apply search filter
-                          if (searchQuery) {
-                            const query = searchQuery.toLowerCase();
-                            if (!listing.name.toLowerCase().includes(query) && !listing.tokenId.toString().includes(query)) {
-                              return false;
+                      {/* Combined Listings - Sorted by USD value */}
+                      {(listingsLoading || marketplaceLoading) ? (
+                        <div className="col-span-full flex items-center justify-center py-4">
+                          <div className="text-gray-400 text-sm">Loading listings...</div>
+                        </div>
+                      ) : (
+                        unifiedListings
+                          .filter((listing) => {
+                            // Apply type filter
+                            if (filterType !== 'all') {
+                              if (listing.nftType !== filterType) return false;
                             }
-                          }
-                          return true;
-                        })
-                        .sort((a, b) => {
-                          // Apply sort
-                          switch (sortBy) {
-                            case 'price-asc':
-                              return parseFloat(a.price) - parseFloat(b.price);
-                            case 'price-desc':
-                              return parseFloat(b.price) - parseFloat(a.price);
-                            case 'id-asc':
-                              return a.tokenId - b.tokenId;
-                            case 'id-desc':
-                              return b.tokenId - a.tokenId;
-                            default:
-                              return 0;
-                          }
-                        })
-                        .map((listing) => (
-                        <a
-                          key={listing.orderHash}
-                          href={listing.openseaUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative rounded-2xl bg-gray-900 border-2 border-gray-800 hover:border-green-500/50 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1"
-                          style={{
-                            minWidth: '128px',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                          }}
-                        >
-                          {/* Image Container */}
-                          <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
-                            <img
-                              src={listing.imageUrl}
-                              alt={listing.name}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                            />
+                            // Apply search filter
+                            if (searchQuery) {
+                              const query = searchQuery.toLowerCase();
+                              if (!listing.name.toLowerCase().includes(query) && !listing.tokenId.toString().includes(query)) {
+                                return false;
+                              }
+                            }
+                            return true;
+                          })
+                          .sort((a, b) => {
+                            // Sort by USD value for price sorting, ID for ID sorting
+                            switch (sortBy) {
+                              case 'price-asc':
+                                return a.priceUsd - b.priceUsd;
+                              case 'price-desc':
+                                return b.priceUsd - a.priceUsd;
+                              case 'id-asc':
+                                return a.tokenId - b.tokenId;
+                              case 'id-desc':
+                                return b.tokenId - a.tokenId;
+                              default:
+                                return 0;
+                            }
+                          })
+                          .map((listing) => {
+                            // OpenSea listing card
+                            if (listing.type === 'opensea') {
+                              const isBuyingThis = buyingOrderHash === listing.orderHash && isBuyingFromOpenSea;
+                              return (
+                                <div
+                                  key={listing.orderHash}
+                                  className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
+                                    isBuyingThis ? 'border-yellow-500/70' : 'border-gray-800 hover:border-green-500/50'
+                                  }`}
+                                  style={{
+                                    minWidth: '128px',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                                  }}
+                                >
+                                  {/* Image Container */}
+                                  <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                                    <img
+                                      src={listing.imageUrl}
+                                      alt={listing.name}
+                                      className={`w-full h-full object-cover transition-transform duration-300 ${isBuyingThis ? 'opacity-50' : 'group-hover:scale-110'}`}
+                                    />
 
-                            {/* Gradient Overlay on Hover */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    {/* Loading Overlay */}
+                                    {isBuyingThis && (
+                                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                        <div className="text-4xl animate-bounce">🔄</div>
+                                      </div>
+                                    )}
 
-                            {/* Price Badge */}
-                            <div className="absolute top-3 left-3">
-                              <span className="px-2.5 py-1.5 rounded-lg bg-green-500/90 text-white text-sm font-bold backdrop-blur-sm flex items-center gap-1.5">
-                                <span>Ξ</span>
-                                <span>{parseFloat(listing.price).toFixed(4)}</span>
-                              </span>
-                            </div>
+                                    {/* Gradient Overlay on Hover */}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                            {/* Buy Button on Hover */}
-                            <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="px-3 py-1.5 rounded-lg bg-green-500 text-white text-xs font-bold">
-                                Buy on OpenSea
+                                    {/* ETH Price Badge */}
+                                    <div className="absolute top-2 left-2">
+                                      <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                        <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                                        <span>{parseFloat(listing.priceRaw).toFixed(4)}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Card Info */}
+                                  <div className="p-3 space-y-2">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
+                                        <p className="text-xs text-gray-500 truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
+                                      </div>
+                                      <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400">
+                                        OpenSea
+                                      </span>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => {
+                                          // Find original OpenSea listing to pass to handler
+                                          const originalListing = openSeaListings.find(l => l.orderHash === listing.orderHash);
+                                          if (originalListing) handleBuyOpenSeaListing(originalListing);
+                                        }}
+                                        disabled={isBuyingFromOpenSea || !isConnected}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                                          isBuyingThis
+                                            ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
+                                            : isConnected
+                                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                            : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                        }`}
+                                      >
+                                        {isBuyingThis ? 'Buying...' : 'Buy Now'}
+                                      </button>
+                                      <a
+                                        href={listing.openseaUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="py-2 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium transition-all"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        View
+                                      </a>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // wASS Marketplace listing card
+                            const isBuyingThis = buyingMarketplaceTokenId === listing.tokenId.toString();
+                            const isProcessing = isBuyingWithWass || isConfirmingWassBuy || isBuyingWithEth || isConfirmingEthBuy || isApprovingWass || isConfirmingWassApproval;
+                            const priceNum = parseFloat(listing.priceRaw);
+                            // Find original marketplace listing to get the price in wei
+                            const originalListing = marketplaceListings.find(l => l.tokenId === listing.tokenId.toString());
+                            const priceWei = originalListing?.price || '0';
+
+                            return (
+                              <div
+                                key={`marketplace-${listing.tokenId}`}
+                                className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
+                                  isBuyingThis ? 'border-yellow-500/70' : 'border-purple-500/30 hover:border-purple-500/70'
+                                }`}
+                                style={{
+                                  minWidth: '128px',
+                                  boxShadow: '0 4px 12px rgba(168, 85, 247, 0.2)',
+                                }}
+                              >
+                                {/* Image Container */}
+                                <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                                  <img
+                                    src={listing.imageUrl}
+                                    alt={listing.name}
+                                    className={`w-full h-full object-cover transition-transform duration-300 ${isBuyingThis ? 'opacity-50' : 'group-hover:scale-110'}`}
+                                  />
+
+                                  {/* Loading Overlay */}
+                                  {isBuyingThis && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                                      <div className="text-4xl animate-bounce">🔄</div>
+                                    </div>
+                                  )}
+
+                                  {/* Gradient Overlay on Hover */}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                                  {/* Price Badges - wASS and ETH */}
+                                  <div className="absolute top-2 left-2 flex flex-col gap-1">
+                                    {/* wASS Price */}
+                                    <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                      <img src="/Images/Token.png" alt="wASS" className="w-3.5 h-3.5" />
+                                      <span>{priceNum < 100 ? priceNum.toFixed(2) : priceNum.toFixed(0)}</span>
+                                    </span>
+                                    {/* ETH Price */}
+                                    {ethPerWass && (
+                                      <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                        <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
+                                        <span>{(priceNum * ethPerWass * 1.10).toFixed(4)}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Card Info */}
+                                <div className="p-3 space-y-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
+                                      <p className="text-xs text-gray-500 truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
+                                    </div>
+                                    <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-purple-500/20 text-purple-400">
+                                      For Sale
+                                    </span>
+                                  </div>
+
+                                  {/* Action Buttons - wASS and ETH */}
+                                  <div className="flex gap-2">
+                                    {/* Buy with wASS Button */}
+                                    <button
+                                      onClick={async () => {
+                                        if (!originalListing) return;
+                                        setBuyingMarketplaceTokenId(originalListing.tokenId);
+                                        resetWassBuy();
+                                        resetWassApproval();
+                                        try {
+                                          const priceWeiBigInt = BigInt(originalListing.price);
+                                          if (wassAllowance >= priceWeiBigInt) {
+                                            await buyWithWass(originalListing.collection as `0x${string}`, BigInt(originalListing.tokenId));
+                                          } else {
+                                            await approveWass();
+                                          }
+                                        } catch (err) {
+                                          console.error('[MarketplaceBuy] wASS Error:', err);
+                                          setBuyingMarketplaceTokenId(null);
+                                        }
+                                      }}
+                                      disabled={isProcessing || !isConnected || (wassBalance < BigInt(priceWei))}
+                                      className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                                        isBuyingThis && (isBuyingWithWass || isConfirmingWassBuy || isApprovingWass || isConfirmingWassApproval)
+                                          ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
+                                          : !isConnected || wassBalance < BigInt(priceWei)
+                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                          : 'bg-purple-500 hover:bg-purple-600 text-white'
+                                      }`}
+                                      title={wassBalance < BigInt(priceWei) ? `Need ${listing.priceRaw} wASS` : 'Buy with wASS'}
+                                    >
+                                      <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
+                                      {isBuyingThis && (isBuyingWithWass || isConfirmingWassBuy || isApprovingWass || isConfirmingWassApproval)
+                                        ? (isApprovingWass || isConfirmingWassApproval ? 'Approve' : 'Buy...')
+                                        : 'wASS'}
+                                    </button>
+                                    {/* Buy with ETH Button */}
+                                    <button
+                                      onClick={async () => {
+                                        if (!originalListing) return;
+                                        setBuyingMarketplaceTokenId(originalListing.tokenId);
+                                        resetEthBuy();
+                                        try {
+                                          const priceWeiBigInt = BigInt(originalListing.price);
+                                          const { ethNeeded, minWassOut } = await quoteEthForWassAmount(priceWeiBigInt);
+                                          console.log(`[MarketplaceBuy] ETH quote: ${ethNeeded} ETH for ${originalListing.priceFormatted} wASS`);
+                                          await buyWithEth(
+                                            originalListing.collection as `0x${string}`,
+                                            BigInt(originalListing.tokenId),
+                                            ethNeeded,
+                                            minWassOut
+                                          );
+                                        } catch (err) {
+                                          console.error('[MarketplaceBuy] ETH Error:', err);
+                                          setBuyingMarketplaceTokenId(null);
+                                        }
+                                      }}
+                                      disabled={isProcessing || !isConnected}
+                                      className={`flex-1 py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                                        isBuyingThis && (isBuyingWithEth || isConfirmingEthBuy)
+                                          ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
+                                          : !isConnected
+                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                      }`}
+                                      title="Buy with ETH (auto-converts to wASS)"
+                                    >
+                                      <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
+                                      {isBuyingThis && (isBuyingWithEth || isConfirmingEthBuy)
+                                        ? 'Buy...'
+                                        : 'ETH'}
+                                    </button>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-
-                          {/* Card Info */}
-                          <div className="p-3 space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
-                                <p className="text-xs text-gray-500">#{listing.tokenId}</p>
-                              </div>
-                              <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-green-500/20 text-green-400">
-                                For Sale
-                              </span>
-                            </div>
-                          </div>
-                        </a>
-                      ))}
+                            );
+                          })
+                      )}
                     </div>
                   </div>
                 )}
               </>
+            )}
+
+            {/* ===== BONDED ITEMS TAB ===== */}
+            {activeTab === 'items' && (
+              <div className="absolute inset-0 flex flex-col overflow-hidden">
+                {/* Stats Bar */}
+                <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gray-900/50">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 text-center">
+                      <p className="text-yellow-400 text-xs">🎯 Presale</p>
+                      <p className="text-lg font-bold text-yellow-400">{presaleItems.length}</p>
+                    </div>
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
+                      <p className="text-green-400 text-xs">📈 Trading</p>
+                      <p className="text-lg font-bold text-green-400">{tradingItems.length}</p>
+                    </div>
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-center">
+                      <p className="text-blue-400 text-xs">💰 Owned</p>
+                      <p className="text-lg font-bold text-blue-400">{ownedItems.filter(i => i.phase !== 3).length}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter & Sort Controls */}
+                <div className="flex-shrink-0 p-3 border-b border-gray-700 bg-gray-900/30 space-y-2">
+                  {/* Phase Filters Row */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(['all', 'presale', 'trading', 'owned'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        onClick={() => setItemFilter(filter)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          itemFilter === filter
+                            ? filter === 'presale' ? 'bg-yellow-600 text-white'
+                              : filter === 'trading' ? 'bg-green-600 text-white'
+                              : filter === 'owned' ? 'bg-blue-600 text-white'
+                              : 'bg-gray-600 text-white'
+                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                      >
+                        {filter === 'all' && '🏠 All'}
+                        {filter === 'presale' && '🎯 Presale'}
+                        {filter === 'trading' && '📈 Trading'}
+                        {filter === 'owned' && `💰 Owned (${ownedItems.filter(i => i.phase !== 3).length})`}
+                      </button>
+                    ))}
+                    <button onClick={() => refetchItems()} className="ml-auto px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-xs">🔄 Refresh</button>
+                  </div>
+
+                  {/* Category Filters Row */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {ITEM_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setItemCategory(cat.id)}
+                        className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                          itemCategory === cat.id
+                            ? 'bg-cyan-600 text-white'
+                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        }`}
+                      >
+                        {cat.label} {categoryCounts[cat.id] > 0 && cat.id !== 'all' ? `(${categoryCounts[cat.id]})` : ''}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Sort Dropdown */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 text-xs">Sort by:</span>
+                    <select
+                      value={itemSort}
+                      onChange={(e) => setItemSort(e.target.value as 'price-asc' | 'price-desc' | 'volume-high')}
+                      className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="volume-high">📊 Volume: High → Low</option>
+                      <option value="price-asc">💰 Price: Low → High</option>
+                      <option value="price-desc">💰 Price: High → Low</option>
+                    </select>
+                    <span className="text-gray-500 text-[10px] ml-auto">{displayedItems.length} items</span>
+                  </div>
+                </div>
+
+                {/* TEMPORARILY HIDDEN - Trait Editor Inventory Section
+                {itemFilter === 'owned' && (
+                  <div className="border-b border-gray-700 p-3 bg-blue-900/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🌉</span>
+                        <h3 className="font-medium text-blue-300">Trait Editor Inventory</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400">{totalBridgedItems} items</span>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const result = await fulfilBridge();
+                              if (result.success) {
+                                refetchItems();
+                                console.log('Deposits claimed:', result.fulfilled);
+                              } else if (result.error) {
+                                if (result.error.includes('cooldown') || result.error.includes('wait')) {
+                                  alert(result.error);
+                                } else {
+                                  console.log('Fulfil result:', result.error);
+                                }
+                              }
+                            } catch (err) {
+                              console.error('Claim failed:', err);
+                            }
+                          }}
+                          disabled={isBridgePending || !canFulfil}
+                          className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                            canFulfil
+                              ? 'bg-green-500/20 border border-green-500/30 text-green-300 hover:bg-green-500/30'
+                              : 'bg-gray-500/20 border border-gray-500/30 text-gray-400'
+                          } disabled:opacity-50`}
+                        >
+                          {isBridgePending ? '...' : canFulfil ? '✨ Claim Deposits' : `⏳ ${fulfilCooldown}s`}
+                        </button>
+                      </div>
+                    </div>
+                    {Object.keys(bridgedBalance).length > 0 ? (
+                      <>
+                        <div className="mb-3 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs text-purple-300">✨ Select an NFT to edit traits:</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {nfts.filter(n => !n.isEgg && !n.isJailed).slice(0, 6).map(nft => (
+                              <button
+                                key={nft.tokenId}
+                                onClick={() => {
+                                  setSelectedNFTForTraits(nft as InventoryNFT);
+                                  setShowTraitSwapper(true);
+                                }}
+                                className="relative group"
+                              >
+                                <img
+                                  src={nft.imageUrl}
+                                  alt={nft.name}
+                                  className="w-10 h-10 rounded-lg object-cover border-2 border-purple-500/30 hover:border-purple-500 transition-colors"
+                                />
+                                <span className="absolute -bottom-1 -right-1 text-[8px] bg-gray-800 px-1 rounded">#{nft.tokenId}</span>
+                              </button>
+                            ))}
+                            {nfts.filter(n => !n.isEgg && !n.isJailed).length > 6 && (
+                              <button
+                                onClick={() => setActiveTab('collection')}
+                                className="w-10 h-10 rounded-lg bg-gray-700 border border-gray-600 flex items-center justify-center text-xs text-gray-400 hover:bg-gray-600"
+                              >
+                                +{nfts.filter(n => !n.isEgg && !n.isJailed).length - 6}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(bridgedBalance).map(([tokenId, amount]) => {
+                            const item = bondedItems.find(i => i.tokenId.toString() === tokenId);
+                            return (
+                              <div key={tokenId} className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-2 flex items-center gap-2">
+                                <img
+                                  src={item?.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${tokenId}.png`}
+                                  alt={item?.name || `Item #${tokenId}`}
+                                  className="w-8 h-8 rounded object-cover"
+                                />
+                                <div>
+                                  <p className="text-white text-xs font-medium">{item?.name || `Item #${tokenId}`}</p>
+                                  <p className="text-blue-300 text-[10px]">x{amount}</p>
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await requestWithdraw([Number(tokenId)], [1]);
+                                      refetchItems();
+                                      refetchBridge();
+                                    } catch (err) {
+                                      console.error('Withdraw failed:', err);
+                                    }
+                                  }}
+                                  disabled={isWithdrawing || !canWithdraw}
+                                  className={`ml-auto px-2 py-1 rounded text-[10px] transition-colors ${
+                                    canWithdraw
+                                      ? 'bg-orange-500/20 border border-orange-500/30 text-orange-300 hover:bg-orange-500/30'
+                                      : 'bg-gray-500/20 border border-gray-500/30 text-gray-400'
+                                  } disabled:opacity-50`}
+                                >
+                                  {isWithdrawing ? '...' : canWithdraw ? 'Withdraw' : `${withdrawCooldown}s`}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500">No items bridged yet. Deposit items to use in Trait Editor.</p>
+                    )}
+                  </div>
+                )}
+                END TEMPORARILY HIDDEN */}
+
+                {/* Items Grid */}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {itemsLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                        <p className="text-gray-400">Loading items...</p>
+                      </div>
+                    </div>
+                  ) : displayedItems.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <span className="text-5xl mb-4 block">📦</span>
+                        <h2 className="text-xl font-bold text-white mb-2">
+                          {itemFilter === 'owned' ? 'No Items Owned' : 'No Items Found'}
+                        </h2>
+                        <p className="text-gray-400 text-sm">
+                          {itemFilter === 'presale' && 'No items currently in presale'}
+                          {itemFilter === 'trading' && 'No items trading on bonding curves'}
+                          {itemFilter === 'owned' && 'Buy some items to see them here!'}
+                          {itemFilter === 'all' && itemCategory !== 'all' && 'No items match this category'}
+                          {itemFilter === 'all' && itemCategory === 'all' && 'Items are being initialized...'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {displayedItems.map((item) => {
+                        const isPresale = item.phase === TokenPhase.Presale;
+                        const isCurve = item.phase === TokenPhase.BondingCurve;
+                        const isRare = item.phase === TokenPhase.RareItem;
+                        const canBuy = isPresale || isCurve;
+                        const canSell = isCurve && item.userBalance > 0n;
+                        const phaseColor = isPresale ? 'yellow' : isCurve ? 'green' : 'purple';
+
+                        return (
+                          <div
+                            key={item.tokenId.toString()}
+                            className="rounded-xl overflow-hidden transition-all hover:scale-[1.02]"
+                            style={{ background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(31, 41, 55, 0.9))', border: `1px solid rgba(${isPresale ? '234, 179, 8' : isCurve ? '34, 197, 94' : '168, 85, 247'}, 0.3)` }}
+                          >
+                            {/* Item Image */}
+                            <div className="relative aspect-square bg-gradient-to-br from-gray-700 to-gray-800">
+                              <img
+                                src={item.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${item.tokenId.toString()}.png`}
+                                alt={item.name || `Item #${item.tokenId.toString()}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  // Fallback to emoji if image fails
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  target.parentElement!.innerHTML = `<span class="text-5xl flex items-center justify-center h-full">${isPresale ? '🎯' : isCurve ? '📈' : '💎'}</span>`;
+                                }}
+                              />
+                              <div className={`absolute top-2 left-2 px-2 py-1 rounded text-[10px] font-medium ${
+                                isPresale ? 'bg-yellow-500/30 text-yellow-400 border border-yellow-500/50' :
+                                isCurve ? 'bg-green-500/30 text-green-400 border border-green-500/50' :
+                                'bg-purple-500/30 text-purple-400 border border-purple-500/50'
+                              }`}>
+                                {item.phaseName}
+                              </div>
+                              {item.userBalance > 0n && (
+                                <div className="absolute top-2 right-2 px-2 py-1 bg-blue-600 rounded text-[10px] text-white font-medium">
+                                  x{item.userBalance.toString()}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3">
+                              <p className="text-white font-medium text-sm">{item.name || `Item #${item.tokenId}`}</p>
+                              <p className="text-gray-500 text-[10px]">#{item.tokenId.toString()}</p>
+
+                              {/* Progress bar for presale */}
+                              {isPresale && (
+                                <div className="mt-2">
+                                  <div className="flex justify-between text-[10px] mb-1">
+                                    <span className="text-gray-400">Progress</span>
+                                    <span className="text-yellow-400">{item.presaleProgress}%</span>
+                                  </div>
+                                  <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${item.presaleProgress}%` }} />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Price */}
+                              <div className="mt-2">
+                                <p className="text-gray-500 text-[10px]">Price</p>
+                                <p className={`font-bold text-sm ${isPresale ? 'text-yellow-400' : isCurve ? 'text-green-400' : 'text-purple-400'}`}>{formatItemPrice(item.currentPrice, 4)} wASS</p>
+                              </div>
+
+                              {/* Curve liquidity */}
+                              {isCurve && item.curve && (
+                                <div className="mt-1 text-[10px] text-gray-400">
+                                  Liquidity: {item.curve.realWassFormatted} wASS
+                                </div>
+                              )}
+
+                              {/* Actions */}
+                              <div className="flex gap-2 mt-3">
+                                {canBuy && (
+                                  <button
+                                    onClick={() => { setSelectedBondedItem(item); setItemAction('buy'); setItemAmount('1'); }}
+                                    className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                                    style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))', color: 'white' }}
+                                  >
+                                    Buy
+                                  </button>
+                                )}
+                                {canSell && (
+                                  <button
+                                    onClick={() => { setSelectedBondedItem(item); setItemAction('sell'); setItemAmount('1'); }}
+                                    className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                                    style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(220, 38, 38, 0.8))', color: 'white' }}
+                                  >
+                                    Sell
+                                  </button>
+                                )}
+                                {isRare && (
+                                  <button disabled className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-400 cursor-not-allowed">
+                                    P2P Only
+                                  </button>
+                                )}
+                              </div>
+                              {/* Bridge button for owned items - AUTO-FULFIL enabled - TEMPORARILY HIDDEN
+                              {item.userBalance > 0n && (
+                                <button
+                                  onClick={async () => {
+                                    if (!canBridge) return;
+                                    try {
+                                      // bridgeIn now auto-handles: approval → deposit → fulfil
+                                      console.log('[ItemBridge] Starting auto-fulfil bridge...');
+                                      const txHash = await bridgeIn([Number(item.tokenId)], [1]);
+                                      console.log('[ItemBridge] Bridge + Fulfil success:', txHash);
+                                      refetchItems();
+                                    } catch (err) {
+                                      console.error('Bridge in failed:', err);
+                                    }
+                                  }}
+                                  disabled={isBridgePending || !canBridge}
+                                  className="w-full mt-2 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                                  style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8))', color: 'white' }}
+                                >
+                                  {isBridgePending ? '⏳ Bridging...' : '🌉 Bridge to Editor'}
+                                </button>
+                              )}
+                              END TEMPORARILY HIDDEN */}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Item Buy/Sell Modal */}
+                {selectedBondedItem && itemAction && (
+                  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeItemModal}>
+                    <div
+                      className="rounded-2xl w-full max-w-sm relative"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.98), rgba(31, 41, 55, 0.98))',
+                        border: `2px solid rgba(${itemAction === 'buy' ? '34, 197, 94' : '239, 68, 68'}, 0.3)`,
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="rounded-t-2xl p-4" style={{ background: `linear-gradient(135deg, rgba(${itemAction === 'buy' ? '34, 197, 94' : '239, 68, 68'}, 0.3), rgba(168, 85, 247, 0.3))` }}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {/* Item preview image instead of emoji */}
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800/50 border border-gray-700">
+                              <img
+                                src={selectedBondedItem.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${selectedBondedItem.tokenId}.png`}
+                                alt={selectedBondedItem.name || `Item #${selectedBondedItem.tokenId}`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <h2 className="font-bold text-lg text-white">{itemAction === 'buy' ? (selectedBondedItem.phase === TokenPhase.Presale ? 'Buy Presale' : 'Buy from Curve') : 'Sell to Curve'}</h2>
+                              <p className={`text-sm ${itemAction === 'buy' ? 'text-green-200' : 'text-red-200'}`}>{selectedBondedItem.name || `Item #${selectedBondedItem.tokenId}`}</p>
+                            </div>
+                          </div>
+                          <button onClick={closeItemModal} className={`${itemAction === 'buy' ? 'text-green-300 hover:text-green-200' : 'text-red-300 hover:text-red-200'} text-xl`}>✕</button>
+                        </div>
+                      </div>
+
+                      <div className="p-4">
+                        {/* Payment Method Selector - Only for Buy */}
+                        {itemAction === 'buy' && (
+                          <div className="mb-4">
+                            <p className="text-gray-400 text-sm mb-2">Payment Method</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => setItemPaymentMethod('wass')}
+                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'wass' ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                              >
+                                <div className="flex items-center justify-center gap-2">
+                                  <img src="/Images/Token.png" alt="wASS" className="w-5 h-5" />
+                                  <span className="font-bold text-white">wASS</span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
+                              </button>
+                              <button
+                                onClick={() => setItemPaymentMethod('eth')}
+                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'eth' ? 'border-blue-500 bg-blue-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                              >
+                                <div className="flex items-center justify-center gap-2">
+                                  <img src="/Images/Ether.png" alt="ETH" className="w-5 h-5" />
+                                  <span className="font-bold text-white">ETH</span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">{ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} available</p>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Item Info - Price formatting fix applied */}
+                        <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-gray-400">Phase</span>
+                            <span className={`font-medium ${selectedBondedItem.phase === TokenPhase.Presale ? 'text-yellow-400' : 'text-green-400'}`}>{selectedBondedItem.phaseName}</span>
+                          </div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-gray-400">Price per Item</span>
+                            <span className="text-white">{formatItemPrice(selectedBondedItem.currentPrice, 4)} wASS</span>
+                          </div>
+                          {selectedBondedItem.phase === TokenPhase.Presale && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-400">Remaining</span>
+                              <span className="text-white">{selectedBondedItem.presaleRemaining.toString()} / {selectedBondedItem.presaleSupply.toString()}</span>
+                            </div>
+                          )}
+                          {itemAction === 'sell' && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-400">Your Balance</span>
+                              <span className="text-white">{selectedBondedItem.userBalance.toString()} items</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Pool Info - Only for Bonding Curve items */}
+                        {selectedBondedItem.phase === TokenPhase.BondingCurve && curveInfo && (
+                          <div className="mb-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
+                            <p className="text-purple-300 text-xs font-semibold mb-2">📊 Pool Info</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-500">Available</span>
+                                <p className="text-white font-medium">{curveInfo.tokensAvailableFormatted} items</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Sold</span>
+                                <p className="text-white font-medium">{curveInfo.tokensSoldFormatted} items</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Liquidity</span>
+                                <p className="text-white font-medium">{curveInfo.realWassFormatted} wASS</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Volume</span>
+                                <p className="text-white font-medium">{curveInfo.totalVolumeFormatted} wASS</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Trades</span>
+                                <p className="text-white font-medium">{curveInfo.totalTrades.toString()}</p>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-gray-500">Curve Price (full precision)</span>
+                                <p className="text-white font-medium text-[10px] break-all">{formatItemPrice(curveInfo.currentPrice, 18)} wASS</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Amount Input */}
+                        <div className="mb-4">
+                          <label className="block text-gray-400 text-sm mb-2">Amount to {itemAction === 'buy' ? 'Buy' : 'Sell'}</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+                              value={itemAmount}
+                              onChange={(e) => setItemAmount(e.target.value)}
+                              min="1"
+                              max={itemAction === 'sell' ? selectedBondedItem.userBalance.toString() : (selectedBondedItem.phase === TokenPhase.Presale ? selectedBondedItem.presaleRemaining.toString() : '1000')}
+                              className={`flex-1 bg-gray-800/50 border ${itemAction === 'buy' ? 'border-green-500/30 focus:border-green-500' : 'border-red-500/30 focus:border-red-500'} rounded-lg px-4 py-3 text-white text-lg focus:outline-none`}
+                            />
+                            <div className="flex gap-1">
+                              {['1', '5', '10'].map((qty) => (
+                                <button key={qty} onClick={() => setItemAmount(qty)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                                  {qty}
+                                </button>
+                              ))}
+                              {itemAction === 'sell' && (
+                                <button onClick={() => setItemAmount(selectedBondedItem.userBalance.toString())} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                                  Max
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Cost Summary - Use accurate quote for curve, simple math for presale */}
+                        <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                          {itemAction === 'buy' ? (
+                            <>
+                              {/* For presale: simple price × amount, for curve: use actual quote */}
+                              {selectedBondedItem.phase === TokenPhase.Presale ? (
+                                <div className="flex justify-between text-sm font-bold">
+                                  <span className="text-white">Total Cost</span>
+                                  <span className="text-green-400">
+                                    {formatWass(selectedBondedItem.presalePrice * BigInt(parseInt(itemAmount) || 0), 4)} wASS
+                                  </span>
+                                </div>
+                              ) : buyQuote ? (
+                                <>
+                                  <div className="flex justify-between text-sm font-bold">
+                                    <span className="text-white">Total Cost</span>
+                                    <span className="text-green-400">{buyQuote.totalCostFormatted} wASS</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                    <span>Base cost</span>
+                                    <span>{buyQuote.wassCostFormatted} wASS</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs text-gray-500">
+                                    <span>Fee ({(buyQuote.feeBps / 100).toFixed(1)}%)</span>
+                                    <span>{buyQuote.feeFormatted} wASS</span>
+                                  </div>
+                                  {buyQuote.priceImpact > 1 && (
+                                    <div className="flex justify-between text-xs mt-1 text-yellow-400">
+                                      <span>Price Impact</span>
+                                      <span>+{buyQuote.priceImpact.toFixed(2)}%</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between text-xs text-gray-500">
+                                    <span>New price after buy</span>
+                                    <span>{formatItemPrice(buyQuote.newPrice, 4)} wASS</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="flex justify-between text-sm font-bold">
+                                  <span className="text-white">Total Cost</span>
+                                  <span className="text-gray-500">Loading...</span>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            /* Sell - use sellQuote */
+                            sellQuote ? (
+                              <>
+                                <div className="flex justify-between text-sm font-bold">
+                                  <span className="text-white">You Receive</span>
+                                  <span className="text-green-400">{sellQuote.netReturnFormatted} wASS</span>
+                                </div>
+                                <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                  <span>Gross return</span>
+                                  <span>{sellQuote.wassReturnFormatted} wASS</span>
+                                </div>
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>Fee ({(sellQuote.feeBps / 100).toFixed(1)}%)</span>
+                                  <span>-{sellQuote.feeFormatted} wASS</span>
+                                </div>
+                                {sellQuote.priceImpact > 1 && (
+                                  <div className="flex justify-between text-xs mt-1 text-yellow-400">
+                                    <span>Price Impact</span>
+                                    <span>-{sellQuote.priceImpact.toFixed(2)}%</span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="flex justify-between text-sm font-bold">
+                                <span className="text-white">You Receive</span>
+                                <span className="text-gray-500">Loading...</span>
+                              </div>
+                            )
+                          )}
+                          {itemAction === 'buy' && itemPaymentMethod === 'eth' && (
+                            <div className="flex justify-between text-xs mt-2 text-blue-400">
+                              <span>Paid via OTC Router</span>
+                              <span>Auto-swap ETH → wASS</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-xs mt-2">
+                            <span className="text-gray-500">Your {itemPaymentMethod === 'wass' ? 'wASS' : 'ETH'} Balance</span>
+                            <span className={
+                              itemPaymentMethod === 'wass'
+                                ? (Number(wassBalance) >= Number(
+                                    itemAction === 'buy'
+                                      ? (selectedBondedItem.phase === TokenPhase.Presale
+                                          ? selectedBondedItem.presalePrice * BigInt(parseInt(itemAmount) || 0)
+                                          : buyQuote?.totalCost ?? 0n)
+                                      : 0n
+                                  ) ? 'text-gray-400' : 'text-red-400')
+                                : 'text-gray-400'
+                            }>
+                              {itemPaymentMethod === 'wass' ? `${wassBalanceFormatted} wASS` : `${ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} ETH`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={async () => {
+                            const amount = parseInt(itemAmount) || 0;
+                            if (amount <= 0) return;
+                            try {
+                              if (itemAction === 'buy') {
+                                if (itemPaymentMethod === 'wass') {
+                                  // Pay with wASS
+                                  if (selectedBondedItem.phase === TokenPhase.Presale) {
+                                    await buyPresaleWithWass(Number(selectedBondedItem.tokenId), amount, selectedBondedItem.presalePrice);
+                                  } else {
+                                    // V3: buyFromCurve(tokenId, tokenAmount, maxWassIn)
+                                    // Use ACTUAL QUOTE for accurate pricing on bonding curves
+                                    const tokenAmount = BigInt(amount);
+                                    if (!buyQuote) throw new Error('Quote not available');
+                                    const maxWassIn = (buyQuote.totalCost * 110n) / 100n; // 10% slippage on actual quote
+                                    await buyFromCurve(Number(selectedBondedItem.tokenId), tokenAmount, maxWassIn);
+                                  }
+                                } else {
+                                  // Pay with ETH - get quote first
+                                  const tokenAmount = BigInt(amount);
+                                  // Use actual quote for curve, simple calc for presale
+                                  const wassNeeded = selectedBondedItem.phase === TokenPhase.Presale
+                                    ? selectedBondedItem.presalePrice * tokenAmount
+                                    : (buyQuote?.totalCost ?? 0n);
+                                  const maxWassIn = (wassNeeded * 110n) / 100n; // 10% slippage
+                                  const { ethNeeded, minWassOut } = await quoteEthForWassAmount(maxWassIn);
+                                  if (selectedBondedItem.phase === TokenPhase.Presale) {
+                                    await buyPresaleWithEth(Number(selectedBondedItem.tokenId), amount, ethNeeded, minWassOut);
+                                  } else {
+                                    // V3: buyFromCurveWithEth(tokenId, ethAmount, tokenAmount, minWassFromSwap)
+                                    await buyFromCurveWithEth(Number(selectedBondedItem.tokenId), ethNeeded, tokenAmount, minWassOut);
+                                  }
+                                }
+                              } else {
+                                // Sell: use actual quote for accurate minWassOut
+                                if (!sellQuote) throw new Error('Quote not available');
+                                const minWassOut = (sellQuote.netReturn * 90n) / 100n; // 10% slippage on actual quote
+                                await sellToCurve(Number(selectedBondedItem.tokenId), BigInt(amount), minWassOut);
+                              }
+                              // Success - close modal and refresh
+                              closeItemModal();
+                              refetchItems();
+                              refetchWassBalance();
+                            } catch (err) {
+                              console.error('Item transaction failed:', err);
+                              // Reset hook states on error so user can try again
+                              resetPresale();
+                              resetPresaleEth();
+                              resetCurveBuy();
+                              resetCurveEth();
+                              resetCurveSell();
+                            }
+                          }}
+                          disabled={
+                            isPresaleBuying || isPresaleBuyingEth || isCurveBuying || isCurveBuyingEth || isCurveSelling || isPresaleApproving || isCurveApproving || isSellApproving ||
+                            (parseInt(itemAmount) || 0) <= 0 ||
+                            // For curve items, wait for quote; for presale, use simple calc
+                            (itemAction === 'buy' && selectedBondedItem.phase === TokenPhase.BondingCurve && !buyQuote) ||
+                            (itemAction === 'sell' && !sellQuote) ||
+                            (itemAction === 'buy' && itemPaymentMethod === 'wass' && Number(wassBalance) < Number(
+                              selectedBondedItem.phase === TokenPhase.Presale
+                                ? selectedBondedItem.presalePrice * BigInt(parseInt(itemAmount) || 0)
+                                : buyQuote?.totalCost ?? 0n
+                            )) ||
+                            (itemAction === 'sell' && BigInt(parseInt(itemAmount) || 0) > selectedBondedItem.userBalance)
+                          }
+                          className="w-full py-3 rounded-lg font-semibold disabled:opacity-50"
+                          style={{ background: `linear-gradient(135deg, rgba(${itemAction === 'buy' ? '34, 197, 94' : '239, 68, 68'}, 0.8), rgba(${itemAction === 'buy' ? '22, 163, 74' : '220, 38, 38'}, 0.8))`, color: 'white' }}
+                        >
+                          {isPresaleBuying || isPresaleBuyingEth || isCurveBuying || isCurveBuyingEth || isCurveSelling ? 'Processing...' : isPresaleApproving || isCurveApproving || isSellApproving ? 'Approving...' : itemAction === 'buy' ? `Buy with ${itemPaymentMethod === 'wass' ? 'wASS' : 'ETH'}` : `Sell ${itemAmount} Item${parseInt(itemAmount) > 1 ? 's' : ''}`}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ===== NFT EXCHANGE TAB - Two Sub-tabs ===== */}
@@ -2488,74 +4485,14 @@ export function InventorySack() {
                     trades={poolTrades}
                     tradesLoading={tradesLoading}
                     selectedPairId={selectedPairId}
+                    externalPairData={selectedPairData?.isTokenWars ? selectedPairData : undefined}
+                    additionalPairs={chartModalAdditionalPairs}
+                    externalPairChanges={allPairChanges}
                   />
                 ) : (
-                  /* ===== LAUNCH VIEW - Two Tab Experience ===== */
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    {/* Tab Navigation */}
-                    <div className="flex-shrink-0 border-b border-gray-700 px-4">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setLaunchTab('instant')}
-                          className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
-                            launchTab === 'instant'
-                              ? 'border-purple-500 text-purple-400'
-                              : 'border-transparent text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            Instant Launch
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => setLaunchTab('clankerdome')}
-                          className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
-                            launchTab === 'clankerdome'
-                              ? 'border-pink-500 text-pink-400'
-                              : 'border-transparent text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="text-base">🎪</span>
-                            Clankerdome
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Tab Content */}
-                    <div className="flex-1 overflow-y-auto">
-                      {launchTab === 'instant' ? (
-                        /* ===== INSTANT LAUNCH - Token Launcher Form ===== */
-                        <div className="flex items-start justify-center py-6 px-4">
-                          <div className="w-full max-w-lg">
-                            {/* Header */}
-                            <div className="flex items-center gap-3 mb-6">
-                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                              </div>
-                              <div>
-                                <h2 className="text-xl font-bold text-white">Launch a Token</h2>
-                                <p className="text-sm text-gray-400">Deploy your token paired with WASS on Uniswap V4</p>
-                              </div>
-                            </div>
-
-                            {/* Verified Token Launcher - 2-step x402 USDC Payment */}
-                            <VerifiedTokenLauncher />
-                          </div>
-                        </div>
-                      ) : (
-                        /* ===== CLANKERDOME - 24-hour Presale Parties ===== */
-                        <div className="p-4">
-                          <Clankerdome />
-                        </div>
-                      )}
-                    </div>
+                  /* ===== LAUNCH VIEW - Token Wars ===== */
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <TokenWars onTradeToken={handleTradeToken} />
                   </div>
                 )}
               </div>
@@ -2660,6 +4597,30 @@ export function InventorySack() {
                     {isProcessing && currentOperation === 'unstake' ? 'Unstaking...' : `🔓 Unstake ${selectedForUnstake.length} Snake${selectedForUnstake.length > 1 ? 's' : ''}`}
                   </button>
                 )}
+
+                {/* List on Marketplace Button - when 1+ non-staked, non-jailed NFTs are selected */}
+                {activeTab === 'collection' && selectedNFTs.size >= 1 && (() => {
+                  // Filter to only listable NFTs (non-staked, non-jailed)
+                  const listableNFTs = selectedNFTsData.filter(nft => !nft.isStaked && !nft.isJailed);
+                  const listCount = listableNFTs.length;
+                  return listCount > 0 ? (
+                    <button
+                      onClick={() => {
+                        // For single NFT, use legacy single-nft flow; for multiple, pass array
+                        if (listCount === 1) {
+                          setSelectedNFTForListing(listableNFTs[0]);
+                        } else {
+                          setSelectedNFTForListing(null); // Clear single selection
+                        }
+                        setShowListingModal(true);
+                      }}
+                      disabled={isProcessing}
+                      className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-400 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      🏪 List{listCount > 1 ? ` ${listCount}` : ''}
+                    </button>
+                  ) : null;
+                })()}
 
                 {/* Wrap Button - enabled when non-staked NFTs selected, warning for snakes */}
                 <div className="relative flex items-center gap-2">
@@ -2783,6 +4744,38 @@ export function InventorySack() {
         initialMode="buy"
         buyOnly={true}
       />
+
+      {/* Listing Modal for Marketplace */}
+      <ListingModal
+        nft={selectedNFTForListing}
+        nfts={!selectedNFTForListing && showListingModal ? selectedNFTsData.filter(nft => !nft.isStaked && !nft.isJailed) : undefined}
+        isOpen={showListingModal}
+        onClose={() => {
+          setShowListingModal(false);
+          setSelectedNFTForListing(null);
+        }}
+        onSuccess={() => {
+          setShowListingModal(false);
+          setSelectedNFTForListing(null);
+          clearSelections();
+          refetchNFTs();
+        }}
+      />
+
+      {/* Trait Swapper Modal */}
+      {selectedNFTForTraits && (
+        <TraitSwapper
+          nft={selectedNFTForTraits as UserNFT}
+          isOpen={showTraitSwapper}
+          onClose={() => {
+            setShowTraitSwapper(false);
+            setSelectedNFTForTraits(null);
+          }}
+          onSuccess={() => {
+            refetchNFTs();
+          }}
+        />
+      )}
 
       <style jsx>{`
         @keyframes fade-in {

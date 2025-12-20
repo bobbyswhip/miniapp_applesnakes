@@ -7,14 +7,21 @@ import { STAKING_ABI } from '@/abis/staking';
 import { PREDICTION_ABI } from '@/abis/predictionLegacy'; // Legacy combined contract
 import { BLACKJACK_ABI } from '@/abis/blackjack'; // New game contract
 import { PREDICTION_HUB_ABI } from '@/abis/predictionHub'; // New market hub
+import { PREDICTION_MARKET_V2_ABI } from '@/abis/predictionMarketV2'; // Token Wars V2 on-chain
 import { WASSOTC_ABI } from '@/abis/wassotc'; // wASS OTC hybrid swap
+import { MARKETPLACE_ABI } from '@/abis/marketplace'; // NFT marketplace
+import { BONDED_ITEMS_V7_ABI } from '@/abis/bondedItemsV7'; // V7: ERC1155 Items with CPMM + Dynamic Fees
+import { ITEM_BRIDGE_ABI } from '@/abis/itemBridge'; // ItemBridge v1.01
 import type { ChainContracts } from './types';
 
 // Uniswap V4 Quoter address on Base
 export const QUOTER_ADDRESS = '0x0d5e0f971ed27fbff6c2837bf31316121532048d' as const;
 
-// Hook address for V4 Super Strategy
+// Hook address for V4 Super Strategy (ETH/wASS pair)
 export const HOOK_ADDRESS = '0x77e180e90130FA6e6A4bf4d07cf2032f5f2B70C8' as const;
+
+// Hook address for wASS token pairs (wASS/TOKEN pairs like TWP, TTT, etc.)
+export const WASS_PAIR_HOOK_ADDRESS = '0x35B9b5b023897DA8C7375ba6141245B8416460CC' as const;
 
 // Pool Manager address on Base
 export const POOL_MANAGER_ADDRESS = '0x498581fF718922c3f8e6A244956aF099B2652b2b' as const;
@@ -28,6 +35,12 @@ export const PERMIT2_ADDRESS = '0x000000000022D473030F116dDEE9F6B43aC78BA3' as c
 // StateView for V4 pool queries
 export const STATE_VIEW_ADDRESS = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71' as const;
 
+// Aerodrome Router V2 address on Base (for Aerodrome token swaps)
+export const AERODROME_ROUTER_ADDRESS = '0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43' as const;
+
+// WETH address on Base (wrapped ETH for Aerodrome)
+export const WETH_ADDRESS = '0x4200000000000000000000000000000000000006' as const;
+
 // External links
 export const OPENSEA_COLLECTION_URL = 'https://opensea.io/collection/applesnakes' as const;
 
@@ -39,10 +52,10 @@ export const OPENSEA_COLLECTION_URL = 'https://opensea.io/collection/applesnakes
 // ============================================================================
 
 // IPNS key for AppleSnakes metadata (points to latest metadata folder)
-export const IPNS_KEY = 'k51qzi5uqu5diqasdnw3fydh31emy8lksdygkl4ycimvxqaj22oeekiclww6mc' as const;
+export const IPNS_KEY = 'k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp' as const;
 
 // Primary gateway for IPNS resolution
-export const IPNS_GATEWAY = 'https://applesnakes.myfilebase.com' as const;
+export const IPNS_GATEWAY = 'https://ipfs.filebase.io' as const;
 
 // Legacy IPFS gateway (for backwards compatibility with cached data)
 export const LEGACY_IPFS_GATEWAY = 'https://surrounding-amaranth-catshark.myfilebase.com' as const;
@@ -209,10 +222,30 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     abi: PREDICTION_HUB_ABI,
     name: 'Prediction Market Hub',
   },
+  predictionMarketV2: {
+    address: '0xCC71e190c8209C29421345C95F43591391413204',
+    abi: PREDICTION_MARKET_V2_ABI,
+    name: 'Token Wars Prediction Market V2',
+  },
   otc: {
     address: '0xD39bcE42ad5Cf7704e74206aD9551206fa0aD98a',
     abi: WASSOTC_ABI,
     name: 'wASS OTC Router',
+  },
+  marketplace: {
+    address: '0xd006C1970AAcffcCAcAf6180Ad24081CdE608e82',
+    abi: MARKETPLACE_ABI,
+    name: 'Apple Snakes Marketplace V3',
+  },
+  bondedItems: {
+    address: '0xE89F37D8F1fc369B11fdAA2b0362D4D290f2cfdd',
+    abi: BONDED_ITEMS_V7_ABI,
+    name: 'Bonded Items V7 (Dynamic Fees + CPMM)',
+  },
+  itemBridge: {
+    address: '0xF799bDC992f7B7F78a138FC17913908e7a332710',
+    abi: ITEM_BRIDGE_ABI,
+    name: 'Item Bridge v1.02',
   },
 };
 
@@ -255,10 +288,30 @@ export const BASE_SEPOLIA_CONTRACTS: ChainContracts = {
     abi: PREDICTION_HUB_ABI,
     name: 'Prediction Market Hub (Testnet)',
   },
+  predictionMarketV2: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: PREDICTION_MARKET_V2_ABI,
+    name: 'Token Wars Prediction Market V2 (Testnet)',
+  },
   otc: {
     address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
     abi: WASSOTC_ABI,
     name: 'wASS OTC Swap (Testnet)',
+  },
+  marketplace: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: MARKETPLACE_ABI,
+    name: 'Apple Snakes Marketplace (Testnet)',
+  },
+  bondedItems: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: BONDED_ITEMS_V7_ABI,
+    name: 'Bonded Items V7 (Testnet)',
+  },
+  itemBridge: {
+    address: '0x0000000000000000000000000000000000000000', // TODO: Deploy to testnet
+    abi: [],
+    name: 'Item Bridge V7 (Testnet)',
   },
 };
 
@@ -313,3 +366,23 @@ export const BLACKJACK_ADDRESS = (chainId: number) => getContracts(chainId).blac
  * Helper to get PredictionHub contract address for current chain
  */
 export const PREDICTION_HUB_ADDRESS = (chainId: number) => getContracts(chainId).predictionHub.address;
+
+/**
+ * Helper to get Marketplace contract address for current chain
+ */
+export const MARKETPLACE_ADDRESS = (chainId: number) => getContracts(chainId).marketplace.address;
+
+/**
+ * Helper to get PredictionMarketV2 contract address for current chain
+ */
+export const PREDICTION_MARKET_V2_ADDRESS = (chainId: number) => getContracts(chainId).predictionMarketV2.address;
+
+/**
+ * Helper to get BondedItems contract address for current chain
+ */
+export const BONDED_ITEMS_ADDRESS = (chainId: number) => getContracts(chainId).bondedItems.address;
+
+/**
+ * Helper to get ItemBridge contract address for current chain
+ */
+export const ITEM_BRIDGE_ADDRESS = (chainId: number) => getContracts(chainId).itemBridge.address;

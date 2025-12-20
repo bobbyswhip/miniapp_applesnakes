@@ -16,7 +16,11 @@ export interface ChainContracts {
   prediction: ContractConfig; // Legacy combined contract
   blackjack: ContractConfig; // New game-only contract
   predictionHub: ContractConfig; // New market hub contract
+  predictionMarketV2: ContractConfig; // Token Wars Prediction Market V2 (on-chain)
   otc: ContractConfig; // wASS OTC hybrid swap contract
+  marketplace: ContractConfig; // NFT marketplace for wASS trading
+  bondedItems: ContractConfig; // V7: ERC1155 Items with CPMM + Dynamic Fees
+  itemBridge: ContractConfig; // V7: Item Bridge for trait editor
 }
 
 export interface AppContracts {

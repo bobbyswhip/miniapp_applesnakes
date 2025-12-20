@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
 // Tab types for the inventory
-export type InventoryTab = 'collection' | 'listings' | 'exchange' | 'trading';
+export type InventoryTab = 'collection' | 'listings' | 'items' | 'exchange' | 'trading';
 
 interface InventoryContextType {
   isOpen: boolean;
