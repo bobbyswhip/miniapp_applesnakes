@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
         seller: listing.protocol_data?.parameters?.offerer || '',
         orderHash: listing.order_hash,
         protocolAddress: listing.protocol_address || '0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC', // Seaport 1.6
-        imageUrl: `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5diqasdnw3fydh31emy8lksdygkl4ycimvxqaj22oeekiclww6mc/${tokenId}.png`,
+        imageUrl: `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp/${tokenId}.png`,
         name: `AppleSnake #${tokenId}`,
         openseaUrl: `https://opensea.io/assets/base/0xa85D49d8B7a041c339D18281a750dE3D7c15A628/${tokenId}`,
       };

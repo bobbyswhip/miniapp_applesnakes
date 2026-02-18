@@ -130,14 +130,14 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
   if (!supportsSubaccounts) {
     return (
       <div className="space-y-4">
-        <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+        <div className="bg-[#1a2221]/50 p-4 rounded-lg border border-[rgba(255,255,255,0.08)]">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-purple-600/30 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-[rgba(255,208,117,0.15)] flex items-center justify-center">
               <span className="text-xl">👤</span>
             </div>
             <div>
               <div className="text-white font-semibold">Sub Accounts</div>
-              <div className="text-gray-400 text-sm">Manage gaming accounts</div>
+              <div className="text-[#8a9090] text-sm">Manage gaming accounts</div>
             </div>
           </div>
 
@@ -150,8 +150,8 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
             </div>
           </div>
 
-          <div className="mt-4 text-gray-400 text-xs">
-            <strong className="text-gray-300">Why use Sub Accounts?</strong>
+          <div className="mt-4 text-[#8a9090] text-xs">
+            <strong className="text-[#cecece]">Why use Sub Accounts?</strong>
             <ul className="list-disc list-inside mt-1 space-y-1">
               <li>Keep gaming funds separate from your main wallet</li>
               <li>Better organization and spending tracking</li>
@@ -179,15 +179,15 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
       </div>
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 p-4 rounded-lg border border-purple-500/30">
+      <div className="bg-gradient-to-r from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] p-4 rounded-lg border border-[rgba(255,208,117,0.2)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-600/30 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-[rgba(255,208,117,0.15)] flex items-center justify-center">
               <span className="text-xl">👥</span>
             </div>
             <div>
               <div className="text-white font-semibold">Gaming Sub Accounts</div>
-              <div className="text-gray-400 text-sm">
+              <div className="text-[#8a9090] text-sm">
                 {subaccounts.length} account{subaccounts.length !== 1 ? 's' : ''} created
               </div>
             </div>
@@ -195,7 +195,7 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
           <button
             onClick={() => refreshSubaccounts()}
             disabled={isLoading}
-            className="p-2 rounded-lg bg-gray-700/50 hover:bg-gray-600/50 transition-colors text-gray-400 hover:text-white"
+            className="p-2 rounded-lg bg-[#1f2827]/50 hover:bg-[#2a3533]/50 transition-colors text-[#8a9090] hover:text-white"
             title="Refresh accounts"
           >
             <span className={isLoading ? 'animate-spin inline-block' : ''}>🔄</span>
@@ -203,21 +203,21 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
         </div>
 
         {/* Active account display */}
-        <div className="bg-gray-900/50 p-3 rounded-lg">
-          <div className="text-xs text-gray-400 mb-1">Active Account</div>
+        <div className="bg-[#171e1d]/50 p-3 rounded-lg">
+          <div className="text-xs text-[#8a9090] mb-1">Active Account</div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${activeAccount === mainAccount ? 'bg-blue-500' : 'bg-green-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${activeAccount === mainAccount ? 'bg-[#b8860b]' : 'bg-green-500'}`} />
               <span className="text-white font-mono text-sm">
                 {activeAccount ? shortenAddress(activeAccount) : 'Not connected'}
               </span>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[#6b7575]">
                 ({activeAccount === mainAccount ? 'Main' : 'Gaming'})
               </span>
             </div>
             <div className="text-right">
               {activeBalance && (
-                <div className="text-purple-300 text-sm">
+                <div className="text-[#ffd075] text-sm">
                   {parseFloat(formatEther(activeBalance.value)).toFixed(4)} ETH
                 </div>
               )}
@@ -232,16 +232,16 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
       </div>
 
       {/* What are Sub Accounts? */}
-      <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
+      <div className="bg-[rgba(255,208,117,0.06)] p-4 rounded-lg border border-[rgba(255,208,117,0.2)]">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg">💡</span>
-          <span className="text-blue-300 font-medium text-sm">What are Sub Accounts?</span>
+          <span className="text-[#ffd075] font-medium text-sm">What are Sub Accounts?</span>
         </div>
-        <p className="text-blue-200/70 text-xs mb-2">
+        <p className="text-[rgba(255,208,117,0.7)] text-xs mb-2">
           Sub Accounts are separate wallet addresses linked to your Coinbase Smart Wallet.
           They allow you to organize funds for different purposes while keeping your main wallet secure.
         </p>
-        <ul className="text-blue-200/60 text-xs space-y-1">
+        <ul className="text-[rgba(255,208,117,0.6)] text-xs space-y-1">
           <li>• <strong>Isolated Funds:</strong> Gaming money stays separate from savings</li>
           <li>• <strong>Gas Sponsorship:</strong> Transactions can be sponsored (no gas fees!)</li>
           <li>• <strong>Easy Management:</strong> Transfer between accounts anytime</li>
@@ -262,8 +262,8 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
         <div
           className={`p-3 rounded-lg border transition-all ${
             activeAccount === mainAccount
-              ? 'bg-blue-900/30 border-blue-500'
-              : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+              ? 'bg-[rgba(255,208,117,0.08)] border-[rgba(255,208,117,0.4)]'
+              : 'bg-[#1a2221]/50 border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.08)]'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -271,12 +271,12 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
               className="flex items-center gap-3 cursor-pointer flex-1"
               onClick={() => handleSwitchAccount(mainAccount!)}
             >
-              <div className="w-8 h-8 rounded-full bg-blue-600/30 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-[rgba(255,208,117,0.15)] flex items-center justify-center">
                 <span>🏠</span>
               </div>
               <div>
                 <div className="text-white font-medium text-sm">Main Wallet</div>
-                <div className="text-gray-400 text-xs font-mono">
+                <div className="text-[#8a9090] text-xs font-mono">
                   {mainAccount ? shortenAddress(mainAccount) : '---'}
                 </div>
               </div>
@@ -293,7 +293,7 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
                 </div>
               )}
               {activeAccount === mainAccount && (
-                <div className="text-blue-400 text-xs">Active</div>
+                <div className="text-[#c5a97b] text-xs">Active</div>
               )}
             </div>
           </div>
@@ -318,26 +318,26 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
           <button
             onClick={() => setShowCreateForm(true)}
             disabled={isCreating}
-            className="w-full p-3 rounded-lg border border-dashed border-gray-600 hover:border-purple-500 bg-gray-800/30 hover:bg-gray-800/50 transition-all text-gray-400 hover:text-purple-300"
+            className="w-full p-3 rounded-lg border border-dashed border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,208,117,0.4)] bg-[#1a2221]/30 hover:bg-[#1a2221]/50 transition-all text-[#8a9090] hover:text-[#ffd075]"
           >
             <span className="text-lg mr-2">+</span>
             Create Gaming Account
           </button>
         ) : (
-          <div className="p-4 rounded-lg border border-purple-500/50 bg-purple-900/20">
+          <div className="p-4 rounded-lg border border-[rgba(255,208,117,0.3)] bg-[rgba(255,208,117,0.06)]">
             <div className="text-white font-medium mb-3">Create New Gaming Account</div>
             <input
               type="text"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               placeholder="Account name (optional)"
-              className="w-full p-2 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-500 text-sm focus:border-purple-500 focus:outline-none mb-3"
+              className="w-full p-2 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-white placeholder-[#6b7575] text-sm focus:border-[rgba(255,208,117,0.4)] focus:outline-none mb-3"
             />
             <div className="flex gap-2">
               <button
                 onClick={handleCreateSubaccount}
                 disabled={isCreating}
-                className="flex-1 py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all text-sm"
+                className="flex-1 py-2 px-4 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all text-sm"
               >
                 {isCreating ? 'Creating...' : 'Create Account'}
               </button>
@@ -347,7 +347,7 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
                   setNewLabel('');
                 }}
                 disabled={isCreating}
-                className="py-2 px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all text-sm"
+                className="py-2 px-4 bg-[#1f2827] hover:bg-[#2a3533] text-[#cecece] rounded-lg transition-all text-sm"
               >
                 Cancel
               </button>
@@ -357,9 +357,9 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
       </div>
 
       {/* Info section */}
-      <div className="bg-gray-800/30 p-3 rounded-lg border border-gray-700/50">
-        <div className="text-gray-400 text-xs">
-          <strong className="text-gray-300">Quick Tips</strong>
+      <div className="bg-[#1a2221]/30 p-3 rounded-lg border border-[rgba(255,255,255,0.06)]">
+        <div className="text-[#8a9090] text-xs">
+          <strong className="text-[#cecece]">Quick Tips</strong>
           <ul className="list-disc list-inside mt-1 space-y-1">
             <li>Transfer funds to your gaming account before playing</li>
             <li>Winnings are automatically sent to your active account</li>
@@ -372,29 +372,29 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
       {/* Transfer Modal */}
       {showTransferModal && selectedSubaccount && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-xl border border-gray-700 p-6 max-w-sm w-full">
+          <div className="bg-[#171e1d] rounded-xl border border-[rgba(255,255,255,0.08)] p-6 max-w-sm w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-semibold">
                 {transferType === 'deposit' ? '⬇️ Deposit to Gaming' : '⬆️ Withdraw to Main'}
               </h3>
               <button
                 onClick={() => setShowTransferModal(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-[#8a9090] hover:text-white"
               >
                 ✕
               </button>
             </div>
 
             {/* Transfer direction display */}
-            <div className="bg-gray-800/50 p-3 rounded-lg mb-4 text-sm">
-              <div className="flex items-center justify-between text-gray-400">
+            <div className="bg-[#1a2221]/50 p-3 rounded-lg mb-4 text-sm">
+              <div className="flex items-center justify-between text-[#8a9090]">
                 <span>From:</span>
                 <span className="text-white font-mono">
                   {shortenAddress(transferType === 'deposit' ? mainAccount! : selectedSubaccount)}
                 </span>
               </div>
-              <div className="text-center my-1 text-gray-500">↓</div>
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="text-center my-1 text-[#6b7575]">↓</div>
+              <div className="flex items-center justify-between text-[#8a9090]">
                 <span>To:</span>
                 <span className="text-white font-mono">
                   {shortenAddress(transferType === 'deposit' ? selectedSubaccount : mainAccount!)}
@@ -408,8 +408,8 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
                 onClick={() => setTransferAsset('ETH')}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                   transferAsset === 'ETH'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-[#b8860b] text-white'
+                    : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
                 }`}
               >
                 ETH
@@ -419,7 +419,7 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                   transferAsset === 'TOKEN'
                     ? 'bg-green-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
                 }`}
               >
                 $wASS
@@ -428,7 +428,7 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
 
             {/* Amount input */}
             <div className="mb-4">
-              <label className="text-gray-400 text-xs mb-1 block">Amount</label>
+              <label className="text-[#8a9090] text-xs mb-1 block">Amount</label>
               <input
                 type="number"
                 value={transferAmount}
@@ -436,9 +436,9 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
                 placeholder="0.0"
                 step="0.001"
                 min="0"
-                className="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none"
+                className="w-full p-3 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-white placeholder-[#6b7575] focus:border-[rgba(255,208,117,0.4)] focus:outline-none"
               />
-              <div className="text-gray-500 text-xs mt-1">
+              <div className="text-[#6b7575] text-xs mt-1">
                 Balance: {transferAsset === 'ETH'
                   ? `${parseFloat(formatEther(
                       (transferType === 'deposit' ? mainBalance?.value : activeBalance?.value) || BigInt(0)
@@ -456,14 +456,14 @@ export function SubaccountsPanel({ onAccountChange }: SubaccountsPanelProps) {
               <button
                 onClick={handleTransfer}
                 disabled={isTransferring || !transferAmount || parseFloat(transferAmount) <= 0}
-                className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all"
+                className="flex-1 py-3 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all"
               >
                 {isTransferring ? 'Transferring...' : `${transferType === 'deposit' ? 'Deposit' : 'Withdraw'}`}
               </button>
               <button
                 onClick={() => setShowTransferModal(false)}
                 disabled={isTransferring}
-                className="py-3 px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-all"
+                className="py-3 px-4 bg-[#1f2827] hover:bg-[#2a3533] text-[#cecece] rounded-lg transition-all"
               >
                 Cancel
               </button>
@@ -506,7 +506,7 @@ function SubaccountCard({ subaccount, index, isActive, onClick, onDeposit, onWit
       className={`p-3 rounded-lg border transition-all ${
         isActive
           ? 'bg-green-900/30 border-green-500'
-          : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+          : 'bg-[#1a2221]/50 border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.08)]'
       }`}
     >
       <div className="flex items-center justify-between">
@@ -518,7 +518,7 @@ function SubaccountCard({ subaccount, index, isActive, onClick, onDeposit, onWit
             <div className="text-white font-medium text-sm">
               {subaccount.label || `Gaming Account ${index + 1}`}
             </div>
-            <div className="text-gray-400 text-xs font-mono">
+            <div className="text-[#8a9090] text-xs font-mono">
               {shortenAddress(subaccount.address)}
             </div>
           </div>
@@ -541,10 +541,10 @@ function SubaccountCard({ subaccount, index, isActive, onClick, onDeposit, onWit
       </div>
 
       {/* Transfer buttons */}
-      <div className="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+      <div className="flex gap-2 mt-3 pt-3 border-t border-[rgba(255,255,255,0.06)]">
         <button
           onClick={(e) => { e.stopPropagation(); onDeposit(); }}
-          className="flex-1 py-1.5 px-3 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 text-xs font-medium rounded-lg transition-colors"
+          className="flex-1 py-1.5 px-3 bg-[rgba(255,208,117,0.15)] hover:bg-[#b8860b]/50 text-[#ffd075] text-xs font-medium rounded-lg transition-colors"
         >
           ⬇️ Deposit
         </button>

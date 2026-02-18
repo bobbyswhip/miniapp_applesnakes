@@ -20,7 +20,7 @@ function BlackjackRedirect() {
   }, [router, searchParams]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-[#171e1d] to-[#0a0d0c]">
       <div className="text-white text-xl">Redirecting to Blackjack...</div>
     </div>
   );
@@ -29,7 +29,7 @@ function BlackjackRedirect() {
 export default function BlackjackPage() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-purple-900 to-indigo-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-[#171e1d] to-[#0a0d0c]">
         <div className="text-white text-xl">Loading...</div>
       </div>
     }>

@@ -36,19 +36,19 @@ export function ParticipantIdentity({
           <img
             src={avatarUrl}
             alt=""
-            className="w-6 h-6 rounded-full object-cover bg-gray-700"
+            className="w-6 h-6 rounded-full object-cover bg-[#1f2827]"
             onError={(e) => {
               // Fallback to gradient on error
               (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
         ) : (
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[10px] font-bold text-white">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#c5a97b] to-[#ffd075] flex items-center justify-center text-[10px] font-bold text-white">
             {address.slice(2, 4).toUpperCase()}
           </div>
         )
       )}
-      <span className="text-sm font-mono text-purple-400 hover:underline">
+      <span className="text-sm font-mono text-[#ffd075] hover:underline">
         {displayName}
       </span>
     </a>
@@ -77,17 +77,17 @@ export function ParticipantIdentityCompact({
         <img
           src={avatarUrl}
           alt=""
-          className="w-5 h-5 rounded-full object-cover bg-gray-700"
+          className="w-5 h-5 rounded-full object-cover bg-[#1f2827]"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
       ) : (
-        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold text-white">
+        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#c5a97b] to-[#ffd075] flex items-center justify-center text-[8px] font-bold text-white">
           {address.slice(2, 4).toUpperCase()}
         </div>
       )}
-      <span className="text-sm font-mono text-purple-400 hover:underline">
+      <span className="text-sm font-mono text-[#ffd075] hover:underline">
         {displayName}
       </span>
     </a>

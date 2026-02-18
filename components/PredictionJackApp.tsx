@@ -23,7 +23,7 @@ const POOL_SIZES = {
   THIN: { maxUSD: 10, color: 'text-red-400', bgColor: 'bg-red-900/30', borderColor: 'border-red-500', label: 'Thin Pool', description: 'Low liquidity - may have high slippage' },
   MEDIUM: { maxUSD: 50, color: 'text-orange-400', bgColor: 'bg-orange-900/30', borderColor: 'border-orange-500', label: 'Medium Pool', description: 'Moderate liquidity for trading' },
   GOOD: { maxUSD: 100, color: 'text-green-400', bgColor: 'bg-green-900/30', borderColor: 'border-green-500', label: 'Good Pool', description: 'Good liquidity for active trading' },
-  OPTIMAL: { maxUSD: Infinity, color: 'text-purple-400', bgColor: 'bg-purple-900/30', borderColor: 'border-purple-500', label: 'Optimal Pool', description: 'Best starting ratio for trading volume' },
+  OPTIMAL: { maxUSD: Infinity, color: 'text-[#c5a97b]', bgColor: 'bg-[rgba(255,208,117,0.08)]', borderColor: 'border-[rgba(255,208,117,0.4)]', label: 'Optimal Pool', description: 'Best starting ratio for trading volume' },
 };
 
 // Get pool size category based on USD value
@@ -171,13 +171,13 @@ function MiniCard({ card, size = 'sm', faceDown = false }: { card: CardDisplay; 
         style={{
           width: s.w,
           height: s.h,
-          background: 'linear-gradient(135deg, #1e3a5f 0%, #0f1f32 100%)',
-          border: '1px solid #3b82f6',
+          background: 'linear-gradient(135deg, #2a2318 0%, #1a1510 100%)',
+          border: '1px solid #c5a97b',
         }}
       >
-        <div className="absolute inset-0.5 rounded border border-blue-500/30"
+        <div className="absolute inset-0.5 rounded border border-[rgba(255,208,117,0.2)]"
           style={{
-            background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(59, 130, 246, 0.1) 2px, rgba(59, 130, 246, 0.1) 4px)'
+            background: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,208,117,0.08) 2px, rgba(255,208,117,0.08) 4px)'
           }}
         />
       </div>
@@ -276,7 +276,7 @@ function PlayerStatsBadge({ playerAddress }: { playerAddress: string }) {
       <Name
         address={playerAddress as `0x${string}`}
         chain={base}
-        className="text-xs truncate max-w-[90px] text-purple-300 font-medium"
+        className="text-xs truncate max-w-[90px] text-[#ffd075] font-medium"
       />
       {/* Win rate badge - shows player's historical win rate */}
       {gamesPlayed > 0 && (
@@ -364,8 +364,8 @@ function EnhancedGameCard({
 
   if (!gameInfo) {
     return (
-      <div className="bg-gray-800/50 rounded-xl p-4 animate-pulse border border-gray-700">
-        <div className="h-40 bg-gray-700/50 rounded" />
+      <div className="bg-[#1a2221]/50 rounded-xl p-4 animate-pulse border border-[rgba(255,255,255,0.08)]">
+        <div className="h-40 bg-[#1f2827]/50 rounded" />
       </div>
     );
   }
@@ -387,11 +387,11 @@ function EnhancedGameCard({
   return (
     <div
       onClick={() => onSelect(gameId)}
-      className={`bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl p-3 cursor-pointer
+      className={`bg-gradient-to-br from-[#1a2221]/80 to-[#171e1d]/80 rounded-xl p-3 cursor-pointer
         transition-all duration-200 hover:scale-[1.02] border-2 ${
         isSelected
-          ? 'border-purple-500 shadow-lg shadow-purple-500/30'
-          : 'border-gray-700 hover:border-purple-500/50'
+          ? 'border-[rgba(255,208,117,0.4)] shadow-lg shadow-[rgba(255,208,117,0.15)]'
+          : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,208,117,0.3)]'
       }`}
     >
       {/* Header */}
@@ -403,10 +403,10 @@ function EnhancedGameCard({
         <div className={`px-2 py-0.5 rounded text-[10px] font-bold ${
           stateName === 'Active' || stateName === 'Hitting' ? 'bg-green-500/20 text-green-400 animate-pulse' :
           stateName === 'Dealing' ? 'bg-yellow-500/20 text-yellow-400' :
-          stateName === 'Standing' ? 'bg-blue-500/20 text-blue-400' :
+          stateName === 'Standing' ? 'bg-[rgba(255,208,117,0.1)] text-[#c5a97b]' :
           stateName === 'Busted' ? 'bg-red-500/20 text-red-400' :
-          stateName === 'Finished' ? 'bg-purple-500/20 text-purple-400' :
-          'bg-gray-700/50 text-gray-300'
+          stateName === 'Finished' ? 'bg-[rgba(255,208,117,0.1)] text-[#c5a97b]' :
+          'bg-[#1f2827]/50 text-[#cecece]'
         }`}>
           {stateName}
         </div>
@@ -417,7 +417,7 @@ function EnhancedGameCard({
         {/* Dealer Row */}
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-1">
-            <span className="text-gray-400 text-[10px] w-10">Dealer</span>
+            <span className="text-[#8a9090] text-[10px] w-10">Dealer</span>
             <div className="flex gap-0.5">
               {dealerCards.length > 0 ? (
                 dealerCards.slice(0, 5).map((card, i) => (
@@ -431,7 +431,7 @@ function EnhancedGameCard({
               )}
             </div>
           </div>
-          <span className="text-white font-bold text-sm bg-gray-800/50 px-1.5 py-0.5 rounded">
+          <span className="text-white font-bold text-sm bg-[#1a2221]/50 px-1.5 py-0.5 rounded">
             {gameInfo.dealerTotal}
           </span>
         </div>
@@ -439,7 +439,7 @@ function EnhancedGameCard({
         {/* Player Row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <span className="text-gray-400 text-[10px] w-10">Player</span>
+            <span className="text-[#8a9090] text-[10px] w-10">Player</span>
             <div className="flex gap-0.5">
               {playerCards.length > 0 ? (
                 playerCards.slice(0, 5).map((card, i) => (
@@ -453,7 +453,7 @@ function EnhancedGameCard({
               )}
             </div>
           </div>
-          <span className="text-white font-bold text-sm bg-gray-800/50 px-1.5 py-0.5 rounded">
+          <span className="text-white font-bold text-sm bg-[#1a2221]/50 px-1.5 py-0.5 rounded">
             {gameInfo.playerTotal}
           </span>
         </div>
@@ -461,7 +461,7 @@ function EnhancedGameCard({
 
       {/* Market Info */}
       {gameInfo.marketCreated && market && (
-        <div className="bg-gray-900/50 rounded-lg p-2">
+        <div className="bg-[#171e1d]/50 rounded-lg p-2">
           {/* Share Prices - show actual token cost per share */}
           <div className="flex justify-between items-center mb-1.5">
             <div className="flex gap-3">
@@ -470,7 +470,7 @@ function EnhancedGameCard({
                 <div className="text-white font-bold text-xs">
                   {(yesPrice / 100).toFixed(4)}
                   {tokenPriceUSD > 0 && (
-                    <span className="text-gray-500 text-[9px] ml-0.5">
+                    <span className="text-[#6b7575] text-[9px] ml-0.5">
                       (${((yesPrice / 100) * tokenPriceUSD).toFixed(4)})
                     </span>
                   )}
@@ -481,7 +481,7 @@ function EnhancedGameCard({
                 <div className="text-white font-bold text-xs">
                   {(noPrice / 100).toFixed(4)}
                   {tokenPriceUSD > 0 && (
-                    <span className="text-gray-500 text-[9px] ml-0.5">
+                    <span className="text-[#6b7575] text-[9px] ml-0.5">
                       (${((noPrice / 100) * tokenPriceUSD).toFixed(4)})
                     </span>
                   )}
@@ -489,16 +489,16 @@ function EnhancedGameCard({
               </div>
             </div>
             <div className="text-right">
-              <div className="text-gray-400 text-[10px]">Pool</div>
-              <div className="text-purple-300 font-semibold text-xs">
+              <div className="text-[#8a9090] text-[10px]">Pool</div>
+              <div className="text-[#ffd075] font-semibold text-xs">
                 {Number(totalDeposits).toFixed(4)} {TOKEN_TICKER}
-                {depositsUSD && <span className="text-gray-500 text-[9px] block">${depositsUSD}</span>}
+                {depositsUSD && <span className="text-[#6b7575] text-[9px] block">${depositsUSD}</span>}
               </div>
             </div>
           </div>
 
           {/* Price Bar - shows probability distribution */}
-          <div className="h-1.5 rounded-full bg-gray-700 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-[#1f2827] overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-green-500 to-green-400"
               style={{ width: `${yesPrice}%` }}
@@ -743,7 +743,7 @@ function MarketPanel({
   const tokenBalanceFormatted = tokenBalance ? formatUnits(tokenBalance, tokenDecimals) : '0';
 
   return (
-    <div className={`bg-gray-800/80 rounded-xl ${compact ? 'p-3' : 'p-4'}`}>
+    <div className={`bg-[#1a2221]/80 rounded-xl ${compact ? 'p-3' : 'p-4'}`}>
       {/* Price Display */}
       <div className="flex gap-2 mb-3">
         <button
@@ -751,7 +751,7 @@ function MarketPanel({
           className={`flex-1 p-2 rounded-lg transition-all ${
             position === 'yes'
               ? 'bg-green-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           <div className="text-xs opacity-80">YES</div>
@@ -762,7 +762,7 @@ function MarketPanel({
           className={`flex-1 p-2 rounded-lg transition-all ${
             position === 'no'
               ? 'bg-red-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           <div className="text-xs opacity-80">NO</div>
@@ -772,8 +772,8 @@ function MarketPanel({
 
       {/* User Shares with To Win calculations in USD */}
       {(Number(userYes) > 0 || Number(userNo) > 0) && (
-        <div className="bg-gray-900/50 p-2 rounded-lg mb-3 text-xs">
-          <div className="text-gray-400 mb-1">Your Position</div>
+        <div className="bg-[#171e1d]/50 p-2 rounded-lg mb-3 text-xs">
+          <div className="text-[#8a9090] mb-1">Your Position</div>
           <div className="space-y-1.5">
             {Number(userYes) > 0 && (() => {
               const yesWinTokens = Number(userYes) * (100 / yesPrice);
@@ -810,11 +810,11 @@ function MarketPanel({
       )}
 
       {/* Action Toggle */}
-      <div className="flex gap-1 mb-3 bg-gray-900/50 rounded-lg p-1">
+      <div className="flex gap-1 mb-3 bg-[#171e1d]/50 rounded-lg p-1">
         <button
           onClick={() => setActionType('buy')}
           className={`flex-1 py-1.5 rounded text-sm font-semibold transition-all ${
-            actionType === 'buy' ? 'bg-green-600 text-white' : 'text-gray-400'
+            actionType === 'buy' ? 'bg-green-600 text-white' : 'text-[#8a9090]'
           }`}
         >
           Buy
@@ -822,7 +822,7 @@ function MarketPanel({
         <button
           onClick={() => setActionType('sell')}
           className={`flex-1 py-1.5 rounded text-sm font-semibold transition-all ${
-            actionType === 'sell' ? 'bg-red-600 text-white' : 'text-gray-400'
+            actionType === 'sell' ? 'bg-red-600 text-white' : 'text-[#8a9090]'
           }`}
         >
           Sell
@@ -831,11 +831,11 @@ function MarketPanel({
 
       {/* Payment Method Toggle (only for buying) */}
       {actionType === 'buy' && (
-        <div className="flex gap-1 mb-3 bg-gray-900/50 rounded-lg p-1">
+        <div className="flex gap-1 mb-3 bg-[#171e1d]/50 rounded-lg p-1">
           <button
             onClick={() => setPaymentMethod('token')}
             className={`flex-1 py-1.5 rounded text-sm font-semibold transition-all ${
-              paymentMethod === 'token' ? 'bg-purple-600 text-white' : 'text-gray-400'
+              paymentMethod === 'token' ? 'bg-[#b8860b] text-white' : 'text-[#8a9090]'
             }`}
           >
             {TOKEN_TICKER}
@@ -843,7 +843,7 @@ function MarketPanel({
           <button
             onClick={() => setPaymentMethod('eth')}
             className={`flex-1 py-1.5 rounded text-sm font-semibold transition-all ${
-              paymentMethod === 'eth' ? 'bg-blue-600 text-white' : 'text-gray-400'
+              paymentMethod === 'eth' ? 'bg-[#b8860b] text-white' : 'text-[#8a9090]'
             }`}
           >
             ETH
@@ -860,9 +860,9 @@ function MarketPanel({
           placeholder={actionType === 'buy'
             ? `Amount in ${paymentMethod === 'eth' ? 'ETH' : TOKEN_TICKER}`
             : 'Shares to sell'}
-          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+          className="w-full px-3 py-2 bg-[#171e1d] border border-[rgba(255,255,255,0.08)] rounded-lg text-white text-sm focus:outline-none focus:border-[rgba(255,208,117,0.4)]"
         />
-        <div className="text-xs text-gray-400 mt-1">
+        <div className="text-xs text-[#8a9090] mt-1">
           {actionType === 'buy' && paymentMethod === 'token' && (
             <span>Balance: {Number(tokenBalanceFormatted).toFixed(4)} {TOKEN_TICKER}</span>
           )}
@@ -891,7 +891,7 @@ function MarketPanel({
           }
         }}
         disabled={!amount || !market.tradingActive || isApprovePending || isApproveConfirming || isTxPending || isTxConfirming || isBatchPending || isBatchConfirming}
-        className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all text-sm"
+        className="w-full py-2 px-4 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all text-sm"
       >
         {getButtonText()}
       </button>
@@ -900,26 +900,26 @@ function MarketPanel({
         <div className="text-yellow-400 text-xs text-center mt-2">Trading paused</div>
       )}
       {market.resolved && (
-        <div className="text-purple-300 text-xs text-center mt-2">Market resolved</div>
+        <div className="text-[#ffd075] text-xs text-center mt-2">Market resolved</div>
       )}
 
       {/* Market Stats */}
-      <div className="mt-3 pt-3 border-t border-gray-700 grid grid-cols-2 gap-2 text-xs">
+      <div className="mt-3 pt-3 border-t border-[rgba(255,255,255,0.08)] grid grid-cols-2 gap-2 text-xs">
         <div>
-          <div className="text-gray-400">Total Deposits</div>
+          <div className="text-[#8a9090]">Total Deposits</div>
           <div className="text-white font-semibold">
             {Number(totalDeposits).toFixed(4)}
             {tokenPriceUSD > 0 && (
-              <span className="text-gray-500 text-[10px] ml-1">(${(Number(totalDeposits) * tokenPriceUSD).toFixed(4)})</span>
+              <span className="text-[#6b7575] text-[10px] ml-1">(${(Number(totalDeposits) * tokenPriceUSD).toFixed(4)})</span>
             )}
           </div>
         </div>
         <div>
-          <div className="text-gray-400">Volume</div>
+          <div className="text-[#8a9090]">Volume</div>
           <div className="text-white font-semibold">
             {Number(volume).toFixed(4)}
             {tokenPriceUSD > 0 && (
-              <span className="text-gray-500 text-[10px] ml-1">(${(Number(volume) * tokenPriceUSD).toFixed(4)})</span>
+              <span className="text-[#6b7575] text-[10px] ml-1">(${(Number(volume) * tokenPriceUSD).toFixed(4)})</span>
             )}
           </div>
         </div>
@@ -927,16 +927,16 @@ function MarketPanel({
 
       {/* Extended Stats for showFullStats mode */}
       {showFullStats && (
-        <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+        <div className="mt-3 pt-3 border-t border-[rgba(255,255,255,0.08)] space-y-2">
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <div className="text-gray-400">YES Pool</div>
+              <div className="text-[#8a9090]">YES Pool</div>
               <div className="text-green-400 font-semibold">
                 {market.yesDeposits ? Number(formatUnits(market.yesDeposits, tokenDecimals)).toFixed(4) : '0'}
               </div>
             </div>
             <div>
-              <div className="text-gray-400">NO Pool</div>
+              <div className="text-[#8a9090]">NO Pool</div>
               <div className="text-red-400 font-semibold">
                 {market.noDeposits ? Number(formatUnits(market.noDeposits, tokenDecimals)).toFixed(4) : '0'}
               </div>
@@ -944,11 +944,11 @@ function MarketPanel({
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <div className="text-gray-400">YES Shares</div>
+              <div className="text-[#8a9090]">YES Shares</div>
               <div className="text-green-300">{market.yesSharesTotal ? Number(formatUnits(market.yesSharesTotal, tokenDecimals)).toFixed(4) : '0'}</div>
             </div>
             <div>
-              <div className="text-gray-400">NO Shares</div>
+              <div className="text-[#8a9090]">NO Shares</div>
               <div className="text-red-300">{market.noSharesTotal ? Number(formatUnits(market.noSharesTotal, tokenDecimals)).toFixed(4) : '0'}</div>
             </div>
           </div>
@@ -995,7 +995,7 @@ function ClaimInlineButton({
     <button
       onClick={handleClaim}
       disabled={isPending || isConfirming || isSuccess}
-      className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-bold rounded-lg text-sm transition-all animate-pulse"
+      className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] text-white font-bold rounded-lg text-sm transition-all animate-pulse"
     >
       {isPending || isConfirming ? 'Claiming...' : isSuccess ? 'Claimed!' : (
         <>
@@ -1029,27 +1029,27 @@ function StartPageClaimItem({ market, tokenPriceUSD }: { market: ClaimableMarket
   const resultLabel = resultLabels[market.result] || 'Unknown';
 
   return (
-    <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-2">
+    <div className="flex items-center justify-between bg-[#1a2221]/50 rounded-lg p-2">
       <div className="flex-1 min-w-0">
         <div className="text-white text-sm font-semibold truncate">
           Game #{market.gameId.toString()}
           <span className={`ml-2 text-xs ${
             resultLabel === 'Win' ? 'text-green-400' :
             resultLabel === 'Lose' ? 'text-red-400' :
-            'text-gray-400'
+            'text-[#8a9090]'
           }`}>
             ({resultLabel})
           </span>
         </div>
         <div className="text-green-400 text-xs">
           {claimableFormatted.toFixed(4)}
-          {claimableUSD && <span className="text-gray-500 ml-1">(${claimableUSD})</span>}
+          {claimableUSD && <span className="text-[#6b7575] ml-1">(${claimableUSD})</span>}
         </div>
       </div>
       <button
         onClick={handleClaim}
         disabled={isPending || isConfirming || isSuccess}
-        className="ml-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white text-xs font-semibold rounded transition-all flex-shrink-0"
+        className="ml-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] text-white text-xs font-semibold rounded transition-all flex-shrink-0"
       >
         {isPending || isConfirming ? '...' : isSuccess ? '✓' : 'Claim'}
       </button>
@@ -1262,7 +1262,7 @@ function GameScreen({
   if (!gameDisplay) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-gray-400">Loading game...</div>
+        <div className="text-[#8a9090]">Loading game...</div>
       </div>
     );
   }
@@ -1277,7 +1277,7 @@ function GameScreen({
           {showBackButton ? (
             <button
               onClick={onBack}
-              className="px-3 py-1.5 bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 rounded-lg text-sm flex items-center gap-2"
+              className="px-3 py-1.5 bg-[#1f2827]/50 hover:bg-[#2a3533]/50 text-[#cecece] rounded-lg text-sm flex items-center gap-2"
             >
               ← Back to Games
             </button>
@@ -1288,7 +1288,7 @@ function GameScreen({
           {/* Game ID and Share Button - Upper Right */}
           {gameDisplay.gameId > 0n && (
             <div className="flex items-center gap-2">
-              <div className="text-gray-400 text-xs">Game #{gameDisplay.gameId.toString()}</div>
+              <div className="text-[#8a9090] text-xs">Game #{gameDisplay.gameId.toString()}</div>
               <button
                 onClick={() => {
                   const shareUrl = `${window.location.origin}/blackjack?id=${gameDisplay.gameId.toString()}`;
@@ -1296,7 +1296,7 @@ function GameScreen({
                   setShowLinkCopied(true);
                   setTimeout(() => setShowLinkCopied(false), 2000);
                 }}
-                className="p-1.5 bg-purple-600/50 hover:bg-purple-500/50 text-purple-200 rounded-lg text-xs flex items-center gap-1 transition-all"
+                className="p-1.5 bg-[rgba(255,208,117,0.25)] hover:bg-[rgba(255,208,117,0.25)] text-[#ffd075] rounded-lg text-xs flex items-center gap-1 transition-all"
                 title="Copy link to clipboard"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1318,19 +1318,19 @@ function GameScreen({
 
         {/* Game Status */}
         <div className="text-center mb-3">
-          <div className="text-purple-300 font-semibold text-lg">{gameDisplay.status}</div>
+          <div className="text-[#ffd075] font-semibold text-lg">{gameDisplay.status}</div>
         </div>
 
         {/* VRF Waiting Info Box */}
         {isGameWaitingForVRF && (
-          <div className={`${vrfWaitSeconds >= 60 ? 'bg-red-900/40 border-red-500' : 'bg-purple-900/40 border-purple-500'} border p-4 rounded-xl mb-4 text-center`}>
+          <div className={`${vrfWaitSeconds >= 60 ? 'bg-red-900/40 border-red-500' : 'bg-[rgba(255,208,117,0.1)] border-[rgba(255,208,117,0.4)]'} border p-4 rounded-xl mb-4 text-center`}>
             <div className="flex items-center justify-center gap-2 mb-2">
-              <div className="animate-spin w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full" />
-              <span className="text-purple-200 font-semibold">Waiting for Chainlink VRF</span>
-              <span className="text-gray-400 text-sm">({vrfWaitSeconds}s)</span>
+              <div className="animate-spin w-5 h-5 border-2 border-[#c5a97b] border-t-transparent rounded-full" />
+              <span className="text-[#ffd075] font-semibold">Waiting for Chainlink VRF</span>
+              <span className="text-[#8a9090] text-sm">({vrfWaitSeconds}s)</span>
             </div>
             {vrfWaitSeconds < 60 ? (
-              <p className="text-purple-300 text-sm">
+              <p className="text-[#ffd075] text-sm">
                 Generating secure random cards... This usually takes 2-3 seconds on Base.
               </p>
             ) : (
@@ -1341,7 +1341,7 @@ function GameScreen({
                 <button
                   onClick={handleCancelStuckGame}
                   disabled={isCancelPending || isCancelConfirming}
-                  className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold rounded-lg transition-all"
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-[#2a3533] text-white font-bold rounded-lg transition-all"
                 >
                   {isCancelPending || isCancelConfirming ? 'Cancelling...' : 'Cancel Stuck Game'}
                 </button>
@@ -1353,7 +1353,7 @@ function GameScreen({
         {/* Dealer Hand */}
         {gameDisplay.dealerCards.length > 0 && (
           <div className="mb-4">
-            <div className="text-gray-300 text-sm mb-2 text-center">
+            <div className="text-[#cecece] text-sm mb-2 text-center">
               Dealer: <span className="font-bold text-white">{gameDisplay.dealerTotal}</span>
             </div>
             <div className="flex justify-center items-center">
@@ -1365,7 +1365,7 @@ function GameScreen({
         {/* Player Hand */}
         {gameDisplay.playerCards.length > 0 && (
           <div className="mb-4">
-            <div className="text-gray-300 text-sm mb-2 text-center">
+            <div className="text-[#cecece] text-sm mb-2 text-center">
               Your Hand: <span className="font-bold text-white">{gameDisplay.playerTotal}</span>
             </div>
             <div className="flex justify-center items-center">
@@ -1376,10 +1376,10 @@ function GameScreen({
 
         {/* Trading Period Timer with Better Context */}
         {clientSecondsUntilCanAct > 0 && (
-          <div className="bg-blue-900/50 border border-blue-500 p-3 rounded-lg text-center mb-3">
-            <div className="text-blue-200 text-sm font-semibold">⏱️ Trading Window Open</div>
+          <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.4)] p-3 rounded-lg text-center mb-3">
+            <div className="text-[#ffd075] text-sm font-semibold">⏱️ Trading Window Open</div>
             <div className="text-white font-bold text-2xl">{clientSecondsUntilCanAct}s</div>
-            <div className="text-blue-300 text-xs mt-1">
+            <div className="text-[#ffd075] text-xs mt-1">
               Trade on the prediction market before making your move
             </div>
           </div>
@@ -1398,7 +1398,7 @@ function GameScreen({
               <button
                 onClick={handleHit}
                 disabled={isHitPending || isHitConfirming}
-                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold rounded-xl transition-all text-lg shadow-lg"
+                className="px-8 py-3 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] text-white font-bold rounded-xl transition-all text-lg shadow-lg"
               >
                 {isHitPending || isHitConfirming ? 'Hitting...' : 'HIT'}
               </button>
@@ -1407,7 +1407,7 @@ function GameScreen({
               <button
                 onClick={handleStand}
                 disabled={isStandPending || isStandConfirming}
-                className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white font-bold rounded-xl transition-all text-lg shadow-lg"
+                className="px-8 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-[#2a3533] text-white font-bold rounded-xl transition-all text-lg shadow-lg"
               >
                 {isStandPending || isStandConfirming ? 'Standing...' : 'STAND'}
               </button>
@@ -1425,12 +1425,12 @@ function GameScreen({
 
         {/* Trading Tips Box - Always show when market exists to help users understand the game */}
         {activeGameId && activeGameId > 0n && gameDisplay.marketCreated && (
-          <div className="bg-gray-800/60 rounded-xl p-3 text-xs">
-            <div className="text-purple-300 font-semibold mb-2">💡 Trading Tips & Odds</div>
-            <div className="space-y-1.5 text-gray-300">
+          <div className="bg-[#1a2221]/60 rounded-xl p-3 text-xs">
+            <div className="text-[#ffd075] font-semibold mb-2">💡 Trading Tips & Odds</div>
+            <div className="space-y-1.5 text-[#cecece]">
               <div>• <span className="text-green-400">YES</span> wins if player beats dealer or dealer busts</div>
               <div>• <span className="text-red-400">NO</span> wins if player busts or dealer wins</div>
-              <div className="pt-1 border-t border-gray-700 mt-1">
+              <div className="pt-1 border-t border-[rgba(255,255,255,0.08)] mt-1">
                 <div className="flex justify-between items-center">
                   <span>Current hand:</span>
                   <span className="text-white font-semibold">{gameDisplay.playerTotal} vs Dealer: {gameDisplay.dealerTotal}</span>
@@ -1438,8 +1438,8 @@ function GameScreen({
               </div>
               {/* Player Win Odds based on current hand situation */}
               {gameDisplay.playerTotal > 0 && (
-                <div className="bg-gray-900/50 rounded-lg p-2 mt-2">
-                  <div className="text-gray-400 text-[10px] mb-1">Player Win Probability</div>
+                <div className="bg-[#171e1d]/50 rounded-lg p-2 mt-2">
+                  <div className="text-[#8a9090] text-[10px] mb-1">Player Win Probability</div>
                   {(() => {
                     // Blackjack odds calculation comparing player vs dealer totals
                     let winChance = 50;
@@ -1517,7 +1517,7 @@ function GameScreen({
                           </span>
                           {!isDefinitive && <span className="text-red-400">LOSE: ~{loseChance}%</span>}
                         </div>
-                        <div className="h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                        <div className="h-1.5 bg-[#1f2827] rounded-full mt-1 overflow-hidden">
                           <div
                             className={`h-full transition-all duration-300 ${
                               isGameResolved && winChance === 100 ? 'bg-gradient-to-r from-green-500 to-green-300' :
@@ -1600,7 +1600,7 @@ function GameScreen({
                 } else {
                   // Player is losing
                   if (playerTotal <= 11) {
-                    return <div className="text-blue-400 mt-1">📈 Behind ({playerTotal} vs {dealerTotal}) - Hit! Can&apos;t bust.</div>;
+                    return <div className="text-[#c5a97b] mt-1">📈 Behind ({playerTotal} vs {dealerTotal}) - Hit! Can&apos;t bust.</div>;
                   } else if (playerTotal >= 17) {
                     return <div className="text-red-400 mt-1">⚠️ Behind ({playerTotal} vs {dealerTotal}) but hitting risks bust. Tough spot!</div>;
                   } else {
@@ -1610,7 +1610,7 @@ function GameScreen({
               })()}
               {/* Trading window indicator */}
               {clientSecondsUntilCanAct > 0 && (
-                <div className="text-purple-300 mt-2 pt-2 border-t border-gray-700">
+                <div className="text-[#ffd075] mt-2 pt-2 border-t border-[rgba(255,255,255,0.08)]">
                   ⏱️ Trading window: <span className="font-bold text-white">{clientSecondsUntilCanAct}s</span> remaining
                 </div>
               )}
@@ -1620,11 +1620,11 @@ function GameScreen({
 
         {/* Waiting for Market / Game ended too quickly */}
         {activeGameId && activeGameId > 0n && !gameDisplay.marketCreated && (
-          <div className={`${gameDisplay.canStartNew ? 'bg-gray-800/50 border-gray-600' : 'bg-yellow-900/30 border-yellow-600'} border rounded-xl p-4 text-center`}>
+          <div className={`${gameDisplay.canStartNew ? 'bg-[#1a2221]/50 border-[rgba(255,255,255,0.08)]' : 'bg-yellow-900/30 border-yellow-600'} border rounded-xl p-4 text-center`}>
             {gameDisplay.canStartNew ? (
               <>
-                <div className="text-gray-300 font-semibold mb-1">⚡ No Market Created</div>
-                <div className="text-gray-400 text-sm">
+                <div className="text-[#cecece] font-semibold mb-1">⚡ No Market Created</div>
+                <div className="text-[#8a9090] text-sm">
                   This game ended too quickly to start a prediction market
                 </div>
               </>
@@ -1937,22 +1937,22 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 flex flex-col bg-gray-900"
+      className="fixed inset-x-0 bottom-0 z-40 flex flex-col bg-[#171e1d]"
       style={{ top: `${navHeight}px` }}
     >
       {/* Tab Buttons Row - Compact, directly under main header */}
-      <div className="flex-shrink-0 bg-gray-900 px-0.5 xs:px-1.5 sm:px-4 pt-0.5 xs:pt-1 sm:pt-2">
+      <div className="flex-shrink-0 bg-[#171e1d] px-0.5 xs:px-1.5 sm:px-4 pt-0.5 xs:pt-1 sm:pt-2">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between gap-0.5 xs:gap-1 sm:gap-2">
             {/* Tab Pills - Order: Live Games → Your Game/Start Game → Claim → Stake */}
-            <div className="flex gap-0.5 bg-gray-800/50 p-0.5 rounded-lg xs:rounded-xl overflow-x-auto scrollbar-hide min-w-0">
+            <div className="flex gap-0.5 bg-[#1a2221]/50 p-0.5 rounded-lg xs:rounded-xl overflow-x-auto scrollbar-hide min-w-0">
               {/* Live Games tab */}
               <button
                 onClick={() => setView('live')}
                 className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'live'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                    ? 'bg-[#b8860b] text-white'
+                    : 'text-[#8a9090] hover:text-white hover:bg-[#1f2827]/50'
                 }`}
               >
                 <span className="hidden sm:inline">🎮 </span><span className="hidden xs:inline">Live </span>Games
@@ -1978,8 +1978,8 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                   onClick={() => setView('play')}
                   className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                     view === 'play'
-                      ? 'bg-purple-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                      ? 'bg-[#b8860b] text-white'
+                      : 'text-[#8a9090] hover:text-white hover:bg-[#1f2827]/50'
                   }`}
                 >
                   <span className="hidden sm:inline">▶️ </span><span className="xs:hidden">Start</span><span className="hidden xs:inline">Start Game</span>
@@ -1991,8 +1991,8 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                 onClick={() => setView('closed')}
                 className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'closed'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                    ? 'bg-[#b8860b] text-white'
+                    : 'text-[#8a9090] hover:text-white hover:bg-[#1f2827]/50'
                 }`}
               >
                 <span className="hidden sm:inline">💰 </span>Claim
@@ -2006,8 +2006,8 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                 onClick={() => setView('stake')}
                 className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                   view === 'stake'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                    ? 'bg-[#b8860b] text-white'
+                    : 'text-[#8a9090] hover:text-white hover:bg-[#1f2827]/50'
                 }`}
               >
                 <span className="hidden sm:inline">🐍 </span>Stake
@@ -2019,8 +2019,8 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                   onClick={() => setView('accounts')}
                   className={`relative px-1 xs:px-1.5 sm:px-3 py-0.5 xs:py-1 sm:py-1.5 font-semibold text-[9px] xs:text-[10px] sm:text-sm transition-all rounded-md xs:rounded-lg whitespace-nowrap flex-shrink-0 ${
                     view === 'accounts'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700/50'
+                      ? 'bg-[#b8860b] text-white'
+                      : 'text-[#8a9090] hover:text-white hover:bg-[#1f2827]/50'
                   }`}
                 >
                   <span className="hidden sm:inline">👥 </span><span className="xs:hidden">Accts</span><span className="hidden xs:inline">Sub Accts</span>
@@ -2037,14 +2037,14 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
             <div className="flex items-center gap-0.5 xs:gap-1 sm:gap-2 flex-shrink-0">
               {/* Token Price Badge */}
               {tokenPriceUSD > 0 && (
-                <div className="hidden sm:flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-purple-900/30 rounded-md sm:rounded-lg text-[10px] sm:text-xs">
-                  <span className="text-purple-400">{TOKEN_TICKER}</span>
+                <div className="hidden sm:flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-[rgba(255,208,117,0.08)] rounded-md sm:rounded-lg text-[10px] sm:text-xs">
+                  <span className="text-[#c5a97b]">{TOKEN_TICKER}</span>
                   <span className="text-white font-semibold">${tokenPriceUSD.toFixed(4)}</span>
                 </div>
               )}
               {/* Live Count */}
-              <div className="flex items-center gap-0.5 px-0.5 xs:px-1 sm:px-2 py-0.5 xs:py-0.5 sm:py-1 bg-gray-800/50 rounded-md sm:rounded-lg text-[8px] xs:text-[9px] sm:text-xs">
-                <span className="text-gray-400 hidden xs:inline">Live:</span>
+              <div className="flex items-center gap-0.5 px-0.5 xs:px-1 sm:px-2 py-0.5 xs:py-0.5 sm:py-1 bg-[#1a2221]/50 rounded-md sm:rounded-lg text-[8px] xs:text-[9px] sm:text-xs">
+                <span className="text-[#8a9090] hidden xs:inline">Live:</span>
                 <span className="text-green-400 font-bold">{totalActiveGames.toString()}</span>
               </div>
               {/* Claimable Button */}
@@ -2062,7 +2062,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               {/* Help Button - links to main docs page */}
               <Link
                 href="/docs"
-                className="p-0.5 xs:p-1 sm:p-1.5 hover:bg-purple-900/50 bg-purple-800/30 rounded-md sm:rounded-lg transition-colors text-purple-400 hover:text-purple-300 hidden xs:block"
+                className="p-0.5 xs:p-1 sm:p-1.5 hover:bg-[rgba(255,208,117,0.12)] bg-[rgba(255,208,117,0.08)] rounded-md sm:rounded-lg transition-colors text-[#c5a97b] hover:text-[#ffd075] hidden xs:block"
                 aria-label="Help & Documentation"
               >
                 <svg className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2095,13 +2095,13 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               </div>
 
               {activeGameIds.length === 0 ? (
-                <div className="bg-gray-800/50 rounded-xl p-12 text-center">
+                <div className="bg-[#1a2221]/50 rounded-xl p-12 text-center">
                   <div className="text-6xl mb-4">🎰</div>
-                  <div className="text-gray-300 text-lg mb-2">No active games</div>
-                  <div className="text-gray-500 mb-6">Be the first to start a game!</div>
+                  <div className="text-[#cecece] text-lg mb-2">No active games</div>
+                  <div className="text-[#6b7575] mb-6">Be the first to start a game!</div>
                   <button
                     onClick={() => setView('play')}
-                    className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl"
+                    className="px-6 py-3 bg-[#b8860b] hover:bg-[#9a7209] text-white font-bold rounded-xl"
                   >
                     Start New Game
                   </button>
@@ -2129,7 +2129,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                 <>
                   <div className="text-center">
                     <h2 className="text-2xl font-bold text-white mb-2">💰 Claim Your Winnings First!</h2>
-                    <p className="text-gray-400">
+                    <p className="text-[#8a9090]">
                       You have {claimableMarkets.length} unclaimed {claimableMarkets.length === 1 ? 'reward' : 'rewards'}
                     </p>
                   </div>
@@ -2162,7 +2162,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                     </button>
                   </div>
 
-                  <div className="text-center text-gray-500 text-sm">
+                  <div className="text-center text-[#6b7575] text-sm">
                     Claim your winnings to start a new game
                   </div>
                 </>
@@ -2170,7 +2170,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                 <>
                   <div className="text-center">
                     <h2 className="text-2xl font-bold text-white mb-2">Start New Game</h2>
-                    <p className="text-gray-400">Create a prediction market on your blackjack game</p>
+                    <p className="text-[#8a9090]">Create a prediction market on your blackjack game</p>
                   </div>
 
                   {errorMessage && (
@@ -2180,13 +2180,13 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                   )}
 
                   {/* Payment Method Toggle */}
-                  <div className="flex gap-2 p-1 bg-gray-800/50 rounded-xl">
+                  <div className="flex gap-2 p-1 bg-[#1a2221]/50 rounded-xl">
                     <button
                       onClick={() => setStartPaymentMethod('eth')}
                       className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
                         startPaymentMethod === 'eth'
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-400 hover:text-white'
+                          ? 'bg-[#b8860b] text-white'
+                          : 'text-[#8a9090] hover:text-white'
                       }`}
                     >
                       ETH
@@ -2195,8 +2195,8 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                       onClick={() => setStartPaymentMethod('token')}
                       className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
                         startPaymentMethod === 'token'
-                          ? 'bg-purple-600 text-white'
-                          : 'text-gray-400 hover:text-white'
+                          ? 'bg-[#b8860b] text-white'
+                          : 'text-[#8a9090] hover:text-white'
                       }`}
                     >
                       {TOKEN_TICKER}
@@ -2204,7 +2204,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                   </div>
 
                   {/* Amount Slider with Pool Size Indicator */}
-                  <div className="bg-gray-800/50 rounded-xl p-4 space-y-4">
+                  <div className="bg-[#1a2221]/50 rounded-xl p-4 space-y-4">
                     {/* Amount Display - shows live value during drag */}
                     <div className="text-center">
                       {(() => {
@@ -2224,12 +2224,12 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                               }
                             </div>
                             {startPaymentMethod === 'eth' && ethPriceUSD > 0 && (
-                              <div className="text-gray-400 text-sm">
+                              <div className="text-[#8a9090] text-sm">
                                 ≈ ${(displayEth * ethPriceUSD).toFixed(4)} USD
                               </div>
                             )}
                             {startPaymentMethod === 'token' && tokenPriceUSD > 0 && (
-                              <div className="text-gray-400 text-sm">
+                              <div className="text-[#8a9090] text-sm">
                                 ≈ ${(displayToken * tokenPriceUSD).toFixed(4)} USD
                               </div>
                             )}
@@ -2264,11 +2264,11 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                               setLocalSliderValue(val);
                               if (!isDraggingSlider) setEthAmount(sliderToEth(val));
                             }}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 touch-none"
+                            className="w-full h-2 bg-[#1f2827] rounded-lg appearance-none cursor-pointer accent-[#c5a97b] touch-none"
                           />
-                          <div className="flex justify-between text-xs text-gray-500">
+                          <div className="flex justify-between text-xs text-[#6b7575]">
                             <span>{ETH_MIN} ETH</span>
-                            <span className="text-purple-400">↑ Optimal ({ETH_OPTIMAL} ETH)</span>
+                            <span className="text-[#c5a97b]">↑ Optimal ({ETH_OPTIMAL} ETH)</span>
                             <span>{ETH_MAX} ETH</span>
                           </div>
                         </>
@@ -2296,11 +2296,11 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                               setLocalSliderValue(val);
                               if (!isDraggingSlider) setTokenAmount(sliderToToken(val));
                             }}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500 touch-none"
+                            className="w-full h-2 bg-[#1f2827] rounded-lg appearance-none cursor-pointer accent-[#c5a97b] touch-none"
                           />
-                          <div className="flex justify-between text-xs text-gray-500">
+                          <div className="flex justify-between text-xs text-[#6b7575]">
                             <span>{TOKEN_MIN} {TOKEN_TICKER}</span>
-                            <span className="text-purple-400">↑ Optimal ({TOKEN_OPTIMAL} {TOKEN_TICKER})</span>
+                            <span className="text-[#c5a97b]">↑ Optimal ({TOKEN_OPTIMAL} {TOKEN_TICKER})</span>
                             <span>{TOKEN_MAX} {TOKEN_TICKER}</span>
                           </div>
                         </>
@@ -2329,21 +2329,21 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                                 poolSize === POOL_SIZES.THIN ? 'bg-red-400' :
                                 poolSize === POOL_SIZES.MEDIUM ? 'bg-orange-400' :
                                 poolSize === POOL_SIZES.GOOD ? 'bg-green-400' :
-                                'bg-purple-400'
+                                'bg-[#c5a97b]'
                               }`} />
                               <span className={`font-semibold ${poolSize.color}`}>
                                 {poolSize.label}
                               </span>
                             </div>
                             {poolSize === POOL_SIZES.OPTIMAL && (
-                              <span className="text-purple-300 text-xs">🏆 Optimal</span>
+                              <span className="text-[#ffd075] text-xs">🏆 Optimal</span>
                             )}
                           </div>
                           <p className={`text-xs mt-1 ${poolSize.color} opacity-80`}>
                             {poolSize.description}
                           </p>
                           {/* Show USD value for context */}
-                          <p className="text-xs mt-1 text-gray-400">
+                          <p className="text-xs mt-1 text-[#8a9090]">
                             ≈ ${usdValue.toFixed(2)} USD
                           </p>
                         </div>
@@ -2357,7 +2357,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                       <button
                         onClick={handleStartGame}
                         disabled={isStartGamePending || isStartGameConfirming || !gameDisplay?.canStartNew}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-lg"
+                        className="w-full py-4 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-lg"
                       >
                         {isStartGamePending || isStartGameConfirming ? 'Starting...' : `Start Game (${ethAmount.toFixed(5)} ETH)`}
                       </button>
@@ -2365,7 +2365,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                       <button
                         onClick={mainSupportsAtomicBatch ? handleApproveAndStartWithTokens : handleApprove}
                         disabled={isApprovePending || isApproveConfirming || isMainBatchPending || isMainBatchConfirming || !gameDisplay?.canStartNew}
-                        className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-bold rounded-xl transition-all"
+                        className="w-full py-4 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] text-white font-bold rounded-xl transition-all"
                       >
                         {isMainBatchPending || isMainBatchConfirming
                           ? '⚡ Processing...'
@@ -2379,7 +2379,7 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
                       <button
                         onClick={handleStartWithTokens}
                         disabled={isStartWithTokensPending || isStartWithTokensConfirming || !gameDisplay?.canStartNew}
-                        className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-lg"
+                        className="w-full py-4 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all text-lg"
                       >
                         {isStartWithTokensPending || isStartWithTokensConfirming ? 'Starting...' : `Start Game (${tokenAmount.toFixed(2)} ${TOKEN_TICKER})`}
                       </button>
@@ -2419,10 +2419,10 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
               </h2>
 
               {claimableMarkets.length === 0 ? (
-                <div className="bg-gray-800/50 rounded-xl p-12 text-center">
+                <div className="bg-[#1a2221]/50 rounded-xl p-12 text-center">
                   <div className="text-6xl mb-4">📭</div>
-                  <div className="text-gray-300 text-lg">No claimable winnings</div>
-                  <div className="text-gray-500">Play games and win to see claims here</div>
+                  <div className="text-[#cecece] text-lg">No claimable winnings</div>
+                  <div className="text-[#6b7575]">Play games and win to see claims here</div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2437,11 +2437,11 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
           {/* Stake View - Integrated Staking Interface */}
           {view === 'stake' && (
             <div className="space-y-4">
-              <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-4 mb-4">
+              <div className="bg-[rgba(255,208,117,0.06)] border border-[rgba(255,208,117,0.2)] rounded-xl p-4 mb-4">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   🐍 Snake Staking
                 </h2>
-                <p className="text-purple-300 text-sm mt-1">
+                <p className="text-[#ffd075] text-sm mt-1">
                   Stake your snakes to earn {TOKEN_TICKER} rewards from prediction market trading fees.
                 </p>
               </div>
@@ -2457,11 +2457,11 @@ export function PredictionJackApp({ onClose, initialGameId }: PredictionJackAppP
           {/* ============ SUB ACCOUNTS VIEW ============ */}
           {view === 'accounts' && supportsSubaccounts && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/30 rounded-xl p-4 mb-4">
+              <div className="bg-gradient-to-r from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] border border-[rgba(255,208,117,0.2)] rounded-xl p-4 mb-4">
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   👥 Sub Accounts
                 </h2>
-                <p className="text-blue-300 text-sm mt-1">
+                <p className="text-[#ffd075] text-sm mt-1">
                   Create dedicated gaming sub accounts for a seamless, gasless experience in the app.
                 </p>
               </div>
@@ -2495,24 +2495,24 @@ function ClaimCard({ market }: { market: ClaimableMarket }) {
   const resultLabel = resultLabels[market.result] || 'Unknown';
 
   return (
-    <div className="bg-gray-800/80 rounded-xl p-4 border border-gray-700">
+    <div className="bg-[#1a2221]/80 rounded-xl p-4 border border-[rgba(255,255,255,0.08)]">
       <div className="flex justify-between items-start mb-3">
         <div>
           <div className="text-white font-bold">Game #{market.gameId.toString()}</div>
-          <div className="text-gray-400 text-xs">
+          <div className="text-[#8a9090] text-xs">
             YES: {(Number(market.yesPrice) / 100).toFixed(1)}% / NO: {(Number(market.noPrice) / 100).toFixed(1)}%
           </div>
         </div>
         <span className={`px-2 py-1 rounded text-xs font-bold ${
           resultLabel === 'Win' ? 'bg-green-500/20 text-green-400' :
           resultLabel === 'Lose' ? 'bg-red-500/20 text-red-400' :
-          'bg-gray-700 text-gray-300'
+          'bg-[#1f2827] text-[#cecece]'
         }`}>
           {resultLabel}
         </span>
       </div>
 
-      <div className="bg-gray-900/50 p-3 rounded-lg mb-3">
+      <div className="bg-[#171e1d]/50 p-3 rounded-lg mb-3">
         {market.userYesShares > 0n && (
           <div className="flex justify-between text-sm">
             <span className="text-green-400">YES Shares:</span>
@@ -2525,8 +2525,8 @@ function ClaimCard({ market }: { market: ClaimableMarket }) {
             <span className="text-white">{formatEther(market.userNoShares)}</span>
           </div>
         )}
-        <div className="flex justify-between text-sm font-bold pt-2 border-t border-gray-700 mt-2">
-          <span className="text-purple-300">Claimable:</span>
+        <div className="flex justify-between text-sm font-bold pt-2 border-t border-[rgba(255,255,255,0.08)] mt-2">
+          <span className="text-[#ffd075]">Claimable:</span>
           <span className="text-green-400">{formatEther(market.claimableAmount)}</span>
         </div>
       </div>
@@ -2534,7 +2534,7 @@ function ClaimCard({ market }: { market: ClaimableMarket }) {
       <button
         onClick={handleClaim}
         disabled={isPending || isConfirming || isSuccess}
-        className="w-full py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-bold rounded-lg transition-all"
+        className="w-full py-2 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] text-white font-bold rounded-lg transition-all"
       >
         {isPending || isConfirming ? 'Claiming...' : isSuccess ? 'Claimed!' : `Claim ${formatEther(market.claimableAmount)}`}
       </button>

@@ -22,41 +22,41 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
   const { getIdentity } = useBatchIdentities(participantAddresses);
 
   if (loading) {
-    return <div className="animate-pulse text-gray-400">Loading participants...</div>;
+    return <div className="animate-pulse text-[#8a9090]">Loading participants...</div>;
   }
 
   if (error) {
     return (
       <div className="text-red-400">
         Error: {error}
-        <button onClick={refresh} className="ml-2 underline text-purple-400 hover:text-purple-300">Retry</button>
+        <button onClick={refresh} className="ml-2 underline text-[#ffd075] hover:text-[#ffe0a0]">Retry</button>
       </div>
     );
   }
 
   if (participants.length === 0) {
-    return <div className="text-gray-500">No participants yet. Be the first!</div>;
+    return <div className="text-[#6b7575]">No participants yet. Be the first!</div>;
   }
 
   return (
     <div className="space-y-4">
       {/* Stats Summary */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-[#1a2221]/50 rounded-lg border border-[rgba(255,255,255,0.06)]">
           <div>
-            <div className="text-sm text-gray-400">Participants</div>
+            <div className="text-sm text-[#8a9090]">Participants</div>
             <div className="text-xl font-bold text-white">{stats.totalParticipants}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-400">Total Raised</div>
+            <div className="text-sm text-[#8a9090]">Total Raised</div>
             <div className="text-xl font-bold text-green-400">${stats.totalRaised.toLocaleString()}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-400">Avg Contribution</div>
+            <div className="text-sm text-[#8a9090]">Avg Contribution</div>
             <div className="text-xl font-bold text-white">${stats.averageContribution.toFixed(2)}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-400">Largest</div>
+            <div className="text-sm text-[#8a9090]">Largest</div>
             <div className="text-xl font-bold text-yellow-400">${stats.largestContribution.toLocaleString()}</div>
           </div>
         </div>
@@ -64,30 +64,30 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
 
       {/* Participant Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-700">
-          <thead className="bg-gray-800/50">
+        <table className="min-w-full divide-y divide-[rgba(255,255,255,0.06)]">
+          <thead className="bg-[#1a2221]/50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Wallet</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase">Amount</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase">Share</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase">Est. Tokens</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a9090] uppercase">Rank</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-[#8a9090] uppercase">Wallet</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-[#8a9090] uppercase">Amount</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-[#8a9090] uppercase">Share</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-[#8a9090] uppercase">Est. Tokens</th>
             </tr>
           </thead>
-          <tbody className="bg-gray-900/30 divide-y divide-gray-700/50">
+          <tbody className="bg-[#171e1d]/30 divide-y divide-[rgba(255,255,255,0.04)]">
             {participants.map((p) => (
-              <tr key={p.wallet} className="hover:bg-gray-800/30">
+              <tr key={p.wallet} className="hover:bg-[#1a2221]/30">
                 <td className="px-4 py-3 text-sm">
                   {p.rank <= 3 ? (
                     <span className={`font-bold ${
                       p.rank === 1 ? 'text-yellow-400' :
-                      p.rank === 2 ? 'text-gray-300' :
+                      p.rank === 2 ? 'text-[#cecece]' :
                       'text-orange-400'
                     }`}>
                       {p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : '🥉'} #{p.rank}
                     </span>
                   ) : (
-                    <span className="text-gray-500">#{p.rank}</span>
+                    <span className="text-[#6b7575]">#{p.rank}</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
@@ -97,9 +97,9 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
                   ${p.totalUsdc.toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-sm text-right">
-                  <span className="font-medium text-cyan-400">{p.sharePercent.toFixed(2)}%</span>
+                  <span className="font-medium text-[#ffd075]">{p.sharePercent.toFixed(2)}%</span>
                 </td>
-                <td className="px-4 py-3 text-sm text-right font-mono text-gray-300">
+                <td className="px-4 py-3 text-sm text-right font-mono text-[#cecece]">
                   {p.estimatedTokens.toLocaleString()}
                 </td>
               </tr>
@@ -111,11 +111,11 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
       {/* Transactions Section */}
       {showTransactions && transactions.length > 0 && (
         <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-400 mb-2">Recent Transactions</h4>
+          <h4 className="text-sm font-medium text-[#8a9090] mb-2">Recent Transactions</h4>
           <div className="space-y-2">
             {transactions.slice(0, 10).map((tx) => (
-              <div key={tx.txHash} className="flex justify-between items-center p-2 bg-gray-800/30 rounded text-sm">
-                <span className="font-mono text-gray-400">
+              <div key={tx.txHash} className="flex justify-between items-center p-2 bg-[#1a2221]/30 rounded text-sm">
+                <span className="font-mono text-[#8a9090]">
                   {tx.wallet.slice(0, 6)}...{tx.wallet.slice(-4)}
                 </span>
                 <span className="text-green-400">${tx.amount.toLocaleString()}</span>
@@ -123,7 +123,7 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
                   href={`https://basescan.org/tx/${tx.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-purple-400 hover:underline"
+                  className="text-[#ffd075] hover:underline"
                 >
                   View TX
                 </a>
@@ -135,7 +135,7 @@ export function ParticipantList({ launchId, showTransactions }: ParticipantListP
 
       <button
         onClick={refresh}
-        className="w-full py-2 text-sm text-gray-400 hover:text-white transition-colors"
+        className="w-full py-2 text-sm text-[#8a9090] hover:text-white transition-colors"
       >
         Refresh
       </button>

@@ -439,7 +439,7 @@ export function X402TokenLauncher() {
       </h3>
 
       {/* Wallet Connection */}
-      <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
+      <div className="mb-4 p-3 bg-[#1a2221]/50 rounded-lg border border-[rgba(255,255,255,0.06)]">
         {isConnected ? (
           <div className="flex items-center justify-between">
             <div>
@@ -450,7 +450,7 @@ export function X402TokenLauncher() {
               <div className="text-white font-mono text-sm mt-1">
                 {address?.slice(0, 6)}...{address?.slice(-4)}
               </div>
-              <div className="text-gray-400 text-xs mt-1">
+              <div className="text-[#8a9090] text-xs mt-1">
                 USDC Balance: ${usdcBalance !== null ? parseFloat(usdcBalance).toFixed(2) : '--'}
               </div>
             </div>
@@ -461,7 +461,7 @@ export function X402TokenLauncher() {
         ) : (
           <button
             onClick={openConnectModal}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm transition-colors"
+            className="w-full py-2 bg-[#b8860b] hover:bg-[#9a7209] text-white rounded font-medium text-sm transition-colors"
           >
             Connect Wallet
           </button>
@@ -469,9 +469,9 @@ export function X402TokenLauncher() {
       </div>
 
       {/* Payment Info */}
-      <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
-        <div className="text-blue-400 font-medium text-sm mb-1">Payment Info</div>
-        <div className="text-gray-400 text-xs space-y-0.5">
+      <div className="mb-4 p-3 bg-[rgba(255,208,117,0.05)] border border-[rgba(255,208,117,0.15)] rounded-lg">
+        <div className="text-[#c5a97b] font-medium text-sm mb-1">Payment Info</div>
+        <div className="text-[#8a9090] text-xs space-y-0.5">
           <div>Currency: USDC on Base</div>
           <div>Recipient: {PAYMENT_WALLET.slice(0, 10)}...{PAYMENT_WALLET.slice(-6)}</div>
           <div>Your payment amount becomes the dev buy budget</div>
@@ -482,7 +482,7 @@ export function X402TokenLauncher() {
       <div className="space-y-3">
         {/* Token Name */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">
+          <label className="block text-[#8a9090] text-xs mb-1">
             Token Name *
           </label>
           <input
@@ -491,13 +491,13 @@ export function X402TokenLauncher() {
             onChange={(e) => setTokenName(e.target.value)}
             placeholder="My Awesome Token"
             disabled={isLaunching}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            className="w-full bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded px-3 py-2 text-white text-sm placeholder-[#6b7575] focus:border-[#c5a97b] focus:outline-none disabled:opacity-50"
           />
         </div>
 
         {/* Token Symbol */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">
+          <label className="block text-[#8a9090] text-xs mb-1">
             Token Symbol *
           </label>
           <input
@@ -507,13 +507,13 @@ export function X402TokenLauncher() {
             placeholder="TKN"
             maxLength={10}
             disabled={isLaunching}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm font-mono placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            className="w-full bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded px-3 py-2 text-white text-sm font-mono placeholder-[#6b7575] focus:border-[#c5a97b] focus:outline-none disabled:opacity-50"
           />
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">
+          <label className="block text-[#8a9090] text-xs mb-1">
             Description (optional)
           </label>
           <textarea
@@ -522,13 +522,13 @@ export function X402TokenLauncher() {
             placeholder="Token description..."
             rows={2}
             disabled={isLaunching}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50 resize-none"
+            className="w-full bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded px-3 py-2 text-white text-sm placeholder-[#6b7575] focus:border-[#c5a97b] focus:outline-none disabled:opacity-50 resize-none"
           />
         </div>
 
         {/* Image Upload */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">
+          <label className="block text-[#8a9090] text-xs mb-1">
             Token Image (optional, max 5MB)
           </label>
           <div className="flex items-center gap-3">
@@ -537,10 +537,10 @@ export function X402TokenLauncher() {
               accept="image/png,image/jpeg,image/gif,image/webp"
               onChange={handleImageSelect}
               disabled={isLaunching}
-              className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-gray-700 file:text-gray-300 disabled:opacity-50"
+              className="flex-1 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded px-3 py-2 text-white text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-[#1f2827] file:text-[#cecece] disabled:opacity-50"
             />
             {imagePreview && (
-              <div className="w-10 h-10 rounded overflow-hidden border border-gray-600 flex-shrink-0">
+              <div className="w-10 h-10 rounded overflow-hidden border border-[rgba(255,255,255,0.08)] flex-shrink-0">
                 <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
               </div>
             )}
@@ -549,11 +549,11 @@ export function X402TokenLauncher() {
 
         {/* Payment Amount */}
         <div>
-          <label className="block text-gray-400 text-xs mb-1">
+          <label className="block text-[#8a9090] text-xs mb-1">
             Payment Amount (USDC) *
           </label>
           <div className="flex items-center gap-2">
-            <span className="text-gray-400">$</span>
+            <span className="text-[#8a9090]">$</span>
             <input
               type="number"
               value={paymentAmount}
@@ -561,11 +561,11 @@ export function X402TokenLauncher() {
               min="0.01"
               step="0.01"
               disabled={isLaunching}
-              className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm font-mono focus:border-blue-500 focus:outline-none disabled:opacity-50"
+              className="flex-1 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded px-3 py-2 text-white text-sm font-mono focus:border-[#c5a97b] focus:outline-none disabled:opacity-50"
             />
-            <span className="text-gray-400 text-sm">USDC</span>
+            <span className="text-[#8a9090] text-sm">USDC</span>
           </div>
-          <div className="text-gray-500 text-xs mt-1">
+          <div className="text-[#6b7575] text-xs mt-1">
             This amount will be used as the dev buy budget
           </div>
         </div>
@@ -594,7 +594,7 @@ export function X402TokenLauncher() {
               Token Launch Initiated!
             </div>
             {result.payment && (
-              <div className="text-gray-300 text-xs space-y-1">
+              <div className="text-[#cecece] text-xs space-y-1">
                 <div>Payment: ${result.payment.amount} {result.payment.currency}</div>
                 {result.payment.txHash && (
                   <div>
@@ -603,7 +603,7 @@ export function X402TokenLauncher() {
                       href={`https://basescan.org/tx/${result.payment.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline"
+                      className="text-[#c5a97b] hover:underline"
                     >
                       {result.payment.txHash.slice(0, 16)}...
                     </a>
@@ -612,7 +612,7 @@ export function X402TokenLauncher() {
               </div>
             )}
             {result.token && (
-              <div className="text-gray-300 text-xs mt-2">
+              <div className="text-[#cecece] text-xs mt-2">
                 <div>Token: {result.token.name} ({result.token.symbol})</div>
                 {result.token.address && (
                   <div>
@@ -621,7 +621,7 @@ export function X402TokenLauncher() {
                       href={`https://basescan.org/token/${result.token.address}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline font-mono"
+                      className="text-[#c5a97b] hover:underline font-mono"
                     >
                       {result.token.address.slice(0, 10)}...
                     </a>
@@ -638,8 +638,8 @@ export function X402TokenLauncher() {
           disabled={!canLaunch}
           className={`w-full py-3 rounded font-semibold text-sm transition-all ${
             !canLaunch
-              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg hover:shadow-green-500/20'
+              ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+              : 'bg-gradient-to-r from-[#22c55e] to-[#16a34a] hover:from-[#4ade80] hover:to-[#22c55e] text-white shadow-lg hover:shadow-green-500/20'
           }`}
         >
           {isLaunching

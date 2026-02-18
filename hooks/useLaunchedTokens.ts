@@ -3,9 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-// Call production API directly
-const API_BASE = 'https://api.applesnakes.com';
+import { TOKEN_WARS_API } from '@/lib/api-config';
 
 // =============================================================================
 // Types
@@ -71,7 +69,7 @@ export function useLaunchedTokens(options: UseLaunchedTokensOptions = {}) {
       if (dex) params.set('dex', dex);
       if (pair) params.set('pair', pair);
 
-      const response = await fetch(`${API_BASE}/api/token-wars/tokens?${params}`);
+      const response = await fetch(`${TOKEN_WARS_API}/token-wars/tokens?${params}`);
 
       // Check if response is OK before parsing
       if (!response.ok) {
@@ -109,7 +107,7 @@ export function useLaunchedTokens(options: UseLaunchedTokensOptions = {}) {
       if (dex) params.set('dex', dex);
       if (pair) params.set('pair', pair);
 
-      const response = await fetch(`${API_BASE}/api/token-wars/tokens?${params}`);
+      const response = await fetch(`${TOKEN_WARS_API}/token-wars/tokens?${params}`);
 
       // Check response before parsing
       if (!response.ok) return;

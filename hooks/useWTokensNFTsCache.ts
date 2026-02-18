@@ -237,7 +237,15 @@ export function useWTokensNFTsCache(
       const startTime = Date.now();
 
       // Try the new direct API first
-      const response = await fetch(WTOKENS_API_URL);
+      let response: Response;
+      try {
+        response = await fetch(WTOKENS_API_URL);
+      } catch (fetchErr) {
+        console.warn('[useWTokensNFTsCache] API unreachable:', fetchErr);
+        setIsLoading(false);
+        isFetchingRef.current = false;
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -420,5 +428,5 @@ export function getWTokensImageUrl(imageUrl: string): string {
   // Already a full URL - return as-is
   if (imageUrl.startsWith('http')) return imageUrl;
   // Fallback to IPNS gateway for bare paths
-  return `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5diqasdnw3fydh31emy8lksdygkl4ycimvxqaj22oeekiclww6mc/${imageUrl}`;
+  return `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp/${imageUrl}`;
 }

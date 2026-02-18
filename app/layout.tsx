@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Navigation } from "@/components/Navigation";
@@ -9,8 +8,6 @@ import { MiniKitFrame } from "@/components/MiniKitFrame";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { InventoryProvider } from "@/contexts/InventoryContext";
 import { generateFarcasterMetadata } from "@/lib/farcaster/metadata";
-
-const inter = Inter({ subsets: ["latin"] });
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://applesnakes.com";
 
@@ -24,7 +21,7 @@ const farcasterMetadata = generateFarcasterMetadata({
   appName: "AppleSnakes",
   appUrl: baseUrl,
   splashImageUrl: `${baseUrl}/Images/Wilfred.png`,
-  splashBackgroundColor: "#87CEEB",
+  splashBackgroundColor: "#171e1d",
   ogTitle: "AppleSnakes",
   ogDescription: "Fee-less NFT gameplay with breeding, jailing, and token vesting. Join the adventure in Apple Valley!",
   ogImageUrl: `${baseUrl}/Images/WebBackground.png`,
@@ -65,7 +62,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className="min-h-screen bg-dark text-neon-white antialiased font-hybrid">
         <Providers>
           <InventoryProvider>
             <MiniKitFrame />

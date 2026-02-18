@@ -79,9 +79,9 @@ export function PredictionMarketCard({
   // No market ID or no embedded data
   if (!marketId || !hasEmbeddedData) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-400">Prediction Market</h3>
-        <p className="text-gray-500 mt-2">No prediction market for this launch</p>
+      <div className="bg-[#1a2221] rounded-lg p-6 border border-[rgba(255,255,255,0.06)]">
+        <h3 className="text-lg font-semibold text-[#8a9090]">Prediction Market</h3>
+        <p className="text-[#6b7575] mt-2">No prediction market for this launch</p>
       </div>
     );
   }
@@ -89,9 +89,9 @@ export function PredictionMarketCard({
   // No outcomes data
   if (outcomes.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-400">Prediction Market</h3>
-        <p className="text-gray-500 mt-2">Market data loading...</p>
+      <div className="bg-[#1a2221] rounded-lg p-6 border border-[rgba(255,255,255,0.06)]">
+        <h3 className="text-lg font-semibold text-[#8a9090]">Prediction Market</h3>
+        <p className="text-[#6b7575] mt-2">Market data loading...</p>
       </div>
     );
   }
@@ -140,7 +140,7 @@ export function PredictionMarketCard({
   const title = launchName ? `Will ${launchName} Sell Out?` : 'Prediction Market';
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+    <div className="bg-[#1a2221] rounded-lg p-6 border border-[rgba(255,255,255,0.06)]">
       {/* Header */}
       <div
         className={`flex justify-between items-center mb-4 ${onSelect ? 'cursor-pointer hover:opacity-80' : ''}`}
@@ -148,10 +148,10 @@ export function PredictionMarketCard({
       >
         <h3 className="text-lg font-semibold text-white">
           {title}
-          {onSelect && <span className="text-xs text-gray-500 ml-2">→ Expand</span>}
+          {onSelect && <span className="text-xs text-[#6b7575] ml-2">→ Expand</span>}
         </h3>
         <div className={`px-3 py-1 rounded-full text-sm ${
-          isResolved ? 'bg-purple-500/20 text-purple-400' :
+          isResolved ? 'bg-[#c5a97b]/20 text-[#ffd075]' :
           isActive ? 'bg-green-500/20 text-green-400' :
           'bg-red-500/20 text-red-400'
         }`}>
@@ -161,14 +161,14 @@ export function PredictionMarketCard({
 
       {/* Current Progress Indicator */}
       {currentProgress > 0 && (
-        <div className="mb-4 p-3 bg-gray-900 rounded-lg">
+        <div className="mb-4 p-3 bg-[#171e1d] rounded-lg">
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-400">Current Progress</span>
+            <span className="text-[#8a9090]">Current Progress</span>
             <span className="text-white font-medium">{currentProgress.toFixed(1)}%</span>
           </div>
-          <div className="w-full bg-gray-700 rounded-full h-2">
+          <div className="w-full bg-[#1f2827] rounded-full h-2">
             <div
-              className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all"
+              className="bg-gradient-to-r from-[#c5a97b] to-[#c5a97b] h-2 rounded-full transition-all"
               style={{ width: `${Math.min(100, currentProgress)}%` }}
             />
           </div>
@@ -178,12 +178,12 @@ export function PredictionMarketCard({
       {/* Stats Row */}
       <div className="flex justify-between mb-4">
         <div className="text-center flex-1">
-          <span className="text-gray-400 text-sm">Total Pool</span>
+          <span className="text-[#8a9090] text-sm">Total Pool</span>
           <p className="text-2xl font-bold text-white">${totalPool.toFixed(2)}</p>
         </div>
         <div className="text-center flex-1">
-          <span className="text-gray-400 text-sm">Total Bets</span>
-          <p className="text-2xl font-bold text-cyan-400">{totalBets}</p>
+          <span className="text-[#8a9090] text-sm">Total Bets</span>
+          <p className="text-2xl font-bold text-[#ffd075]">{totalBets}</p>
         </div>
       </div>
 
@@ -201,10 +201,10 @@ export function PredictionMarketCard({
                 isWinner
                   ? 'border-green-500 bg-green-500/10'
                   : isSelected
-                  ? 'border-blue-500 bg-blue-500/10'
+                  ? 'border-[#c5a97b] bg-[#c5a97b]/10'
                   : isCurrentOutcome
                   ? 'border-yellow-500/50 bg-yellow-500/5'
-                  : 'border-gray-600 bg-gray-700/30'
+                  : 'border-[rgba(255,255,255,0.1)] bg-[#1f2827]/30'
               }`}
             >
               {/* Outcome Header */}
@@ -229,7 +229,7 @@ export function PredictionMarketCard({
                       </span>
                     )}
                   </div>
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-[#8a9090]">
                     ${outcome.totalPool.toFixed(2)} pool
                   </span>
                 </div>
@@ -280,12 +280,12 @@ export function PredictionMarketCard({
                 {isResolved && (
                   <div className="flex gap-2 mt-2">
                     <div className={`flex-1 py-2 px-3 rounded-lg text-center ${
-                      isWinner ? 'bg-green-500/30 text-green-400' : 'bg-gray-700/50 text-gray-500'
+                      isWinner ? 'bg-green-500/30 text-green-400' : 'bg-[#1f2827]/50 text-[#6b7575]'
                     }`}>
                       YES: {outcome.yesProbability.toFixed(0)}%
                     </div>
                     <div className={`flex-1 py-2 px-3 rounded-lg text-center ${
-                      !isWinner ? 'bg-red-500/30 text-red-400' : 'bg-gray-700/50 text-gray-500'
+                      !isWinner ? 'bg-red-500/30 text-red-400' : 'bg-[#1f2827]/50 text-[#6b7575]'
                     }`}>
                       NO: {outcome.noProbability.toFixed(0)}%
                     </div>
@@ -299,7 +299,7 @@ export function PredictionMarketCard({
 
       {/* Bet Form (only when active and outcome selected) */}
       {isActive && selectedOutcome !== null && (
-        <div className="mb-4 p-4 bg-gray-900 rounded-lg border border-blue-500/50">
+        <div className="mb-4 p-4 bg-[#171e1d] rounded-lg border border-[rgba(255,208,117,0.5)]">
           <div className="flex items-center gap-2 mb-3">
             <span className={`px-3 py-1 rounded-full text-sm font-bold ${
               selectedSide === 'yes' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
@@ -317,7 +317,7 @@ export function PredictionMarketCard({
               value={betAmount}
               onChange={(e) => setBetAmount(e.target.value)}
               placeholder="Amount (USDC)"
-              className="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              className="flex-1 bg-[#1a2221] border border-[rgba(255,255,255,0.1)] rounded-lg px-3 py-2 text-white"
               min="1"
               step="1"
             />
@@ -326,7 +326,7 @@ export function PredictionMarketCard({
               disabled={betting || !betAmount || parseFloat(betAmount) < 1}
               className={`px-6 py-2 rounded-lg font-medium transition-colors ${
                 betting || !betAmount
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  ? 'bg-[#2a3533] text-[#8a9090] cursor-not-allowed'
                   : selectedSide === 'yes'
                   ? 'bg-green-600 hover:bg-green-700 text-white'
                   : 'bg-red-600 hover:bg-red-700 text-white'
@@ -344,8 +344,8 @@ export function PredictionMarketCard({
                 onClick={() => setBetAmount(val.toString())}
                 className={`flex-1 py-1.5 rounded text-sm font-medium transition-colors ${
                   betAmount === val.toString()
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-[#a88a5a] text-white'
+                    : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
                 }`}
               >
                 ${val}
@@ -355,7 +355,7 @@ export function PredictionMarketCard({
 
           {/* Potential payout */}
           {potentialPayout > 0 && (
-            <div className="text-sm text-gray-400">
+            <div className="text-sm text-[#8a9090]">
               Potential payout: <span className="text-white font-medium">${potentialPayout.toFixed(2)}</span>
             </div>
           )}
@@ -376,7 +376,7 @@ export function PredictionMarketCard({
       )}
 
       {/* Market stats footer */}
-      <div className="flex justify-between text-sm text-gray-500 pt-3 border-t border-gray-700">
+      <div className="flex justify-between text-sm text-[#6b7575] pt-3 border-t border-[rgba(255,255,255,0.06)]">
         <span>{totalBets} bets</span>
         <span>{uniqueBettors} bettors</span>
       </div>

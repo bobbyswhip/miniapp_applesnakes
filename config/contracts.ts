@@ -38,6 +38,12 @@ export const STATE_VIEW_ADDRESS = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71' a
 // Aerodrome Router V2 address on Base (for Aerodrome token swaps)
 export const AERODROME_ROUTER_ADDRESS = '0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43' as const;
 
+// Migration target token (ZORA) - detect and offer swap to wASS
+export const MIGRATION_TARGET_TOKEN = '0x1111111111166b7FE7bd91427724B487980aFc69' as const;
+
+// Content coin hook address - V4 pools for coins paired with ZORA
+export const CONTENT_COIN_HOOK = '0xc8d077444625eb300a427a6dfb2b1dbf9b159040' as const;
+
 // WETH address on Base (wrapped ETH for Aerodrome)
 export const WETH_ADDRESS = '0x4200000000000000000000000000000000000006' as const;
 
@@ -51,14 +57,17 @@ export const OPENSEA_COLLECTION_URL = 'https://opensea.io/collection/applesnakes
 // This allows updating metadata without changing tokenURI on-chain
 // ============================================================================
 
-// IPNS key for AppleSnakes metadata (points to latest metadata folder)
+// IPNS key for AppleSnakes NFT images (NFT bucket)
 export const IPNS_KEY = 'k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp' as const;
 
 // Primary gateway for IPNS resolution
-export const IPNS_GATEWAY = 'https://ipfs.filebase.io' as const;
+export const IPNS_GATEWAY = 'https://applesnakes.myfilebase.com' as const;
 
 // Legacy IPFS gateway (for backwards compatibility with cached data)
 export const LEGACY_IPFS_GATEWAY = 'https://surrounding-amaranth-catshark.myfilebase.com' as const;
+
+// Cache version - increment this to bust browser/CDN cache when IPNS content updates
+const NFT_CACHE_VERSION = 'v2';
 
 /**
  * Get NFT metadata URL via IPNS (always returns latest version)
@@ -66,7 +75,7 @@ export const LEGACY_IPFS_GATEWAY = 'https://surrounding-amaranth-catshark.myfile
  * @returns Full URL to the metadata JSON
  */
 export const getNFTMetadataUrl = (tokenId: number): string => {
-  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.json`;
+  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.json?${NFT_CACHE_VERSION}`;
 };
 
 /**
@@ -75,7 +84,7 @@ export const getNFTMetadataUrl = (tokenId: number): string => {
  * @returns Full URL to the image
  */
 export const getNFTImageUrl = (tokenId: number): string => {
-  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.png`;
+  return `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/${tokenId}.png?${NFT_CACHE_VERSION}`;
 };
 
 /**
@@ -110,14 +119,17 @@ export const resolveIPFSUrl = (url: string): string => {
   return `${IPNS_GATEWAY}/ipfs/${url}`;
 };
 
-// Pool configuration for ETH/Token swap
+// Pool configuration for ETH/Token swap (Uniswap V4 pool key)
 export const POOL_CONFIG = {
   currency0: '0x0000000000000000000000000000000000000000', // ETH
-  currency1: '0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6', // Token1
+  currency1: '0x445040FfaAb67992Ba1020ec2558CD6754d83Ad6', // wASS Token
   fee: 3000, // 0.3% fee tier
   tickSpacing: 60,
   hooks: HOOK_ADDRESS, // Hook address
 } as const;
+
+// Pool ID info value for reference
+export const POOL_INFO = 48120612876864988898825404246449950661704737969651615163908330264312640074752n;
 
 // Token Pair Configuration for Chart System
 export interface TokenPairConfig {
@@ -145,7 +157,7 @@ export const TOKEN_PAIRS: TokenPairConfig[] = [
     token0: ETH_ADDRESS, // ETH (native)
     token1: WASS_TOKEN_ADDRESS, // wASS
     hook: HOOK_ADDRESS,
-    fee: 3000,
+    fee: 3000, // 0.3% fee tier
     tickSpacing: 60,
     geckoPoolAddress: '0xa113103448f7b09199e019656f377988c87f8f312ddcebc6fea9e78bcd6ec2af',
     isDefault: true,
@@ -153,11 +165,11 @@ export const TOKEN_PAIRS: TokenPairConfig[] = [
   {
     id: 'wass-token',
     token0: WASS_TOKEN_ADDRESS, // wASS is token0
-    token1: '0x9B26FcCf0C90C2DAf54B82FeF07dDBF21E11c658', // Paired token (name fetched via RPC)
+    token1: '0x92C4Cc88e010D772CEE651FBfceEBC4F0E12d500', // MANTIS token
     hook: '0x35B9b5b023897DA8C7375ba6141245B8416460CC' as `0x${string}`,
     fee: 3000,
     tickSpacing: 60,
-    geckoPoolAddress: '0xe4821b1cbfce1906c2249d1b34366610960c01fa3f762b0579c594d2033b9152',
+    geckoPoolAddress: '0x280f48fab8afcd1c8f08830a78a9702020d94f5c378a0fad27ac49ef6ba04170',
   },
 ];
 
@@ -243,9 +255,9 @@ export const BASE_MAINNET_CONTRACTS: ChainContracts = {
     name: 'Bonded Items V7 (Dynamic Fees + CPMM)',
   },
   itemBridge: {
-    address: '0xF799bDC992f7B7F78a138FC17913908e7a332710',
+    address: '0xc92adf6B4A55b9f58AcCb4EC07b5728473e4533c',
     abi: ITEM_BRIDGE_ABI,
-    name: 'Item Bridge v1.02',
+    name: 'Item Bridge v1.04',
   },
 };
 

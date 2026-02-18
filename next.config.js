@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
+  // Externalize Node.js-only packages so Turbopack doesn't try to bundle them
+  serverExternalPackages: ['pino', 'pino-pretty', 'thread-stream', 'lokijs', 'encoding'],
   // Turbopack config (Next.js 16 default bundler)
   turbopack: {},
   webpack: (config) => {

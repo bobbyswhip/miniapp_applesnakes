@@ -85,7 +85,7 @@ export function VestingStats() {
           <div className="text-center py-8 space-y-4">
             <span className="text-6xl">🔐</span>
             <h3 className="text-2xl font-bold text-white">Connect Wallet</h3>
-            <p className="text-gray-400">Connect your wallet to view vesting stats</p>
+            <p className="text-[#8a9090]">Connect your wallet to view vesting stats</p>
           </div>
         </div>
       </div>
@@ -97,8 +97,8 @@ export function VestingStats() {
       <div className="w-full max-w-2xl">
         <div className="glass rounded-2xl p-6">
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span className="ml-3 text-gray-400">Loading vesting data...</span>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd075]"></div>
+            <span className="ml-3 text-[#8a9090]">Loading vesting data...</span>
           </div>
         </div>
       </div>
@@ -109,11 +109,11 @@ export function VestingStats() {
     <div className="w-full max-w-2xl">
       <div className="glass rounded-2xl p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700/50 pb-4">
+        <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] pb-4">
           <h2 className="text-2xl font-bold text-white">Vesting Stats</h2>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${hasVesting ? 'bg-green-500' : 'bg-gray-500'}`} />
-            <span className="text-sm text-gray-400">
+            <div className={`w-2 h-2 rounded-full ${hasVesting ? 'bg-[#22c55e]' : 'bg-[#6b7575]'}`} />
+            <span className="text-sm text-[#8a9090]">
               {hasVesting ? 'Active' : 'No Vesting'}
             </span>
           </div>
@@ -123,7 +123,7 @@ export function VestingStats() {
           <div className="text-center py-12 space-y-4">
             <span className="text-7xl">🪙</span>
             <h3 className="text-2xl font-bold text-white">No Vesting Balance</h3>
-            <p className="text-gray-400">
+            <p className="text-[#8a9090]">
               Swap, breed, jail, or evolve to start vesting tokens
             </p>
           </div>
@@ -132,16 +132,16 @@ export function VestingStats() {
             {/* Main Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Total Vested */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-cyan-950/40 via-purple-950/40 to-pink-950/40 border border-cyan-500/30 rounded-xl p-5 space-y-3 backdrop-blur-sm"
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#1a2221] via-[#171e1d] to-[#1a2221] border border-[rgba(255,208,117,0.3)] rounded-xl p-5 space-y-3 backdrop-blur-sm"
                 style={{
-                  boxShadow: '0 0 20px rgba(6, 182, 212, 0.15), inset 0 0 20px rgba(168, 85, 247, 0.05)'
+                  boxShadow: '0 0 20px rgba(255, 208, 117, 0.15), inset 0 0 20px rgba(197, 169, 123, 0.05)'
                 }}
               >
                 {/* Shimmer effect */}
                 <div
                   className="absolute inset-0 opacity-20"
                   style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.3), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.3), transparent)',
                     animation: 'shimmer 3s infinite',
                   }}
                 />
@@ -153,44 +153,44 @@ export function VestingStats() {
                       alt="Wilfred"
                       className="w-full h-full object-contain"
                       style={{
-                        filter: 'drop-shadow(0 0 8px rgba(6, 182, 212, 0.6))'
+                        filter: 'drop-shadow(0 0 8px rgba(255, 208, 117, 0.6))'
                       }}
                     />
                   </div>
-                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-purple-300">Total Vested</h3>
+                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">Total Vested</h3>
                 </div>
                 <div className="relative space-y-1">
-                  <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
+                  <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">
                     {formatEther(vestBalance)} $wNFTs
                   </p>
-                  <p className="text-xs text-cyan-200/80">wrapped nfts (claimable over 90 days)</p>
+                  <p className="text-xs text-[#c5a97b]/80">wrapped nfts (claimable over 90 days)</p>
                 </div>
               </div>
 
               {/* Claimable Now */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-green-950/40 via-emerald-950/40 to-teal-950/40 border border-green-500/30 rounded-xl p-5 space-y-3 backdrop-blur-sm"
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#0a1a0f] via-[#0d1a12] to-[#0a1a10] border border-[#22c55e]/30 rounded-xl p-5 space-y-3 backdrop-blur-sm"
                 style={{
-                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.15), inset 0 0 20px rgba(16, 185, 129, 0.05)'
+                  boxShadow: '0 0 20px rgba(34, 197, 94, 0.15), inset 0 0 20px rgba(34, 197, 94, 0.05)'
                 }}
               >
                 {/* Shimmer effect */}
                 <div
                   className="absolute inset-0 opacity-20"
                   style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.3), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.3), transparent)',
                     animation: 'shimmer 3s infinite',
                   }}
                 />
 
                 <div className="relative flex items-center gap-2">
-                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(16,185,129,0.6)]">🎁</span>
-                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-green-300 to-teal-300">Claimable Now</h3>
+                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]">🎁</span>
+                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-[#22c55e] to-[#22c55e]">Claimable Now</h3>
                 </div>
                 <div className="relative space-y-1">
-                  <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400">
+                  <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#22c55e] to-[#22c55e]">
                     {claimableAmount ? formatEther(claimableAmount as bigint) : '0'} $wNFTs
                   </p>
-                  <p className="text-xs text-green-200/80">available to claim right now</p>
+                  <p className="text-xs text-[#22c55e]/80">available to claim right now</p>
                 </div>
               </div>
             </div>
@@ -198,45 +198,45 @@ export function VestingStats() {
             {/* Time Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Next Claim Timer */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-purple-950/40 via-violet-950/40 to-fuchsia-950/40 border border-purple-500/30 rounded-xl p-5 space-y-3 backdrop-blur-sm"
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#1a2221] via-[#171e1d] to-[#1a2221] border border-[rgba(255,208,117,0.3)] rounded-xl p-5 space-y-3 backdrop-blur-sm"
                 style={{
-                  boxShadow: '0 0 20px rgba(168, 85, 247, 0.15), inset 0 0 20px rgba(168, 85, 247, 0.05)'
+                  boxShadow: '0 0 20px rgba(255, 208, 117, 0.15), inset 0 0 20px rgba(255, 208, 117, 0.05)'
                 }}
               >
                 {/* Shimmer effect */}
                 <div
                   className="absolute inset-0 opacity-20"
                   style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.3), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.3), transparent)',
                     animation: 'shimmer 3s infinite',
                   }}
                 />
 
                 <div className="relative flex items-center gap-2">
-                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(168,85,247,0.6)]">⏰</span>
-                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-fuchsia-300">Next Claim</h3>
+                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(255,208,117,0.6)]">⏰</span>
+                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">Next Claim</h3>
                 </div>
                 {timeUntilClaim > 0 ? (
                   <>
                     <div className="relative space-y-1">
-                      <p className="text-2xl font-bold font-mono text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-400">
+                      <p className="text-2xl font-bold font-mono text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">
                         {formatTime(timeUntilClaim)}
                       </p>
-                      <p className="text-xs text-purple-200/80">time remaining</p>
+                      <p className="text-xs text-[#c5a97b]/80">time remaining</p>
                     </div>
-                    <p className="relative text-xs text-purple-300/60">
+                    <p className="relative text-xs text-[#c5a97b]/60">
                       can claim 1% every 24 hours
                     </p>
                   </>
                 ) : (
                   <>
                     <div className="relative space-y-1">
-                      <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">
+                      <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">
                         Ready!
                       </p>
-                      <p className="text-xs text-purple-200/80">claim available</p>
+                      <p className="text-xs text-[#c5a97b]/80">claim available</p>
                     </div>
-                    <p className="relative text-xs text-purple-300/60">
+                    <p className="relative text-xs text-[#c5a97b]/60">
                       you can claim now
                     </p>
                   </>
@@ -244,45 +244,45 @@ export function VestingStats() {
               </div>
 
               {/* Days Until Full Unlock */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-orange-950/40 via-amber-950/40 to-yellow-950/40 border border-orange-500/30 rounded-xl p-5 space-y-3 backdrop-blur-sm"
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#1a2221] via-[#171e1d] to-[#1a2221] border border-[rgba(197,169,123,0.3)] rounded-xl p-5 space-y-3 backdrop-blur-sm"
                 style={{
-                  boxShadow: '0 0 20px rgba(251, 146, 60, 0.15), inset 0 0 20px rgba(251, 146, 60, 0.05)'
+                  boxShadow: '0 0 20px rgba(197, 169, 123, 0.15), inset 0 0 20px rgba(197, 169, 123, 0.05)'
                 }}
               >
                 {/* Shimmer effect */}
                 <div
                   className="absolute inset-0 opacity-20"
                   style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(251, 146, 60, 0.3), transparent)',
+                    background: 'linear-gradient(90deg, transparent, rgba(197, 169, 123, 0.3), transparent)',
                     animation: 'shimmer 3s infinite',
                   }}
                 />
 
                 <div className="relative flex items-center gap-2">
-                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(251,146,60,0.6)]">🔓</span>
-                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-orange-300 to-amber-300">Full Unlock</h3>
+                  <span className="text-2xl filter drop-shadow-[0_0_8px_rgba(197,169,123,0.6)]">🔓</span>
+                  <h3 className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-[#c5a97b] to-[#ffd075]">Full Unlock</h3>
                 </div>
                 {daysUntilUnlock > 0 ? (
                   <>
                     <div className="relative space-y-1">
-                      <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">
+                      <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#c5a97b] to-[#ffd075]">
                         {daysUntilUnlock}
                       </p>
-                      <p className="text-xs text-orange-200/80">days remaining</p>
+                      <p className="text-xs text-[#c5a97b]/80">days remaining</p>
                     </div>
-                    <p className="relative text-xs text-orange-300/60">
+                    <p className="relative text-xs text-[#c5a97b]/60">
                       until 100% unlock (90 days)
                     </p>
                   </>
                 ) : (
                   <>
                     <div className="relative space-y-1">
-                      <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-yellow-400">
+                      <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#ffd075] to-[#c5a97b]">
                         Unlocked!
                       </p>
-                      <p className="text-xs text-orange-200/80">fully vested</p>
+                      <p className="text-xs text-[#c5a97b]/80">fully vested</p>
                     </div>
-                    <p className="relative text-xs text-orange-300/60">
+                    <p className="relative text-xs text-[#c5a97b]/60">
                       all tokens available
                     </p>
                   </>
@@ -291,29 +291,29 @@ export function VestingStats() {
             </div>
 
             {/* Progress Bar */}
-            <div className="bg-gray-800/50 rounded-lg p-4 space-y-3">
+            <div className="bg-[#1a2221]/50 rounded-lg p-4 space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Vesting Progress</span>
-                <span className="text-gray-300">{Math.max(0, 90 - daysUntilUnlock)} / 90 days</span>
+                <span className="text-[#8a9090]">Vesting Progress</span>
+                <span className="text-[#cecece]">{Math.max(0, 90 - daysUntilUnlock)} / 90 days</span>
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-3">
+              <div className="w-full bg-[#1f2827] rounded-full h-3">
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-[#ffd075] to-[#c5a97b] h-3 rounded-full transition-all duration-300"
                   style={{ width: `${Math.min(100, ((90 - daysUntilUnlock) / 90) * 100)}%` }}
                 />
               </div>
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-[#6b7575] text-center">
                 {daysUntilUnlock === 0 ? '100% unlocked - Claim entire balance anytime' : `${Math.min(100, Math.round(((90 - daysUntilUnlock) / 90) * 100))}% - Claim 1% per day or wait for full unlock`}
               </p>
             </div>
 
             {/* Info Box */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 space-y-2">
+            <div className="bg-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.2)] rounded-lg p-4 space-y-2">
               <div className="flex items-start gap-3">
-                <span className="text-blue-400 text-xl">ℹ️</span>
+                <span className="text-[#ffd075] text-xl">ℹ️</span>
                 <div className="flex-1 space-y-1">
-                  <p className="text-blue-300 text-sm font-semibold">How Vesting Works</p>
-                  <ul className="text-blue-200 text-xs space-y-1">
+                  <p className="text-[#ffd075] text-sm font-semibold">How Vesting Works</p>
+                  <ul className="text-[#e0e0e0] text-xs space-y-1">
                     <li>• Claim 1% of your balance every 24 hours</li>
                     <li>• Or wait 90 days to claim 100% at once</li>
                     <li>• Each new action (swap/breed/jail/evolve) resets the 90-day timer</li>
@@ -330,18 +330,18 @@ export function VestingStats() {
                 rel="noopener noreferrer"
                 className="inline-block text-lg font-bold transition-all duration-300"
                 style={{
-                  color: 'rgba(168, 85, 247, 0.9)',
-                  textShadow: '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.3)',
-                  filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.4))',
+                  color: 'rgba(255, 208, 117, 0.9)',
+                  textShadow: '0 0 10px rgba(255, 208, 117, 0.5), 0 0 20px rgba(255, 208, 117, 0.3)',
+                  filter: 'drop-shadow(0 0 8px rgba(255, 208, 117, 0.4))',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'rgba(168, 85, 247, 1)';
-                  e.currentTarget.style.textShadow = '0 0 15px rgba(168, 85, 247, 0.8), 0 0 30px rgba(168, 85, 247, 0.5)';
+                  e.currentTarget.style.color = 'rgba(255, 208, 117, 1)';
+                  e.currentTarget.style.textShadow = '0 0 15px rgba(255, 208, 117, 0.8), 0 0 30px rgba(255, 208, 117, 0.5)';
                   e.currentTarget.style.transform = 'scale(1.05)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'rgba(168, 85, 247, 0.9)';
-                  e.currentTarget.style.textShadow = '0 0 10px rgba(168, 85, 247, 0.5), 0 0 20px rgba(168, 85, 247, 0.3)';
+                  e.currentTarget.style.color = 'rgba(255, 208, 117, 0.9)';
+                  e.currentTarget.style.textShadow = '0 0 10px rgba(255, 208, 117, 0.5), 0 0 20px rgba(255, 208, 117, 0.3)';
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >

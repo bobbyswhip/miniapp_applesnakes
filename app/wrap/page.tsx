@@ -680,15 +680,15 @@ export default function WrapPage() {
       <div
         className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
           isComplete || isSkipped
-            ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
+            ? 'bg-gradient-to-br from-[#22c55e] to-green-600 text-white'
             : isActive
-            ? 'bg-gradient-to-br from-purple-500 to-violet-600 text-white ring-2 ring-purple-400 ring-offset-2 ring-offset-gray-900'
-            : 'bg-gray-700 text-gray-400'
+            ? 'bg-gradient-to-br from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] ring-2 ring-[#ffd075] ring-offset-2 ring-offset-[#0a0d0c]'
+            : 'bg-[#1f2827] text-[#8a9090]'
         }`}
       >
         {isComplete || isSkipped ? '✓' : stepNum}
       </div>
-      <div className={`text-xs mt-2 ${isActive ? 'text-purple-400 font-semibold' : 'text-gray-500'}`}>
+      <div className={`text-xs mt-2 ${isActive ? 'text-[#ffd075] font-semibold' : 'text-[#6b7575]'}`}>
         {isSkipped ? 'Skipped' : label}
       </div>
     </div>
@@ -706,22 +706,22 @@ export default function WrapPage() {
       <div className="w-full max-w-7xl space-y-8">
         {/* Header */}
         <div className="text-center space-y-4 pt-4">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-400 via-pink-500 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-[#ffd075] via-[#c5a97b] to-[#ffd075] bg-clip-text text-transparent">
             NFT Wrapper
           </h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-[#8a9090] text-lg">
             Get your Human NFT in just a few steps
           </p>
         </div>
 
         {!isConnected ? (
-          <div className="glass rounded-3xl p-8 shadow-2xl border border-gray-800">
+          <div className="glass rounded-3xl p-8 shadow-2xl border border-[rgba(255,255,255,0.06)]">
             <div className="space-y-6 text-center">
-              
+
               <h2 className="text-2xl font-semibold text-white">
                 Connect Your Wallet
               </h2>
-              <p className="text-gray-400">
+              <p className="text-[#8a9090]">
                 Use the &quot;Connect Wallet&quot; button in the header above to start
               </p>
             </div>
@@ -729,10 +729,10 @@ export default function WrapPage() {
         ) : (
           <div className="space-y-6">
             {/* wNFT Balance Card */}
-            <div className="glass rounded-3xl p-6 shadow-2xl border border-gray-800">
+            <div className="glass rounded-3xl p-6 shadow-2xl border border-[rgba(255,255,255,0.06)]">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm mb-1">Your Token Balance</p>
+                  <p className="text-[#8a9090] text-sm mb-1">Your Token Balance</p>
                   <p className="text-3xl font-bold text-white">{wTokenBalanceFormatted.toFixed(2)}</p>
                 </div>
                 <div className="text-5xl">🪙</div>
@@ -740,15 +740,15 @@ export default function WrapPage() {
             </div>
 
             {/* Main Wrapper Card */}
-            <div className="glass rounded-3xl p-8 shadow-2xl border border-gray-800">
+            <div className="glass rounded-3xl p-8 shadow-2xl border border-[rgba(255,255,255,0.06)]">
               {/* Mode Tabs */}
               <div className="grid grid-cols-3 gap-4 mb-8">
                 <button
                   onClick={() => setMode('get-nft')}
                   className={`py-3 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     mode === 'get-nft'
-                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/50'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-[#ffd075] text-[#0a0d0c] shadow-lg shadow-[rgba(255,208,117,0.5)]'
+                      : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
                   }`}
                 >
                   {finalNFTImageUrl ? (
@@ -758,9 +758,9 @@ export default function WrapPage() {
                       className="w-5 h-5 rounded-full object-cover"
                     />
                   ) : isLoadingImage ? (
-                    <span className="w-5 h-5 rounded-full bg-gray-600 animate-pulse" />
+                    <span className="w-5 h-5 rounded-full bg-[#2a3533] animate-pulse" />
                   ) : (
-                    <span className="w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center text-xs">?</span>
+                    <span className="w-5 h-5 rounded-full bg-[#c5a97b] flex items-center justify-center text-xs">?</span>
                   )}
                   Get NFT
                 </button>
@@ -768,8 +768,8 @@ export default function WrapPage() {
                   onClick={() => setMode('wrap')}
                   className={`py-3 px-4 rounded-xl font-semibold transition-all ${
                     mode === 'wrap'
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-[#c5a97b] text-[#0a0d0c] shadow-lg shadow-[rgba(197,169,123,0.5)]'
+                      : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
                   }`}
                 >
                   🪙 Wrap
@@ -778,8 +778,8 @@ export default function WrapPage() {
                   onClick={() => setMode('swap')}
                   className={`py-3 px-4 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
                     mode === 'swap'
-                      ? 'bg-green-500 text-white shadow-lg shadow-green-500/50'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      ? 'bg-[#22c55e] text-white shadow-lg shadow-[rgba(34,197,94,0.5)]'
+                      : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
                   }`}
                 >
                   🛒 Buy NFT
@@ -792,7 +792,7 @@ export default function WrapPage() {
                   {/* Smart Wallet Badge */}
                   {isSmartWallet && (
                     <div className="flex justify-center">
-                      <div className="px-4 py-2 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/50 rounded-lg text-sm font-semibold text-cyan-400">
+                      <div className="px-4 py-2 bg-gradient-to-r from-[rgba(255,208,117,0.2)] to-[rgba(197,169,123,0.2)] border border-[rgba(255,208,117,0.5)] rounded-lg text-sm font-semibold text-[#ffd075]">
                         ⚡ Smart Wallet - All Steps in One Transaction
                       </div>
                     </div>
@@ -801,9 +801,9 @@ export default function WrapPage() {
                   {/* Step Progress Indicator */}
                   <div className="flex items-start relative mb-8">
                     {/* Connecting line */}
-                    <div className="absolute top-5 left-[16.66%] right-[16.66%] h-0.5 bg-gray-700" />
+                    <div className="absolute top-5 left-[16.66%] right-[16.66%] h-0.5 bg-[#1f2827]" />
                     <div
-                      className="absolute top-5 left-[16.66%] h-0.5 bg-gradient-to-r from-green-500 to-purple-500 transition-all duration-300"
+                      className="absolute top-5 left-[16.66%] h-0.5 bg-gradient-to-r from-[#22c55e] to-[#ffd075] transition-all duration-300"
                       style={{
                         width: currentStep === 1 ? '0%' : currentStep === 2 ? '50%' : '100%',
                         maxWidth: '66.66%',
@@ -816,26 +816,26 @@ export default function WrapPage() {
                   </div>
 
                   {/* Step Content */}
-                  <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+                  <div className="bg-[#1a2221]/50 rounded-2xl p-6 border border-[rgba(255,255,255,0.06)]">
                     {/* Step 1: Buy Token */}
                     {currentStep === 1 && txStep !== 'success' && (
                       <>
                         <div className="text-lg font-bold text-white mb-3">
                           Step 1: Buy 1 Token
                         </div>
-                        <div className="text-sm text-gray-400 mb-6">
+                        <div className="text-sm text-[#8a9090] mb-6">
                           Swap ETH for 1 token from the liquidity pool. This token will be wrapped into your NFT.
                         </div>
 
                         <div className="flex justify-between items-center mb-2">
-                          <span className="text-sm text-gray-500">You Pay</span>
-                          <span className="text-sm text-gray-500">
+                          <span className="text-sm text-[#6b7575]">You Pay</span>
+                          <span className="text-sm text-[#6b7575]">
                             Balance: {parseFloat(ethBalance).toFixed(4)} ETH
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                          <span className={`text-2xl font-bold ${isLoadingQuote ? 'text-gray-500' : 'text-white'}`}>
+                        <div className="flex items-center justify-between p-4 bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-xl">
+                          <span className={`text-2xl font-bold ${isLoadingQuote ? 'text-[#6b7575]' : 'text-white'}`}>
                             {isLoadingQuote ? 'Loading...' : swapCost.toFixed(6)}
                           </span>
                           <div className="flex items-center gap-2">
@@ -858,17 +858,17 @@ export default function WrapPage() {
                         <div className="text-lg font-bold text-white mb-3">
                           Step 2: Approve Wrapper
                         </div>
-                        <div className="text-sm text-gray-400 mb-6">
+                        <div className="text-sm text-[#8a9090] mb-6">
                           Allow the wrapper contract to convert your token into an NFT. This is a one-time approval.
                         </div>
 
-                        <div className="p-6 bg-purple-500/10 border border-purple-500/30 rounded-xl text-center">
+                        <div className="p-6 bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-xl text-center">
                           
-                          <div className="text-gray-300">Approve wrapper contract</div>
-                          <div className="text-gray-500 text-sm mt-2">No ETH required for this step</div>
+                          <div className="text-[#cecece]">Approve wrapper contract</div>
+                          <div className="text-[#6b7575] text-sm mt-2">No ETH required for this step</div>
                         </div>
 
-                        <div className="mt-4 text-sm text-gray-500">
+                        <div className="mt-4 text-sm text-[#6b7575]">
                           Your token balance: {wTokenBalanceFormatted.toFixed(4)} tokens
                         </div>
                       </>
@@ -880,7 +880,7 @@ export default function WrapPage() {
                         <div className="text-lg font-bold text-white mb-3">
                           Step 3: Get Your NFT
                         </div>
-                        <div className="text-sm text-gray-400 mb-6">
+                        <div className="text-sm text-[#8a9090] mb-6">
                           {nextTokenId
                             ? `You will receive Human #${nextTokenId} from the collection.`
                             : 'Convert your token into a Human NFT from the collection.'}
@@ -896,24 +896,24 @@ export default function WrapPage() {
                               />
                             </div>
                           ) : isLoadingImage ? (
-                            <div className="w-20 h-20 rounded-xl bg-gray-700 animate-pulse flex-shrink-0" />
+                            <div className="w-20 h-20 rounded-xl bg-[#1f2827] animate-pulse flex-shrink-0" />
                           ) : (
-                            <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center flex-shrink-0">
-                              <span className="text-3xl text-gray-500">?</span>
+                            <div className="w-20 h-20 rounded-xl bg-[#1f2827] flex items-center justify-center flex-shrink-0">
+                              <span className="text-3xl text-[#6b7575]">?</span>
                             </div>
                           )}
                           <div>
                             <div className="text-xl font-bold text-white">
                               {nextTokenId ? `Human #${nextTokenId}` : isLoadingImage ? 'Loading...' : '1 Human NFT'}
                             </div>
-                            <div className="text-gray-500 text-sm">
+                            <div className="text-[#6b7575] text-sm">
                               {nextTokenId ? 'Next in queue (FIFO)' : isLoadingImage ? 'Fetching preview...' : 'NFT from collection'}
                             </div>
                           </div>
                         </div>
 
                         <div className="mt-4 flex justify-between text-sm">
-                          <span className="text-gray-500">Wrap Fee:</span>
+                          <span className="text-[#6b7575]">Wrap Fee:</span>
                           <span className="text-white">{wrapFeeFormatted} ETH</span>
                         </div>
 
@@ -941,7 +941,7 @@ export default function WrapPage() {
                             </div>
                           </div>
                         )}
-                        <div className="text-gray-400">
+                        <div className="text-[#8a9090]">
                           {nextTokenId ? `Human #${nextTokenId} is now yours!` : 'Your new Human is waiting in your wallet'}
                         </div>
                       </div>
@@ -998,8 +998,8 @@ export default function WrapPage() {
                       disabled={isBusy || isLoadingQuote || (currentStep === 1 && !hasEnoughEthForSwap) || (currentStep === 3 && !hasEnoughEthForWrap)}
                       className={`w-full font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2 ${
                         isBusy
-                          ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-purple-500 to-violet-600 text-white hover:from-purple-600 hover:to-violet-700 shadow-lg shadow-purple-500/30'
+                          ? 'bg-[#2a3533] text-[#cecece] cursor-not-allowed'
+                          : 'bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] hover:from-[#c5a97b] hover:to-[#b89a6a] shadow-lg shadow-[rgba(255,208,117,0.3)]'
                       }`}
                     >
                       {isBusy ? (
@@ -1027,7 +1027,7 @@ export default function WrapPage() {
                       href={`https://basescan.org/tx/${hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg text-sm text-purple-400 text-center hover:bg-purple-500/20 transition-colors"
+                      className="block mt-4 p-3 bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg text-sm text-[#ffd075] text-center hover:bg-[rgba(255,208,117,0.2)] transition-colors"
                     >
                       View Transaction on Basescan
                     </a>
@@ -1046,10 +1046,10 @@ export default function WrapPage() {
                   )}
 
                   {/* NFT Preview Card */}
-                  <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700">
+                  <div className="bg-[#1a2221]/50 rounded-2xl p-6 border border-[rgba(255,255,255,0.06)]">
                     <div className="text-center space-y-4">
                       <h3 className="text-xl font-bold text-white">One-Click Purchase</h3>
-                      <p className="text-gray-400 text-sm">
+                      <p className="text-[#8a9090] text-sm">
                         Buy ETH → Get Token → Receive NFT instantly
                       </p>
 
@@ -1064,10 +1064,10 @@ export default function WrapPage() {
                             />
                           </div>
                         ) : isLoadingImage ? (
-                          <div className="w-32 h-32 rounded-xl bg-gray-700 animate-pulse" />
+                          <div className="w-32 h-32 rounded-xl bg-[#1f2827] animate-pulse" />
                         ) : (
-                          <div className="w-32 h-32 rounded-xl bg-gray-700 flex items-center justify-center">
-                            <span className="text-4xl text-gray-500">?</span>
+                          <div className="w-32 h-32 rounded-xl bg-[#1f2827] flex items-center justify-center">
+                            <span className="text-4xl text-[#6b7575]">?</span>
                           </div>
                         )}
                       </div>
@@ -1076,10 +1076,10 @@ export default function WrapPage() {
                         <div className="text-2xl font-bold text-white">
                           {nextTokenId ? `Human #${nextTokenId}` : isLoadingImage ? 'Loading...' : '1 Human NFT'}
                         </div>
-                        <div className="text-gray-500 text-sm">
+                        <div className="text-[#6b7575] text-sm">
                           {nextTokenId ? 'Next in queue (FIFO)' : isLoadingImage ? 'Fetching preview...' : 'From collection pool'}
                         </div>
-                        <div className="text-gray-400 text-xs mt-1">
+                        <div className="text-[#8a9090] text-xs mt-1">
                           {wTokensTotalHeld} NFTs available in pool
                         </div>
                       </div>
@@ -1087,24 +1087,24 @@ export default function WrapPage() {
                   </div>
 
                   {/* Price Breakdown */}
-                  <div className="bg-gray-800/50 rounded-2xl p-4 border border-gray-700 space-y-3">
+                  <div className="bg-[#1a2221]/50 rounded-2xl p-4 border border-[rgba(255,255,255,0.06)] space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Token Cost</span>
+                      <span className="text-[#8a9090]">Token Cost</span>
                       <span className="text-white font-semibold">
                         {isLoadingQuote ? 'Loading...' : `${swapCost.toFixed(6)} ETH`}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Wrap Fee</span>
+                      <span className="text-[#8a9090]">Wrap Fee</span>
                       <span className="text-white font-semibold">{wrapFeeFormatted} ETH</span>
                     </div>
-                    <div className="border-t border-gray-600 pt-3 flex justify-between items-center">
+                    <div className="border-t border-[rgba(255,255,255,0.08)] pt-3 flex justify-between items-center">
                       <span className="text-white font-bold">Total</span>
                       <span className="text-green-400 font-bold text-lg">
                         {isLoadingQuote ? 'Loading...' : `${totalCostFromStep1.toFixed(6)} ETH`}
                       </span>
                     </div>
-                    <div className="text-right text-gray-500 text-xs">
+                    <div className="text-right text-[#6b7575] text-xs">
                       Balance: {parseFloat(ethBalance).toFixed(4)} ETH
                     </div>
                   </div>
@@ -1141,7 +1141,7 @@ export default function WrapPage() {
                           </div>
                         </div>
                       )}
-                      <div className="text-gray-400">
+                      <div className="text-[#8a9090]">
                         {nextTokenId ? `Human #${nextTokenId} is now yours!` : 'Your new Human is waiting in your wallet'}
                       </div>
                     </div>
@@ -1179,7 +1179,7 @@ export default function WrapPage() {
                       disabled={isBusy || isLoadingQuote || !hasEnoughEthForSwap}
                       className={`w-full font-bold py-4 px-6 rounded-xl transition-all flex items-center justify-center gap-2 ${
                         isBusy
-                          ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                          ? 'bg-[#2a3533] text-[#cecece] cursor-not-allowed'
                           : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-lg shadow-green-500/30'
                       }`}
                     >
@@ -1218,18 +1218,18 @@ export default function WrapPage() {
                 /* WRAP MODE */
                 <div className="space-y-6">
                   <div className="text-center">
-                    <p className="text-gray-400">
+                    <p className="text-[#8a9090]">
                       Convert your NFTs to fungible tokens
                     </p>
                   </div>
 
                   {/* Selection Controls */}
-                  <div className="flex items-center justify-between border-b border-gray-700 pb-4">
+                  <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] pb-4">
                     <div>
                       <p className="text-white font-semibold">
                         {selectedCount} NFT{selectedCount !== 1 ? 's' : ''} selected
                       </p>
-                      <p className="text-gray-400 text-sm">
+                      <p className="text-[#8a9090] text-sm">
                         Fee: {wrapFee ? formatEther(totalWrapFee) : '0'} ETH
                       </p>
                     </div>
@@ -1237,14 +1237,14 @@ export default function WrapPage() {
                       <button
                         onClick={handleSelectAll}
                         disabled={selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-[#c5a97b] hover:bg-[#b89a6a] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Select All
                       </button>
                       <button
                         onClick={handleUnselectAll}
                         disabled={selectedNFTs.size === 0}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-[#1f2827] hover:bg-[#2a3533] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Unselect All
                       </button>
@@ -1254,12 +1254,12 @@ export default function WrapPage() {
                   {/* NFT Grid */}
                   {isLoading ? (
                     <div className="flex items-center justify-center py-16">
-                      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500"></div>
+                      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[rgba(255,208,117,0.4)]"></div>
                     </div>
                   ) : displayedNFTs.length === 0 ? (
                     <div className="text-center py-16">
                       {finalNFTImageUrl ? (
-                        <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-gray-600 mx-auto">
+                        <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-[rgba(255,255,255,0.08)] mx-auto">
                           <img
                             src={finalNFTImageUrl}
                             alt="NFT Preview"
@@ -1267,17 +1267,17 @@ export default function WrapPage() {
                           />
                         </div>
                       ) : isLoadingImage ? (
-                        <div className="w-24 h-24 rounded-xl bg-gray-700 mx-auto animate-pulse" />
+                        <div className="w-24 h-24 rounded-xl bg-[#1f2827] mx-auto animate-pulse" />
                       ) : (
-                        <div className="w-24 h-24 rounded-xl bg-gray-700 mx-auto flex items-center justify-center">
-                          <span className="text-3xl text-gray-500">?</span>
+                        <div className="w-24 h-24 rounded-xl bg-[#1f2827] mx-auto flex items-center justify-center">
+                          <span className="text-3xl text-[#6b7575]">?</span>
                         </div>
                       )}
                       <h3 className="text-2xl font-bold text-white mt-4">No NFTs Found</h3>
-                      <p className="text-gray-400 mt-2">You don&apos;t own any NFTs to wrap</p>
+                      <p className="text-[#8a9090] mt-2">You don&apos;t own any NFTs to wrap</p>
                       <button
                         onClick={() => setMode('get-nft')}
-                        className="mt-6 px-6 py-3 bg-purple-500 hover:bg-purple-600 text-white rounded-xl transition-colors"
+                        className="mt-6 px-6 py-3 bg-[#ffd075] hover:bg-[#c5a97b] text-[#0a0d0c] rounded-xl transition-colors"
                       >
                         Get Your First NFT
                       </button>
@@ -1292,14 +1292,14 @@ export default function WrapPage() {
                             onClick={() => toggleNFT(nft.tokenId)}
                             className={`relative group rounded-xl overflow-hidden border-2 transition-all ${
                               isSelected
-                                ? 'border-blue-500 shadow-lg shadow-blue-500/50 scale-95'
-                                : 'border-gray-700 hover:border-blue-400'
+                                ? 'border-[rgba(255,208,117,0.4)] shadow-lg shadow-[rgba(255,208,117,0.5)] scale-95'
+                                : 'border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,208,117,0.4)]'
                             }`}
                           >
                             {/* Checkbox */}
                             <div className="absolute top-2 left-2 z-10">
                               <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                                isSelected ? 'bg-blue-500 border-blue-500' : 'bg-gray-800/80 border-gray-600'
+                                isSelected ? 'bg-[#ffd075] border-[rgba(255,208,117,0.4)]' : 'bg-[#1a2221]/80 border-[rgba(255,255,255,0.08)]'
                               }`}>
                                 {isSelected && <span className="text-white text-xs">✓</span>}
                               </div>
@@ -1315,9 +1315,9 @@ export default function WrapPage() {
                             </div>
 
                             {/* NFT Info */}
-                            <div className="p-2 bg-gray-900/90">
+                            <div className="p-2 bg-[#171e1d]/90">
                               <p className="text-white text-xs font-semibold truncate">{nft.name}</p>
-                              <p className="text-gray-400 text-xs">#{nft.tokenId}</p>
+                              <p className="text-[#8a9090] text-xs">#{nft.tokenId}</p>
                             </div>
                           </button>
                         );
@@ -1327,7 +1327,7 @@ export default function WrapPage() {
 
                   {/* Action Button */}
                   {displayedNFTs.length > 0 && (
-                    <div className="border-t border-gray-700 pt-6">
+                    <div className="border-t border-[rgba(255,255,255,0.06)] pt-6">
                       {!isApproved ? (
                         <button
                           onClick={supportsAtomicBatch ? handleApproveAndWrap : handleApprove}
@@ -1346,7 +1346,7 @@ export default function WrapPage() {
                         <button
                           onClick={handleWrap}
                           disabled={selectedCount === 0 || isPending}
-                          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                          className="w-full bg-[#ffd075] hover:bg-[#c5a97b] text-white font-bold py-4 px-6 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                         >
                           <span>🪙</span>
                           <span>
@@ -1363,8 +1363,8 @@ export default function WrapPage() {
 
               {/* Transaction Status */}
               {hash && mode !== 'get-nft' && (
-                <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                  <p className="text-blue-400 text-sm text-center">
+                <div className="mt-6 p-4 bg-[#ffd075]/10 border border-[rgba(255,208,117,0.4)]/30 rounded-xl">
+                  <p className="text-[#ffd075] text-sm text-center">
                     {isConfirming ? 'Confirming transaction...' : isSuccess ? 'Transaction successful!' : 'Transaction submitted'}
                   </p>
                 </div>

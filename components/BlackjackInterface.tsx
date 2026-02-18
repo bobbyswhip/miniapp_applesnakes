@@ -88,8 +88,8 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
 
   if (!gameInfo) {
     return (
-      <div className="bg-gray-800/50 p-4 rounded-lg animate-pulse">
-        <div className="h-16 bg-gray-700/50 rounded"></div>
+      <div className="bg-[#1a2221]/50 p-4 rounded-lg animate-pulse">
+        <div className="h-16 bg-[#1f2827]/50 rounded"></div>
       </div>
     );
   }
@@ -99,13 +99,13 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
 
   return (
     <div
-      className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 hover:border-purple-500 transition-all cursor-pointer"
+      className="bg-[#1a2221]/50 p-4 rounded-lg border border-[rgba(255,255,255,0.08)] hover:border-[#c5a97b] transition-all cursor-pointer"
       onClick={() => gameInfo.marketCreated && onOpenMarket(gameId)}
     >
       <div className="flex justify-between items-start mb-2">
         <div>
           <div className="text-white font-semibold">Game #{gameId.toString()}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[#8a9090]">
             Player: {gameInfo.player.slice(0, 6)}...{gameInfo.player.slice(-4)}
           </div>
         </div>
@@ -113,7 +113,7 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
           stateName === 'Active' ? 'bg-green-900/50 text-green-300' :
           stateName === 'Dealing' ? 'bg-yellow-900/50 text-yellow-300' :
           stateName === 'Busted' ? 'bg-red-900/50 text-red-300' :
-          'bg-gray-700/50 text-gray-300'
+          'bg-[#1f2827]/50 text-[#cecece]'
         }`}>
           {stateName}
         </div>
@@ -121,17 +121,17 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
 
       <div className="flex gap-4 text-sm items-center">
         <div>
-          <div className="text-gray-400 text-xs">Player</div>
+          <div className="text-[#8a9090] text-xs">Player</div>
           <div className="text-white font-bold">{gameInfo.playerTotal.toString()}</div>
         </div>
         <div>
-          <div className="text-gray-400 text-xs">Dealer</div>
+          <div className="text-[#8a9090] text-xs">Dealer</div>
           <div className="text-white font-bold">{gameInfo.dealerTotal.toString()}</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {gameInfo.marketCreated && (
             <>
-              <div className="text-xs text-purple-300">
+              <div className="text-xs text-[#ffd075]">
                 📊 Market Active
               </div>
               <button
@@ -139,7 +139,7 @@ function LiveGameCard({ gameId, onOpenMarket }: LiveGameCardProps) {
                   e.stopPropagation();
                   onOpenMarket(gameId);
                 }}
-                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded transition-all"
+                className="px-3 py-1 bg-[#b8860b] hover:bg-[#9a7209] text-white text-xs font-semibold rounded transition-all"
               >
                 Trade
               </button>
@@ -163,11 +163,11 @@ function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps
   const noPricePercent = Number(noPrice) / 100;
 
   return (
-    <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+    <div className="bg-[#1a2221]/50 p-4 rounded-lg border border-[rgba(255,255,255,0.08)]">
       <div className="flex justify-between items-start mb-3">
         <div>
           <div className="text-white font-semibold">Game #{gameId.toString()}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[#8a9090]">
             Final Prices: YES {yesPricePercent.toFixed(1)}% / NO {noPricePercent.toFixed(1)}%
           </div>
         </div>
@@ -175,14 +175,14 @@ function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps
           resultLabel === 'Win' ? 'bg-green-900/50 text-green-300' :
           resultLabel === 'Lose' ? 'bg-red-900/50 text-red-300' :
           resultLabel === 'Push' ? 'bg-yellow-900/50 text-yellow-300' :
-          'bg-gray-700/50 text-gray-300'
+          'bg-[#1f2827]/50 text-[#cecece]'
         }`}>
           {resultLabel}
         </div>
       </div>
 
       {/* User shares info */}
-      <div className="bg-gray-900/50 p-3 rounded-lg mb-3 space-y-1">
+      <div className="bg-[#171e1d]/50 p-3 rounded-lg mb-3 space-y-1">
         {userYesShares > 0n && (
           <div className="flex justify-between text-xs">
             <span className="text-green-400">Your YES Shares:</span>
@@ -195,8 +195,8 @@ function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps
             <span className="text-white">{formatEther(userNoShares)}</span>
           </div>
         )}
-        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-700">
-          <span className="text-purple-300">Claimable:</span>
+        <div className="flex justify-between text-sm font-semibold pt-2 border-t border-[rgba(255,255,255,0.08)]">
+          <span className="text-[#ffd075]">Claimable:</span>
           <span className="text-green-400">{formatEther(claimableAmount)} tokens</span>
         </div>
       </div>
@@ -204,7 +204,7 @@ function ClosedGameCard({ market, onClaim, isClaimPending }: ClosedGameCardProps
       <button
         onClick={() => onClaim(gameId)}
         disabled={isClaimPending}
-        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
       >
         {isClaimPending ? 'Claiming...' : `Claim ${formatEther(claimableAmount)} Tokens`}
       </button>
@@ -797,12 +797,12 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           maxHeight: '90vh',
           overflowY: 'auto',
           overflowX: 'hidden',
-          background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(168, 85, 247, 0.08), rgba(99, 102, 241, 0.05))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(139, 92, 246, 0.3)',
+          background: 'linear-gradient(135deg, rgba(255,208,117,0.05), rgba(197,169,123,0.08), rgba(255,208,117,0.05))',
+          backgroundColor: 'rgba(10,13,12,0.98)',
+          border: '2px solid rgba(255,208,117,0.3)',
           borderRadius: '16px',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(139, 92, 246, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+          boxShadow: '0 0 50px rgba(255,208,117,0.15), 0 0 100px rgba(197,169,123,0.1), inset 0 0 30px rgba(255,208,117,0.03)',
           padding: '20px',
         }}
       >
@@ -822,7 +822,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         className="text-3xl font-bold text-center mb-6"
         style={{
           color: '#fff',
-          textShadow: '0 0 20px rgba(168, 85, 247, 0.8)',
+          textShadow: '0 0 20px rgba(255,208,117,0.6)',
         }}
       >
         Prediction Jack
@@ -834,8 +834,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           onClick={() => setActiveTab('play')}
           className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all text-sm ${
             activeTab === 'play'
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-[#b8860b] text-white'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           Play
@@ -844,8 +844,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           onClick={() => setActiveTab('games')}
           className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all text-sm ${
             activeTab === 'games'
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-[#b8860b] text-white'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           Live
@@ -854,8 +854,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           onClick={() => setActiveTab('closed')}
           className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all relative text-sm ${
             activeTab === 'closed'
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-[#b8860b] text-white'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           Closed
@@ -867,13 +867,13 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           onClick={() => setActiveTab('accounts')}
           className={`flex-1 min-w-[70px] py-2 px-3 rounded-lg font-semibold transition-all relative text-sm ${
             activeTab === 'accounts'
-              ? 'bg-purple-600 text-white'
-              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              ? 'bg-[#b8860b] text-white'
+              : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
           }`}
         >
           Accounts
           {supportsSubaccounts && subaccounts.length > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-xs flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#b8860b] rounded-full text-xs flex items-center justify-center">
               {subaccounts.length}
             </span>
           )}
@@ -914,7 +914,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
           <button
             onClick={() => handleClaimWinnings()}
             disabled={isClaimPending || isClaimConfirming}
-            className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+            className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
           >
             {isClaimPending || isClaimConfirming ? 'Claiming...' : 'Claim Winnings'}
           </button>
@@ -933,30 +933,30 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
         <div className="space-y-6">
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-800/50 p-4 rounded-lg text-center">
-              <div className="text-gray-400 text-sm">Games</div>
+            <div className="bg-[#1a2221]/50 p-4 rounded-lg text-center">
+              <div className="text-[#8a9090] text-sm">Games</div>
               <div className="text-2xl font-bold text-white">{gamesPlayed.toString()}</div>
             </div>
-            <div className="bg-gray-800/50 p-4 rounded-lg text-center">
-              <div className="text-gray-400 text-sm">Wins</div>
+            <div className="bg-[#1a2221]/50 p-4 rounded-lg text-center">
+              <div className="text-[#8a9090] text-sm">Wins</div>
               <div className="text-2xl font-bold text-green-400">{wins.toString()}</div>
             </div>
-            <div className="bg-gray-800/50 p-4 rounded-lg text-center">
-              <div className="text-gray-400 text-sm">Win Rate</div>
-              <div className="text-2xl font-bold text-purple-400">{winRate.toString()}%</div>
+            <div className="bg-[#1a2221]/50 p-4 rounded-lg text-center">
+              <div className="text-[#8a9090] text-sm">Win Rate</div>
+              <div className="text-2xl font-bold text-[#c5a97b]">{winRate.toString()}%</div>
             </div>
           </div>
 
           {/* Game status */}
-          <div className="bg-gray-800/50 p-4 rounded-lg">
-            <div className="text-center text-lg font-semibold text-purple-300 mb-4">
+          <div className="bg-[#1a2221]/50 p-4 rounded-lg">
+            <div className="text-center text-lg font-semibold text-[#ffd075] mb-4">
               {gameDisplay?.status || 'No active game'}
             </div>
 
             {/* Dealer hand */}
             {gameDisplay && gameDisplay.dealerCards.length > 0 && (
               <div className="mb-6">
-                <div className="text-gray-400 text-sm mb-2">Dealer: {gameDisplay.dealerTotal}</div>
+                <div className="text-[#8a9090] text-sm mb-2">Dealer: {gameDisplay.dealerTotal}</div>
                 <div className="flex justify-center items-center">
                   {gameDisplay.dealerCards.map((card, i) => renderCard(card, i))}
                 </div>
@@ -966,7 +966,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
             {/* Player hand */}
             {gameDisplay && gameDisplay.playerCards.length > 0 && (
               <div>
-                <div className="text-gray-400 text-sm mb-2">Player: {gameDisplay.playerTotal}</div>
+                <div className="text-[#8a9090] text-sm mb-2">Player: {gameDisplay.playerTotal}</div>
                 <div className="flex justify-center items-center">
                   {gameDisplay.playerCards.map((card, i) => renderCard(card, i))}
                 </div>
@@ -976,8 +976,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
           {/* Trading period timer */}
           {gameDisplay && clientSecondsUntilCanAct > 0 && (
-            <div className="bg-blue-900/50 border border-blue-500 p-3 rounded-lg text-center">
-              <div className="text-blue-200 text-sm">Trading period active</div>
+            <div className="bg-[#1a2221]/50 border border-[rgba(255,208,117,0.4)] p-3 rounded-lg text-center">
+              <div className="text-[#ffd075] text-sm">Trading period active</div>
               <div className="text-white font-bold">{clientSecondsUntilCanAct}s until you can act</div>
             </div>
           )}
@@ -989,7 +989,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                 <button
                   onClick={handleStartGame}
                   disabled={isStartGamePending || isStartGameConfirming || !!(claimableAmount && claimableAmount > 0n)}
-                  className="w-full py-3 px-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                  className="w-full py-3 px-6 bg-green-600 hover:bg-green-700 disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
                   title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : ''}
                 >
                   {isStartGamePending || isStartGameConfirming ? 'Starting...' : `Start Game (${startGameFee} ETH)`}
@@ -999,7 +999,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                   <button
                     onClick={supportsAtomicBatch ? handleApproveAndStartWithTokens : handleApproveTokens}
                     disabled={isApprovePending || isApproveConfirming || isBatchPending || isBatchConfirming || !!(claimableAmount && claimableAmount > 0n)}
-                    className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                    className="w-full py-3 px-6 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
                     title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : supportsAtomicBatch ? 'Approve and start game with tokens' : 'Approve tokens to start game'}
                   >
                     {isBatchPending || isBatchConfirming
@@ -1014,7 +1014,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                   <button
                     onClick={handleStartGameWithTokens}
                     disabled={isStartGameWithTokensPending || isStartGameWithTokensConfirming || !!(claimableAmount && claimableAmount > 0n)}
-                    className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                    className="w-full py-3 px-6 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
                     title={claimableAmount && claimableAmount > 0n ? 'Claim your winnings first' : ''}
                   >
                     {isStartGameWithTokensPending || isStartGameWithTokensConfirming ? 'Starting...' : `Start with Tokens (${startGameFee} tokens)`}
@@ -1028,7 +1028,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                 <button
                   onClick={handleHit}
                   disabled={isHitPending || isHitConfirming}
-                  className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                  className="flex-1 py-3 px-6 bg-[#b8860b] hover:bg-[#9a7209] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
                 >
                   {isHitPending || isHitConfirming ? 'Hitting...' : 'Hit'}
                 </button>
@@ -1038,7 +1038,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                 <button
                   onClick={handleStand}
                   disabled={isStandPending || isStandConfirming}
-                  className="flex-1 py-3 px-6 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+                  className="flex-1 py-3 px-6 bg-yellow-600 hover:bg-yellow-700 disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
                 >
                   {isStandPending || isStandConfirming ? 'Standing...' : 'Stand'}
                 </button>
@@ -1048,13 +1048,13 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
           {/* Game info with market button */}
           {gameDisplay && gameDisplay.gameId > 0n && (
-            <div className="bg-gray-800/50 p-3 rounded-lg">
+            <div className="bg-[#1a2221]/50 p-3 rounded-lg">
               <div className="flex justify-between items-center">
                 <div>
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm text-[#8a9090]">
                     Game ID: #{gameDisplay.gameId.toString()}
                   </div>
-                  <div className={`text-xs mt-1 ${gameDisplay.marketCreated ? 'text-green-400' : gameDisplay.canStartNew ? 'text-gray-400' : 'text-yellow-400'}`}>
+                  <div className={`text-xs mt-1 ${gameDisplay.marketCreated ? 'text-green-400' : gameDisplay.canStartNew ? 'text-[#8a9090]' : 'text-yellow-400'}`}>
                     {gameDisplay.marketCreated
                       ? '📊 Market Active'
                       : gameDisplay.canStartNew
@@ -1065,7 +1065,7 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                 {gameDisplay.marketCreated && (
                   <button
                     onClick={() => setSelectedMarketGameId(gameDisplay.gameId)}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition-all"
+                    className="px-4 py-2 bg-[#b8860b] hover:bg-[#9a7209] text-white text-sm font-semibold rounded-lg transition-all"
                   >
                     Trade Market
                   </button>
@@ -1080,17 +1080,17 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       {activeTab === 'games' && (
         <div className="space-y-4">
           {/* Active games count */}
-          <div className="bg-gray-800/50 p-3 rounded-lg text-center">
-            <div className="text-purple-300 font-semibold">
+          <div className="bg-[#1a2221]/50 p-3 rounded-lg text-center">
+            <div className="text-[#ffd075] font-semibold">
               {totalActiveGames.toString()} Active Game{totalActiveGames !== 1n ? 's' : ''}
             </div>
           </div>
 
           {/* Games list */}
           {activeGameIds.length === 0 ? (
-            <div className="bg-gray-800/50 p-6 rounded-lg text-center">
-              <div className="text-gray-400 mb-2">No active games right now</div>
-              <div className="text-sm text-gray-500">
+            <div className="bg-[#1a2221]/50 p-6 rounded-lg text-center">
+              <div className="text-[#8a9090] mb-2">No active games right now</div>
+              <div className="text-sm text-[#6b7575]">
                 Start a game to be the first player!
               </div>
             </div>
@@ -1112,8 +1112,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
       {activeTab === 'closed' && (
         <div className="space-y-4">
           {/* Claimable summary */}
-          <div className="bg-gray-800/50 p-3 rounded-lg text-center">
-            <div className="text-purple-300 font-semibold">
+          <div className="bg-[#1a2221]/50 p-3 rounded-lg text-center">
+            <div className="text-[#ffd075] font-semibold">
               {claimableMarkets.length} Market{claimableMarkets.length !== 1 ? 's' : ''} with Claimable Winnings
             </div>
             {totalClaimableFromMarkets > 0n && (
@@ -1121,30 +1121,30 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
                 {formatEther(totalClaimableFromMarkets)} tokens total
               </div>
             )}
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-[#8a9090] mt-1">
               Resolved markets where you can claim funds
             </div>
           </div>
 
           {/* Portfolio Summary */}
           {portfolioSummary && (
-            <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 p-4 rounded-lg border border-purple-500/30">
-              <div className="text-xs text-purple-300 mb-2 font-semibold">Your Portfolio</div>
+            <div className="bg-gradient-to-r from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] p-4 rounded-lg border border-[rgba(255,208,117,0.2)]">
+              <div className="text-xs text-[#ffd075] mb-2 font-semibold">Your Portfolio</div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <div className="text-gray-400 text-xs">Active Positions</div>
+                  <div className="text-[#8a9090] text-xs">Active Positions</div>
                   <div className="text-white font-semibold">{portfolioSummary.activePositions.toString()}</div>
                 </div>
                 <div>
-                  <div className="text-gray-400 text-xs">Active Value</div>
+                  <div className="text-[#8a9090] text-xs">Active Value</div>
                   <div className="text-white font-semibold">{formatEther(portfolioSummary.totalActiveValue)} tokens</div>
                 </div>
                 <div>
-                  <div className="text-gray-400 text-xs">Resolved Positions</div>
+                  <div className="text-[#8a9090] text-xs">Resolved Positions</div>
                   <div className="text-white font-semibold">{portfolioSummary.resolvedPositions.toString()}</div>
                 </div>
                 <div>
-                  <div className="text-gray-400 text-xs">Total Claimable</div>
+                  <div className="text-[#8a9090] text-xs">Total Claimable</div>
                   <div className="text-green-400 font-semibold">{formatEther(portfolioSummary.totalClaimable)} tokens</div>
                 </div>
               </div>
@@ -1153,8 +1153,8 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
           {/* Info box */}
           {!address && (
-            <div className="bg-blue-900/50 border border-blue-500 p-4 rounded-lg text-center">
-              <div className="text-blue-200 text-sm">
+            <div className="bg-[#1a2221]/50 border border-[rgba(255,208,117,0.4)] p-4 rounded-lg text-center">
+              <div className="text-[#ffd075] text-sm">
                 Connect your wallet to view games where you have claimable winnings
               </div>
             </div>
@@ -1162,9 +1162,9 @@ export function BlackjackInterface({ onClose }: BlackjackInterfaceProps) {
 
           {/* Games list */}
           {address && claimableMarkets.length === 0 ? (
-            <div className="bg-gray-800/50 p-6 rounded-lg text-center">
-              <div className="text-gray-400 mb-2">No games with claimable winnings</div>
-              <div className="text-sm text-gray-500">
+            <div className="bg-[#1a2221]/50 p-6 rounded-lg text-center">
+              <div className="text-[#8a9090] mb-2">No games with claimable winnings</div>
+              <div className="text-sm text-[#6b7575]">
                 When games finish, they will appear here if you have winnings to collect
               </div>
             </div>

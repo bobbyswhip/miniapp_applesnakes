@@ -52,7 +52,7 @@ export function UsdcApproval({ marketAddress, requiredAmount, children }: Props)
   };
 
   if (!address) {
-    return <div className="text-gray-400 text-center p-3">Connect wallet to bet</div>;
+    return <div className="text-[#8a9090] text-center p-3">Connect wallet to bet</div>;
   }
 
   if (formattedBalance < requiredAmount) {
@@ -68,7 +68,7 @@ export function UsdcApproval({ marketAddress, requiredAmount, children }: Props)
       <button
         onClick={handleApprove}
         disabled={isApproving}
-        className="w-full py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+        className="w-full py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-[#2a3533] text-white rounded-lg font-medium transition-colors"
       >
         {isApproving ? 'Approving USDC...' : 'Approve USDC to Bet'}
       </button>

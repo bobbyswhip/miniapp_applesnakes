@@ -23,8 +23,6 @@ interface InventoryContextType {
   setShowBreed: (open: boolean) => void;
   showPredictionJack: boolean;
   setShowPredictionJack: (open: boolean) => void;
-  showUnity: boolean;
-  setShowUnity: (open: boolean) => void;
   // NFT Hub (SwapWrapModal) state
   showNFTHub: boolean;
   setShowNFTHub: (open: boolean) => void;
@@ -40,8 +38,6 @@ interface InventoryContextType {
   openHatch: () => void;
   openBreed: () => void;
   openPredictionJack: () => void;
-  openUnity: () => void;
-  closeUnity: () => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -54,7 +50,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const [showHatch, setShowHatch] = useState(false);
   const [showBreed, setShowBreed] = useState(false);
   const [showPredictionJack, setShowPredictionJack] = useState(false);
-  const [showUnity, setShowUnity] = useState(false);
   const [showNFTHub, setShowNFTHub] = useState(false);
   const [nftHubMode, setNFTHubMode] = useState<'buy' | 'wrap'>('buy');
 
@@ -72,7 +67,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   const openSwapMint = () => {
@@ -82,7 +76,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   const openChat = () => {
@@ -92,7 +85,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   const openHatch = () => {
@@ -102,7 +94,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowBreed(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   const openBreed = () => {
@@ -112,7 +103,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   const openPredictionJack = () => {
@@ -122,21 +112,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowChat(false);
     setShowHatch(false);
     setShowBreed(false);
-    setShowUnity(false);
-  };
-
-  const openUnity = () => {
-    setShowUnity(true);
-    setIsOpen(false);
-    setShowSwapMint(false);
-    setShowChat(false);
-    setShowHatch(false);
-    setShowBreed(false);
-    setShowPredictionJack(false);
-  };
-
-  const closeUnity = () => {
-    setShowUnity(false);
   };
 
   const openNFTHub = (mode: 'buy' | 'wrap' = 'buy') => {
@@ -149,7 +124,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     setShowHatch(false);
     setShowBreed(false);
     setShowPredictionJack(false);
-    setShowUnity(false);
   };
 
   // Opens NFT Hub as overlay WITHOUT closing inventory (for marketplace actions)
@@ -181,8 +155,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setShowBreed,
         showPredictionJack,
         setShowPredictionJack,
-        showUnity,
-        setShowUnity,
         showNFTHub,
         setShowNFTHub,
         nftHubMode,
@@ -196,8 +168,6 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         openHatch,
         openBreed,
         openPredictionJack,
-        openUnity,
-        closeUnity,
       }}
     >
       {children}

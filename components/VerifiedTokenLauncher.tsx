@@ -494,7 +494,7 @@ export function VerifiedTokenLauncher() {
 
       {/* Status Message */}
       {statusMessage && (
-        <div className="p-4 bg-blue-900/50 border border-blue-500/50 rounded-lg text-blue-200 text-center">
+        <div className="p-4 bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg text-[#ffd075] text-center">
           <div className="animate-pulse">{statusMessage}</div>
         </div>
       )}
@@ -538,7 +538,7 @@ export function VerifiedTokenLauncher() {
             <button
               onClick={handleVerify}
               disabled={isProcessing}
-              className="w-full py-4 bg-green-600 hover:bg-green-500 disabled:bg-gray-600 text-white font-bold rounded-lg transition-colors"
+              className="w-full py-4 bg-green-600 hover:bg-green-500 disabled:bg-[#2a3533] text-white font-bold rounded-lg transition-colors"
             >
               {isProcessing ? 'Processing...' : `Verify Image ($${X402_CONFIG.VERIFY_PRICE_USDC.toFixed(2)} USDC)`}
             </button>
@@ -632,7 +632,7 @@ export function VerifiedTokenLauncher() {
           <button
             onClick={handleLaunch}
             disabled={isProcessing || !tokenName || !tokenSymbol || tokenSymbol.length < 2}
-            className="w-full py-4 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white font-bold rounded-lg transition-colors"
+            className="w-full py-4 bg-[#b8860b] hover:bg-[#c5a97b] disabled:bg-[#2a3533] text-white font-bold rounded-lg transition-colors"
           >
             {isProcessing ? 'Processing...' : `Launch Token ($${devBuyBudget} USDC)`}
           </button>
@@ -656,7 +656,7 @@ export function VerifiedTokenLauncher() {
                   href={`https://basescan.org/token/${launch.tokenAddress || launch.result?.tokenAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 text-sm"
+                  className="text-[#c5a97b] hover:text-[#ffd075] text-sm"
                 >
                   View on BaseScan
                 </a>

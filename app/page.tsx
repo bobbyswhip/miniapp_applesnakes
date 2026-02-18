@@ -15,13 +15,7 @@ import { StakingInterface } from '@/components/StakingInterface';
 import { PredictionJackApp } from '@/components/PredictionJackApp';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { useBatchTransaction } from '@/hooks/useBatchTransaction';
-import dynamic from 'next/dynamic';
 
-// Dynamically import Unity component (client-side only, no SSR)
-const UnityWebGL = dynamic(() => import('@/components/UnityWebGL'), {
-  ssr: false,
-  loading: () => null,
-});
 
 type TimeOfDay = 'day' | 'sunset' | 'dusk' | 'moonrise' | 'night' | 'moonset' | 'dawn' | 'sunrise';
 
@@ -138,7 +132,7 @@ function HomeContent() {
   const { nfts, isLoading, refetch: refetchNFTs } = useNFTContext();
 
   // UI coordination from InventoryContext
-  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, showUnity, closeUnity, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack, openNFTHub } = useInventory();
+  const { showSwapMint, setShowSwapMint, showChat, setShowChat, showHatch, setShowHatch, showBreed, setShowBreed, showPredictionJack, setShowPredictionJack, openSwapMint, openChat, openHatch, openBreed, openInventory, openPredictionJack, openNFTHub } = useInventory();
 
   // Track if we've already triggered refresh for current mint (prevent duplicate refreshes)
   const hasRefreshedRef = useRef(false);
@@ -1754,13 +1748,13 @@ function HomeContent() {
               alt="Mountain"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -1789,13 +1783,13 @@ function HomeContent() {
               alt="Cave"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'brightness(1.15) drop-shadow(0 0 8px rgba(147, 51, 234, 0.4))',
+                filter: 'brightness(1.15) drop-shadow(0 0 8px rgba(255, 208, 117, 0.4))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'brightness(1.15) drop-shadow(0 0 20px rgba(147, 51, 234, 0.8))';
+                e.currentTarget.style.filter = 'brightness(1.15) drop-shadow(0 0 20px rgba(255, 208, 117, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'brightness(1.15) drop-shadow(0 0 8px rgba(147, 51, 234, 0.4))';
+                e.currentTarget.style.filter = 'brightness(1.15) drop-shadow(0 0 8px rgba(255, 208, 117, 0.4))';
               }}
             />
           </div>
@@ -1824,13 +1818,13 @@ function HomeContent() {
               alt="Town"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -1963,13 +1957,13 @@ function HomeContent() {
               alt="Jail House"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -1998,13 +1992,13 @@ function HomeContent() {
               alt="Town Store"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -2033,13 +2027,13 @@ function HomeContent() {
               alt="Wizard House"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -2341,7 +2335,7 @@ function HomeContent() {
           </div>
 
           {/* Strong hazy gray gradient overlay to dim sun/moon gradients */}
-          <div className="absolute inset-0 z-25 pointer-events-none bg-gradient-to-b from-gray-500/70 via-gray-600/60 to-gray-700/50" />
+          <div className="absolute inset-0 z-25 pointer-events-none bg-gradient-to-b from-[rgba(42,53,51,0.7)] via-[rgba(31,40,39,0.6)] to-[rgba(26,34,33,0.5)]" />
         </>
       )}
 
@@ -2370,7 +2364,7 @@ function HomeContent() {
           </div>
 
           {/* Strong hazy gray gradient overlay to dim sun/moon gradients */}
-          <div className="absolute inset-0 z-25 pointer-events-none bg-gradient-to-b from-gray-500/70 via-gray-600/60 to-gray-700/50" />
+          <div className="absolute inset-0 z-25 pointer-events-none bg-gradient-to-b from-[rgba(42,53,51,0.7)] via-[rgba(31,40,39,0.6)] to-[rgba(26,34,33,0.5)]" />
         </>
       )}
 
@@ -2381,7 +2375,7 @@ function HomeContent() {
           <div
             className="absolute inset-0 z-30 pointer-events-none animate-cave-shift"
             style={{
-              background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.75) 0%, rgba(0, 0, 0, 0.85) 25%, rgba(31, 41, 55, 0.7) 50%, rgba(0, 0, 0, 0.8) 75%, rgba(17, 24, 39, 0.78) 100%)'
+              background: 'linear-gradient(135deg, rgba(23, 30, 29, 0.75) 0%, rgba(0, 0, 0, 0.85) 25%, rgba(26, 34, 33, 0.7) 50%, rgba(0, 0, 0, 0.8) 75%, rgba(23, 30, 29, 0.78) 100%)'
             }}
           />
 
@@ -2446,13 +2440,13 @@ function HomeContent() {
               alt="Mountain Hut"
               className="w-full h-full object-contain transition-all duration-300"
               style={{
-                filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
               }}
             />
           </div>
@@ -2489,13 +2483,13 @@ function HomeContent() {
                 alt="Meteor"
                 className="w-full h-full object-contain transition-all duration-300"
                 style={{
-                  filter: 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))',
+                  filter: 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(59, 130, 246, 0.8))';
+                  e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(197, 169, 123, 0.8))';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(59, 130, 246, 0))';
+                  e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(197, 169, 123, 0))';
                 }}
               />
             </div>
@@ -2522,13 +2516,13 @@ function HomeContent() {
       )}
 
       {/* Location Display at Bottom Left - Enhanced Futuristic Style */}
-      <div className="absolute bottom-3 left-3 z-50 bg-gradient-to-br from-slate-900/40 to-slate-950/50 backdrop-blur-lg px-5 py-2.5 rounded-xl border border-cyan-400/20"
+      <div className="absolute bottom-3 left-3 z-50 bg-gradient-to-br from-[rgba(23,30,29,0.4)] to-[rgba(10,13,12,0.5)] backdrop-blur-lg px-5 py-2.5 rounded-xl border border-[rgba(255,208,117,0.2)]"
            style={{
-             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(6, 182, 212, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 208, 117, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
            }}>
-        <p className="text-cyan-50 text-sm font-semibold tracking-wider"
+        <p className="text-[#ffd075] text-sm font-semibold tracking-wider"
            style={{
-             textShadow: '0 0 10px rgba(6, 182, 212, 0.5), 0 1px 2px rgba(0, 0, 0, 0.8)',
+             textShadow: '0 0 10px rgba(255, 208, 117, 0.5), 0 1px 2px rgba(0, 0, 0, 0.8)',
            }}>
           {LOCATIONS[currentLocation].name}
         </p>
@@ -2864,11 +2858,11 @@ function HomeContent() {
                 setShowChat(false);
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(168, 85, 247, 0.9))';
-                e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.3)';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 20px rgba(255, 208, 117, 0.9))';
+                e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.6), inset 0 0 15px rgba(255, 208, 117, 0.3)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(168, 85, 247, 0))';
+                e.currentTarget.style.filter = 'drop-shadow(0 0 0px rgba(255, 208, 117, 0))';
                 e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.4)';
               }}
               style={{
@@ -2880,7 +2874,7 @@ function HomeContent() {
                 minWidth: '90px',
                 maxWidth: '130px',
                 aspectRatio: '2.5 / 1',
-                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%)',
+                background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.95) 0%, rgba(197, 169, 123, 0.95) 100%)',
                 border: '2px solid rgba(216, 180, 254, 0.5)',
                 borderRadius: '12px',
                 display: 'flex',
@@ -2889,9 +2883,9 @@ function HomeContent() {
                 fontSize: 'clamp(11px, 1.3vw, 15px)',
                 fontWeight: 700,
                 color: '#FFFFFF',
-                textShadow: '1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(168, 85, 247, 0.5)',
+                textShadow: '1px 1px 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 208, 117, 0.5)',
                 boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
-                filter: 'drop-shadow(0 0 0px rgba(168, 85, 247, 0))',
+                filter: 'drop-shadow(0 0 0px rgba(255, 208, 117, 0))',
               }}
             >
               {characterButtons[currentCharacter]}
@@ -2945,12 +2939,12 @@ function HomeContent() {
             maxHeight: '90vh',
             overflowY: 'auto',
             overflowX: 'hidden',
-            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
-            backgroundColor: 'rgba(17, 24, 39, 0.98)',
-            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(255, 208, 117, 0.08), rgba(197, 169, 123, 0.05))',
+            backgroundColor: 'rgba(23, 30, 29, 0.98)',
+            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
             borderRadius: 'clamp(10px, 2vw, 16px)',
             backdropFilter: 'blur(20px)',
-            boxShadow: '0 0 50px rgba(6, 182, 212, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+            boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(255, 208, 117, 0.2), inset 0 0 30px rgba(255, 208, 117, 0.05)',
             padding: 'clamp(12px, 2.5vw, 20px)',
           }}
         >
@@ -2958,7 +2952,7 @@ function HomeContent() {
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.1), transparent)',
               animation: 'shimmer 3s infinite',
               zIndex: 1,
             }}
@@ -2977,14 +2971,14 @@ function HomeContent() {
                 borderRadius: 'clamp(8px, 1.5vw, 12px)',
                 fontWeight: 700,
                 fontSize: 'clamp(12px, 2.8vw, 16px)',
-                border: shopTab === 'mint' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(168, 85, 247, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: shopTab === 'mint' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 background: shopTab === 'mint'
-                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))'
-                  : 'rgba(17, 24, 39, 0.8)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                  : 'rgba(23, 30, 29, 0.8)',
                 color: shopTab === 'mint' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: shopTab === 'mint' ? '0 0 15px rgba(168, 85, 247, 0.4)' : 'none',
+                boxShadow: shopTab === 'mint' ? '0 0 15px rgba(255, 208, 117, 0.4)' : 'none',
               }}
             >
               {nftsRemaining > 0 ? '🐍 Swap to Mint' : '🪙 Swap Tokens'}
@@ -2997,14 +2991,14 @@ function HomeContent() {
                 borderRadius: 'clamp(8px, 1.5vw, 12px)',
                 fontWeight: 700,
                 fontSize: 'clamp(12px, 2.8vw, 16px)',
-                border: shopTab === 'wrap' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: shopTab === 'wrap' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 background: shopTab === 'wrap'
-                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                  : 'rgba(17, 24, 39, 0.8)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                  : 'rgba(23, 30, 29, 0.8)',
                 color: shopTab === 'wrap' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: shopTab === 'wrap' ? '0 0 15px rgba(6, 182, 212, 0.4)' : 'none',
+                boxShadow: shopTab === 'wrap' ? '0 0 15px rgba(255, 208, 117, 0.4)' : 'none',
               }}
             >
               🪙 Manage NFTs
@@ -3017,11 +3011,11 @@ function HomeContent() {
           {/* Swap Input Section */}
           <div
             style={{
-              backgroundColor: 'rgba(17, 24, 39, 0.8)',
+              backgroundColor: 'rgba(23, 30, 29, 0.8)',
               borderRadius: 'clamp(12px, 2vw, 16px)',
               padding: 'clamp(12px, 2.5vw, 18px)',
               marginBottom: 'clamp(12px, 2vw, 16px)',
-              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
             }}
           >
             <div
@@ -3083,9 +3077,9 @@ function HomeContent() {
                   alignItems: 'center',
                   gap: 'clamp(6px, 1.2vw, 8px)',
                   padding: 'clamp(6px, 1.2vw, 8px) clamp(10px, 2vw, 14px)',
-                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                  backgroundColor: 'rgba(197, 169, 123, 0.2)',
                   borderRadius: 'clamp(8px, 1.5vw, 12px)',
-                  border: 'clamp(1px, 0.15vw, 1px) solid rgba(59, 130, 246, 0.4)',
+                  border: 'clamp(1px, 0.15vw, 1px) solid rgba(197, 169, 123, 0.4)',
                   flexShrink: 0,
                 }}
               >
@@ -3169,23 +3163,23 @@ function HomeContent() {
                   disabled={isLoadingQuote}
                   style={{
                     padding: 'clamp(3px, 0.6vw, 4px) clamp(6px, 1.2vw, 8px)',
-                    backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                    border: 'clamp(1px, 0.15vw, 1px) solid rgba(168, 85, 247, 0.4)',
+                    backgroundColor: 'rgba(255, 208, 117, 0.2)',
+                    border: 'clamp(1px, 0.15vw, 1px) solid rgba(255, 208, 117, 0.4)',
                     borderRadius: 'clamp(4px, 0.8vw, 6px)',
                     fontSize: 'clamp(9px, 2vw, 11px)',
                     fontWeight: 600,
-                    color: 'rgba(168, 85, 247, 1)',
+                    color: 'rgba(255, 208, 117, 1)',
                     cursor: isLoadingQuote ? 'not-allowed' : 'pointer',
                     opacity: isLoadingQuote ? 0.5 : 1,
                     transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => {
                     if (!isLoadingQuote) {
-                      e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.3)';
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.3)';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.2)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.2)';
                   }}
                 >
                   {isLoadingQuote ? '...' : '10 NFTs'}
@@ -3310,13 +3304,13 @@ function HomeContent() {
                 width: 'clamp(28px, 5.5vw, 36px)',
                 height: 'clamp(28px, 5.5vw, 36px)',
                 borderRadius: 'clamp(6px, 1.2vw, 8px)',
-                backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(168, 85, 247, 0.4)',
+                backgroundColor: 'rgba(255, 208, 117, 0.2)',
+                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.4)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 'clamp(16px, 3.5vw, 20px)',
-                color: 'rgba(168, 85, 247, 1)',
+                color: 'rgba(255, 208, 117, 1)',
               }}
             >
               ↓
@@ -3326,11 +3320,11 @@ function HomeContent() {
           {/* What You'll Get Section */}
           <div
             style={{
-              backgroundColor: 'rgba(17, 24, 39, 0.8)',
+              backgroundColor: 'rgba(23, 30, 29, 0.8)',
               borderRadius: 'clamp(12px, 2vw, 16px)',
               padding: 'clamp(12px, 2.5vw, 18px)',
               marginBottom: 'clamp(12px, 2vw, 16px)',
-              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
             }}
           >
             <div
@@ -3444,7 +3438,7 @@ function HomeContent() {
             }}
             onMouseEnter={(e) => {
               if (!isTransactionPending && !isConfirming) {
-                e.currentTarget.style.boxShadow = '0 0 30px rgba(168, 85, 247, 0.7), inset 0 0 20px rgba(168, 85, 247, 0.3)';
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(255, 208, 117, 0.7), inset 0 0 20px rgba(255, 208, 117, 0.3)';
               }
             }}
             onMouseLeave={(e) => {
@@ -3454,10 +3448,10 @@ function HomeContent() {
               width: '100%',
               padding: 'clamp(12px, 2.5vw, 16px)',
               background: isTransactionPending || isConfirming
-                ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95) 0%, rgba(75, 85, 99, 0.95) 100%)'
+                ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.1) 100%)'
                 : !isWalletConnected
-                ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.95) 0%, rgba(37, 99, 235, 0.95) 100%)'
-                : 'linear-gradient(135deg, rgba(168, 85, 247, 0.95) 0%, rgba(139, 92, 246, 0.95) 100%)',
+                ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.95) 0%, rgba(139, 114, 69, 0.95) 100%)'
+                : 'linear-gradient(135deg, rgba(255, 208, 117, 0.95) 0%, rgba(197, 169, 123, 0.95) 100%)',
               border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(216, 180, 254, 0.5)',
               borderRadius: 'clamp(12px, 2vw, 16px)',
               fontSize: 'clamp(14px, 3.5vw, 18px)',
@@ -3494,23 +3488,23 @@ function HomeContent() {
                 display: 'block',
                 marginTop: 'clamp(10px, 2vw, 12px)',
                 padding: 'clamp(10px, 2vw, 12px)',
-                backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                border: 'clamp(1px, 0.15vw, 1px) solid rgba(168, 85, 247, 0.3)',
+                backgroundColor: 'rgba(255, 208, 117, 0.1)',
+                border: 'clamp(1px, 0.15vw, 1px) solid rgba(255, 208, 117, 0.3)',
                 borderRadius: 'clamp(6px, 1.2vw, 8px)',
                 fontSize: 'clamp(9px, 1.8vw, 11px)',
-                color: 'rgba(168, 85, 247, 0.9)',
+                color: 'rgba(255, 208, 117, 0.9)',
                 textAlign: 'center',
                 wordBreak: 'break-all',
                 textDecoration: 'none',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.2)';
+                e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.5)';
                 e.currentTarget.style.transform = 'scale(1.02)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(168, 85, 247, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.1)';
+                e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.3)';
                 e.currentTarget.style.transform = 'scale(1)';
               }}
             >
@@ -3528,7 +3522,7 @@ function HomeContent() {
               lineHeight: '1.5',
             }}
           >
-            powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(168, 85, 247, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
+            powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255, 208, 117, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
           </div>
           </>
           )}
@@ -3542,7 +3536,7 @@ function HomeContent() {
                   {/* NFT Grid First */}
                   {isLoading ? (
                     <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
-                      <div style={{ display: 'inline-block', width: 'clamp(32px, 6vw, 48px)', height: 'clamp(32px, 6vw, 48px)', border: 'clamp(3px, 0.6vw, 4px) solid rgba(59, 130, 246, 0.3)', borderTop: 'clamp(3px, 0.6vw, 4px) solid rgba(59, 130, 246, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      <div style={{ display: 'inline-block', width: 'clamp(32px, 6vw, 48px)', height: 'clamp(32px, 6vw, 48px)', border: 'clamp(3px, 0.6vw, 4px) solid rgba(197, 169, 123, 0.3)', borderTop: 'clamp(3px, 0.6vw, 4px) solid rgba(197, 169, 123, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                     </div>
                   ) : nfts.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
@@ -3569,11 +3563,11 @@ function HomeContent() {
                               borderRadius: 'clamp(6px, 1.2vw, 8px)',
                               overflow: 'hidden',
                               border: isSelected
-                                ? 'clamp(2px, 0.4vw, 3px) solid rgba(59, 130, 246, 1)'
-                                : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                                ? 'clamp(2px, 0.4vw, 3px) solid rgba(197, 169, 123, 1)'
+                                : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                               cursor: 'pointer',
                               transition: 'all 0.2s',
-                              boxShadow: isSelected ? '0 0 15px rgba(59, 130, 246, 0.6)' : 'none',
+                              boxShadow: isSelected ? '0 0 15px rgba(197, 169, 123, 0.6)' : 'none',
                               transform: isSelected ? 'scale(0.95)' : 'scale(1)',
                             }}
                           >
@@ -3583,8 +3577,8 @@ function HomeContent() {
                                 width: 'clamp(16px, 3.2vw, 20px)',
                                 height: 'clamp(16px, 3.2vw, 20px)',
                                 borderRadius: '50%',
-                                border: 'clamp(1.5px, 0.3vw, 2px) solid ' + (isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(107, 114, 128, 1)'),
-                                backgroundColor: isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(17, 24, 39, 0.8)',
+                                border: 'clamp(1.5px, 0.3vw, 2px) solid ' + (isSelected ? 'rgba(197, 169, 123, 1)' : 'rgba(255, 255, 255, 0.15)'),
+                                backgroundColor: isSelected ? 'rgba(197, 169, 123, 1)' : 'rgba(23, 30, 29, 0.8)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -3605,7 +3599,7 @@ function HomeContent() {
                             </div>
 
                             {/* NFT Info */}
-                            <div style={{ padding: 'clamp(4px, 0.8vw, 6px)', backgroundColor: 'rgba(17, 24, 39, 0.9)' }}>
+                            <div style={{ padding: 'clamp(4px, 0.8vw, 6px)', backgroundColor: 'rgba(23, 30, 29, 0.9)' }}>
                               <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: '#FFFFFF', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nft.name}</p>
                               <p style={{ fontSize: 'clamp(8px, 1.6vw, 10px)', color: 'rgba(255, 255, 255, 0.6)' }}>#{nft.tokenId}</p>
                             </div>
@@ -3618,11 +3612,11 @@ function HomeContent() {
                   {/* Wrap Summary - Single Consolidated Box */}
                   {nfts.length > 0 && (
                     <div style={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                      backgroundColor: 'rgba(23, 30, 29, 0.8)',
                       borderRadius: 'clamp(8px, 1.5vw, 12px)',
                       padding: 'clamp(10px, 2vw, 12px)',
                       marginTop: 'clamp(10px, 2vw, 12px)',
-                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(59, 130, 246, 0.5)',
+                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(197, 169, 123, 0.5)',
                     }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'clamp(10px, 2vw, 12px)' }}>
                         {/* Left: Balance & Selected */}
@@ -3656,7 +3650,7 @@ function HomeContent() {
                             <div style={{
                               fontSize: 'clamp(20px, 4.5vw, 26px)',
                               fontWeight: 700,
-                              color: 'rgba(59, 130, 246, 1)',
+                              color: 'rgba(197, 169, 123, 1)',
                             }}>
                               {selectedNFTs.size}
                             </div>
@@ -3670,7 +3664,7 @@ function HomeContent() {
                       <div style={{
                         marginTop: 'clamp(8px, 1.5vw, 10px)',
                         paddingTop: 'clamp(8px, 1.5vw, 10px)',
-                        borderTop: 'clamp(1px, 0.2vw, 1px) solid rgba(75, 85, 99, 0.3)',
+                        borderTop: 'clamp(1px, 0.2vw, 1px) solid rgba(255, 255, 255, 0.06)',
                         display: 'flex',
                         gap: 'clamp(12px, 2.5vw, 16px)',
                         justifyContent: 'center'
@@ -3690,13 +3684,13 @@ function HomeContent() {
                         >
                           Unwrap NFTs →
                         </button>
-                        <span style={{ color: 'rgba(75, 85, 99, 0.6)' }}>|</span>
+                        <span style={{ color: 'rgba(255, 255, 255, 0.1)' }}>|</span>
                         <button
                           onClick={() => setWrapMode('swap')}
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: 'rgba(168, 85, 247, 1)',
+                            color: 'rgba(255, 208, 117, 1)',
                             fontSize: 'clamp(10px, 2vw, 12px)',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -3751,8 +3745,8 @@ function HomeContent() {
                             fontSize: 'clamp(14px, 3vw, 16px)',
                             border: 'none',
                             background: (selectedNFTs.size === 0 || isTransactionPending || isConfirming)
-                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
-                              : 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95))',
+                              ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.1))'
+                              : 'linear-gradient(135deg, rgba(197, 169, 123, 0.95), rgba(139, 114, 69, 0.95))',
                             color: '#FFFFFF',
                             cursor: (selectedNFTs.size === 0 || isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
                             opacity: (selectedNFTs.size === 0 || isTransactionPending || isConfirming) ? 0.7 : 1,
@@ -3772,7 +3766,7 @@ function HomeContent() {
                 <div>
                   {/* Unwrap Summary - Single Consolidated Box */}
                   <div style={{
-                    backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                    backgroundColor: 'rgba(23, 30, 29, 0.8)',
                     borderRadius: 'clamp(8px, 1.5vw, 12px)',
                     padding: 'clamp(10px, 2vw, 12px)',
                     marginBottom: 'clamp(10px, 2vw, 12px)',
@@ -3816,8 +3810,8 @@ function HomeContent() {
                           }}
                           style={{
                             width: '100%',
-                            backgroundColor: 'rgba(17, 24, 39, 0.8)',
-                            border: `clamp(1px, 0.2vw, 1.5px) solid ${unwrapError ? 'rgba(239, 68, 68, 0.6)' : 'rgba(75, 85, 99, 0.4)'}`,
+                            backgroundColor: 'rgba(23, 30, 29, 0.8)',
+                            border: `clamp(1px, 0.2vw, 1.5px) solid ${unwrapError ? 'rgba(239, 68, 68, 0.6)' : 'rgba(255, 255, 255, 0.08)'}`,
                             borderRadius: 'clamp(6px, 1.2vw, 8px)',
                             padding: 'clamp(8px, 1.5vw, 10px)',
                             color: '#FFFFFF',
@@ -3861,7 +3855,7 @@ function HomeContent() {
                     <div style={{
                       marginTop: 'clamp(8px, 1.5vw, 10px)',
                       paddingTop: 'clamp(8px, 1.5vw, 10px)',
-                      borderTop: 'clamp(1px, 0.2vw, 1px) solid rgba(75, 85, 99, 0.3)',
+                      borderTop: 'clamp(1px, 0.2vw, 1px) solid rgba(255, 255, 255, 0.06)',
                       textAlign: 'center'
                     }}>
                       <button
@@ -3869,7 +3863,7 @@ function HomeContent() {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: 'rgba(59, 130, 246, 1)',
+                          color: 'rgba(197, 169, 123, 1)',
                           fontSize: 'clamp(10px, 2vw, 12px)',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -3894,7 +3888,7 @@ function HomeContent() {
                       fontSize: 'clamp(14px, 3vw, 16px)',
                       border: 'none',
                       background: (!!unwrapError || unwrapCount < 1 || unwrapCount > (wTokenBalance ? Number(wTokenBalance) / 1e18 : 0) || isTransactionPending || isConfirming)
-                        ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                        ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.1))'
                         : 'linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95))',
                       color: '#FFFFFF',
                       cursor: (!!unwrapError || unwrapCount < 1 || unwrapCount > (wTokenBalance ? Number(wTokenBalance) / 1e18 : 0) || isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
@@ -3928,12 +3922,12 @@ function HomeContent() {
                   {/* Step 1: Pool NFTs Selection (What you want to get) */}
                   {selectedWTokenNFT === null ? (
                     <div>
-                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.3)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
+                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 255, 255, 0.06)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
                         Pick a NFT you want ({wTokensTotalHeld})
                       </h3>
                       {wTokensLoading ? (
                         <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
-                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                         </div>
                       ) : wTokensNFTs.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: 'clamp(12px, 2.5vw, 16px)' }}>
@@ -3956,14 +3950,14 @@ function HomeContent() {
                                 position: 'relative',
                                 borderRadius: 'clamp(6px, 1.2vw, 8px)',
                                 overflow: 'hidden',
-                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.4)',
+                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 255, 255, 0.08)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
                                 transform: 'scale(1)',
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 0 12px rgba(168, 85, 247, 0.6)';
+                                e.currentTarget.style.boxShadow = '0 0 12px rgba(255, 208, 117, 0.6)';
                               }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.transform = 'scale(1)';
@@ -3977,7 +3971,7 @@ function HomeContent() {
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               </div>
-                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(17, 24, 39, 0.9)' }}>
+                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(23, 30, 29, 0.9)' }}>
                                 <p style={{ fontSize: 'clamp(8px, 1.6vw, 10px)', color: '#FFFFFF', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{nft.tokenId}</p>
                               </div>
                             </button>
@@ -3990,11 +3984,11 @@ function HomeContent() {
                     <div>
                       {/* Show selected pool NFT */}
                       <div style={{
-                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        backgroundColor: 'rgba(23, 30, 29, 0.8)',
                         borderRadius: 'clamp(8px, 1.5vw, 12px)',
                         padding: 'clamp(10px, 2vw, 12px)',
                         marginBottom: 'clamp(12px, 2.5vw, 16px)',
-                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(168, 85, 247, 0.5)',
+                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.5)',
                       }}>
                         <p style={{ fontSize: 'clamp(9px, 1.8vw, 11px)', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 'clamp(4px, 0.8vw, 6px)', textAlign: 'center' }}>
                           You will receive: <span style={{ fontWeight: 700, color: '#FFFFFF' }}>#{selectedWTokenNFT}</span>
@@ -4018,12 +4012,12 @@ function HomeContent() {
                         </button>
                       </div>
 
-                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.3)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
+                      <h3 style={{ fontSize: 'clamp(12px, 2.6vw, 14px)', fontWeight: 700, color: '#FFFFFF', marginBottom: 'clamp(8px, 1.5vw, 10px)', borderBottom: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 255, 255, 0.06)', paddingBottom: 'clamp(6px, 1.2vw, 8px)' }}>
                         Pick your NFT to trade ({nfts.length})
                       </h3>
                       {isLoading ? (
                         <div style={{ textAlign: 'center', padding: 'clamp(20px, 4vw, 40px)' }}>
-                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                          <div style={{ display: 'inline-block', width: 'clamp(24px, 5vw, 32px)', height: 'clamp(24px, 5vw, 32px)', border: 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 0.3)', borderTop: 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                         </div>
                       ) : nfts.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: 'clamp(12px, 2.5vw, 16px)' }}>
@@ -4046,14 +4040,14 @@ function HomeContent() {
                                 position: 'relative',
                                 borderRadius: 'clamp(6px, 1.2vw, 8px)',
                                 overflow: 'hidden',
-                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.4)',
+                                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 255, 255, 0.08)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
                                 transform: 'scale(1)',
                               }}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 0 12px rgba(168, 85, 247, 0.6)';
+                                e.currentTarget.style.boxShadow = '0 0 12px rgba(255, 208, 117, 0.6)';
                               }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.transform = 'scale(1)';
@@ -4067,7 +4061,7 @@ function HomeContent() {
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               </div>
-                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(17, 24, 39, 0.9)' }}>
+                              <div style={{ padding: 'clamp(3px, 0.6vw, 4px)', backgroundColor: 'rgba(23, 30, 29, 0.9)' }}>
                                 <p style={{ fontSize: 'clamp(8px, 1.6vw, 10px)', color: '#FFFFFF', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>#{nft.tokenId}</p>
                               </div>
                             </button>
@@ -4080,11 +4074,11 @@ function HomeContent() {
                     <div>
                       {/* Swap Preview */}
                       <div style={{
-                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        backgroundColor: 'rgba(23, 30, 29, 0.8)',
                         borderRadius: 'clamp(8px, 1.5vw, 12px)',
                         padding: 'clamp(10px, 2vw, 12px)',
                         marginBottom: 'clamp(12px, 2.5vw, 16px)',
-                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(168, 85, 247, 0.5)',
+                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.5)',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(8px, 1.5vw, 10px)', marginBottom: 'clamp(8px, 1.5vw, 10px)' }}>
                           <div style={{ textAlign: 'center' }}>
@@ -4128,7 +4122,7 @@ function HomeContent() {
                   <div style={{
                     marginBottom: 'clamp(10px, 2vw, 12px)',
                     paddingBottom: 'clamp(8px, 1.5vw, 10px)',
-                    borderBottom: 'clamp(1px, 0.2vw, 1px) solid rgba(75, 85, 99, 0.3)',
+                    borderBottom: 'clamp(1px, 0.2vw, 1px) solid rgba(255, 255, 255, 0.06)',
                     textAlign: 'center'
                   }}>
                     <button
@@ -4140,7 +4134,7 @@ function HomeContent() {
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: 'rgba(59, 130, 246, 1)',
+                        color: 'rgba(197, 169, 123, 1)',
                         fontSize: 'clamp(10px, 2vw, 12px)',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -4192,8 +4186,8 @@ function HomeContent() {
                           fontSize: 'clamp(14px, 3vw, 16px)',
                           border: 'none',
                           background: (isTransactionPending || isConfirming)
-                            ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
-                            : 'linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(139, 92, 246, 0.95))',
+                            ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.1))'
+                            : 'linear-gradient(135deg, rgba(255, 208, 117, 0.95), rgba(197, 169, 123, 0.95))',
                           color: '#FFFFFF',
                           cursor: (isTransactionPending || isConfirming) ? 'not-allowed' : 'pointer',
                           opacity: (isTransactionPending || isConfirming) ? 0.7 : 1,
@@ -4214,14 +4208,14 @@ function HomeContent() {
                 style={{
                   marginTop: 'clamp(16px, 3vw, 24px)',
                   paddingTop: 'clamp(12px, 2.5vw, 16px)',
-                  borderTop: 'clamp(1px, 0.2vw, 1.5px) solid rgba(75, 85, 99, 0.3)',
+                  borderTop: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 255, 255, 0.06)',
                   fontSize: 'clamp(9px, 1.8vw, 11px)',
                   color: 'rgba(255, 255, 255, 0.5)',
                   textAlign: 'center',
                   lineHeight: '1.5',
                 }}
               >
-                powered by the <a href="https://pairable.io/#/nft-strategy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(59, 130, 246, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT wrapping system
+                powered by the <a href="https://pairable.io/#/nft-strategy" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(197, 169, 123, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT wrapping system
               </div>
 
             </>
@@ -4258,12 +4252,12 @@ function HomeContent() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
-            backgroundColor: 'rgba(17, 24, 39, 0.98)',
-            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(255, 208, 117, 0.08), rgba(197, 169, 123, 0.05))',
+            backgroundColor: 'rgba(23, 30, 29, 0.98)',
+            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
             borderRadius: 'clamp(10px, 2vw, 16px)',
             backdropFilter: 'blur(20px)',
-            boxShadow: '0 0 50px rgba(6, 182, 212, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+            boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(255, 208, 117, 0.2), inset 0 0 30px rgba(255, 208, 117, 0.05)',
             padding: 'clamp(8px, 2vw, 16px)',
           }}
         >
@@ -4271,7 +4265,7 @@ function HomeContent() {
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.1), transparent)',
               animation: 'shimmer 3s infinite',
               zIndex: 1,
             }}
@@ -4336,22 +4330,22 @@ function HomeContent() {
                 style={{
                   width: '100%',
                   padding: 'clamp(6px, 1.2vw, 10px)',
-                  backgroundColor: 'rgba(6, 182, 212, 0.2)',
-                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.4)',
+                  backgroundColor: 'rgba(255, 208, 117, 0.2)',
+                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.4)',
                   borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                   fontSize: 'clamp(11px, 2.2vw, 13px)',
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(6, 182, 212, 0.3)';
-                  e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.6)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.3)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.6)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
-                  e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.4)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.2)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.4)';
                 }}
               >
                 {selectedEggs.size === nfts.filter(nft => nft.isEgg && !recentlyHatchedEggs.has(nft.tokenId)).length && nfts.filter(nft => nft.isEgg && !recentlyHatchedEggs.has(nft.tokenId)).length > 0
@@ -4396,11 +4390,11 @@ function HomeContent() {
           {/* Eggs Grid / Hatched NFTs Grid */}
           <div
             style={{
-              backgroundColor: 'rgba(17, 24, 39, 0.8)',
+              backgroundColor: 'rgba(23, 30, 29, 0.8)',
               borderRadius: 'clamp(8px, 1.6vw, 12px)',
               padding: 'clamp(8px, 1.6vw, 12px)',
               marginBottom: 'clamp(6px, 1.2vw, 10px)',
-              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
@@ -4549,7 +4543,7 @@ function HomeContent() {
                     padding: 'clamp(8px, 1.6vw, 12px)',
                     backgroundColor: 'rgba(0, 0, 0, 0.2)',
                     borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                    border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.2)',
+                    border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.2)',
                   }}
                 >
                   {nfts.filter(nft => nft.isEgg && !recentlyHatchedEggs.has(nft.tokenId)).map((egg) => (
@@ -4561,12 +4555,12 @@ function HomeContent() {
                         aspectRatio: '1 / 1',
                         borderRadius: 'clamp(6px, 1.2vw, 10px)',
                         border: selectedEggs.has(egg.tokenId)
-                          ? 'clamp(2px, 0.4vw, 3px) solid rgba(6, 182, 212, 1)'
-                          : 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+                          ? 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)'
+                          : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
                         overflow: 'hidden',
                         position: 'relative',
                         boxShadow: selectedEggs.has(egg.tokenId)
-                          ? '0 0 15px rgba(6, 182, 212, 0.6)'
+                          ? '0 0 15px rgba(255, 208, 117, 0.6)'
                           : 'none',
                         transition: 'all 0.2s ease',
                       }}
@@ -4588,7 +4582,7 @@ function HomeContent() {
                             position: 'absolute',
                             top: '4px',
                             right: '4px',
-                            backgroundColor: 'rgba(6, 182, 212, 1)',
+                            backgroundColor: 'rgba(255, 208, 117, 1)',
                             color: '#FFFFFF',
                             borderRadius: '50%',
                             width: 'clamp(18px, 3.6vw, 24px)',
@@ -4630,11 +4624,11 @@ function HomeContent() {
           {!showHatchSuccess && (
             <div
               style={{
-                backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                backgroundColor: 'rgba(23, 30, 29, 0.8)',
                 borderRadius: 'clamp(8px, 1.6vw, 12px)',
                 padding: 'clamp(8px, 1.6vw, 12px)',
                 marginBottom: 'clamp(6px, 1.2vw, 10px)',
-                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 flexShrink: 0,
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -4645,7 +4639,7 @@ function HomeContent() {
                 style={{
                   fontSize: 'clamp(11px, 2.2vw, 13px)',
                   fontWeight: 600,
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                 }}
               >
                 Swap Amount:
@@ -4654,7 +4648,7 @@ function HomeContent() {
                 style={{
                   fontSize: 'clamp(12px, 2.6vw, 15px)',
                   fontWeight: 700,
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                 }}
               >
                 {unhatchFee && selectedEggs.size > 0
@@ -4675,12 +4669,12 @@ function HomeContent() {
               fontWeight: 700,
               color: '#FFFFFF',
               background: showHatchSuccess
-                ? 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))'
+                ? 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))'
                 : !isWalletConnected || selectedEggs.size === 0
-                ? 'rgba(75, 85, 99, 0.5)'
+                ? 'rgba(255, 255, 255, 0.08)'
                 : isConfirming
                 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.8), rgba(245, 158, 11, 0.8))'
-                : 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
+                : 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))',
               border: 'none',
               borderRadius: 'clamp(10px, 2vw, 14px)',
               cursor: showHatchSuccess
@@ -4696,21 +4690,21 @@ function HomeContent() {
               transition: 'all 0.3s ease',
               flexShrink: 0,
               boxShadow: showHatchSuccess
-                ? '0 0 20px rgba(6, 182, 212, 0.5)'
+                ? '0 0 20px rgba(255, 208, 117, 0.5)'
                 : (isWalletConnected && selectedEggs.size > 0 && !isConfirming)
-                ? '0 0 20px rgba(6, 182, 212, 0.5)'
+                ? '0 0 20px rgba(255, 208, 117, 0.5)'
                 : 'none',
             }}
             onMouseEnter={(e) => {
               if (showHatchSuccess || (isWalletConnected && selectedEggs.size > 0 && !isConfirming)) {
                 e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 0 30px rgba(6, 182, 212, 0.7)';
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(255, 208, 117, 0.7)';
               }
             }}
             onMouseLeave={(e) => {
               if (showHatchSuccess || (isWalletConnected && selectedEggs.size > 0 && !isConfirming)) {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 0 20px rgba(6, 182, 212, 0.5)';
+                e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 208, 117, 0.5)';
               }
             }}
           >
@@ -4731,11 +4725,11 @@ function HomeContent() {
               style={{
                 marginTop: 'clamp(6px, 1.2vw, 10px)',
                 padding: 'clamp(6px, 1.2vw, 10px)',
-                backgroundColor: 'rgba(6, 182, 212, 0.1)',
-                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.3)',
+                backgroundColor: 'rgba(255, 208, 117, 0.1)',
+                border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.3)',
                 borderRadius: 'clamp(6px, 1.2vw, 10px)',
                 fontSize: 'clamp(9px, 1.8vw, 11px)',
-                color: 'rgba(6, 182, 212, 1)',
+                color: 'rgba(255, 208, 117, 1)',
                 textAlign: 'center',
                 flexShrink: 0,
               }}
@@ -4748,7 +4742,7 @@ function HomeContent() {
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                   textDecoration: 'underline',
                 }}
               >
@@ -4770,7 +4764,7 @@ function HomeContent() {
               flexShrink: 0,
             }}
           >
-            powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(6, 182, 212, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
+            powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255, 208, 117, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
           </div>
           </div>{/* Close content wrapper */}
         </div>
@@ -4803,12 +4797,12 @@ function HomeContent() {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
-            backgroundColor: 'rgba(17, 24, 39, 0.98)',
-            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(255, 208, 117, 0.08), rgba(197, 169, 123, 0.05))',
+            backgroundColor: 'rgba(23, 30, 29, 0.98)',
+            border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
             borderRadius: 'clamp(10px, 2vw, 16px)',
             backdropFilter: 'blur(20px)',
-            boxShadow: '0 0 50px rgba(6, 182, 212, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+            boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(255, 208, 117, 0.2), inset 0 0 30px rgba(255, 208, 117, 0.05)',
             padding: 'clamp(8px, 2vw, 16px)',
           }}
         >
@@ -4816,7 +4810,7 @@ function HomeContent() {
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.1), transparent)',
               animation: 'shimmer 3s infinite',
               zIndex: 1,
             }}
@@ -4835,14 +4829,14 @@ function HomeContent() {
                 borderRadius: 'clamp(8px, 1.5vw, 12px)',
                 fontWeight: 700,
                 fontSize: 'clamp(12px, 2.8vw, 16px)',
-                border: breedStakeTab === 'breed' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(168, 85, 247, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: breedStakeTab === 'breed' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 background: breedStakeTab === 'breed'
-                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))'
-                  : 'linear-gradient(135deg, rgba(75, 85, 99, 0.2), rgba(55, 65, 81, 0.2))',
-                color: breedStakeTab === 'breed' ? 'rgba(168, 85, 247, 1)' : 'rgba(156, 163, 175, 1)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                  : 'linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.03))',
+                color: breedStakeTab === 'breed' ? 'rgba(255, 208, 117, 1)' : 'rgba(138, 144, 144, 1)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: breedStakeTab === 'breed' ? '0 0 20px rgba(168, 85, 247, 0.3)' : 'none',
+                boxShadow: breedStakeTab === 'breed' ? '0 0 20px rgba(255, 208, 117, 0.3)' : 'none',
               }}
             >
               🍽️ Feed Wilfred
@@ -4855,14 +4849,14 @@ function HomeContent() {
                 borderRadius: 'clamp(8px, 1.5vw, 12px)',
                 fontWeight: 700,
                 fontSize: 'clamp(12px, 2.8vw, 16px)',
-                border: breedStakeTab === 'stake' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: breedStakeTab === 'stake' ? 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)' : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 background: breedStakeTab === 'stake'
-                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                  : 'linear-gradient(135deg, rgba(75, 85, 99, 0.2), rgba(55, 65, 81, 0.2))',
-                color: breedStakeTab === 'stake' ? 'rgba(6, 182, 212, 1)' : 'rgba(156, 163, 175, 1)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                  : 'linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.03))',
+                color: breedStakeTab === 'stake' ? 'rgba(255, 208, 117, 1)' : 'rgba(138, 144, 144, 1)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: breedStakeTab === 'stake' ? '0 0 20px rgba(6, 182, 212, 0.3)' : 'none',
+                boxShadow: breedStakeTab === 'stake' ? '0 0 20px rgba(255, 208, 117, 0.3)' : 'none',
               }}
             >
               Apple Staking
@@ -4916,22 +4910,22 @@ function HomeContent() {
                 style={{
                   width: '100%',
                   padding: 'clamp(8px, 1.6vw, 12px)',
-                  backgroundColor: 'rgba(6, 182, 212, 0.2)',
-                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.4)',
+                  backgroundColor: 'rgba(255, 208, 117, 0.2)',
+                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.4)',
                   borderRadius: 'clamp(8px, 1.5vw, 12px)',
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                   fontSize: 'clamp(11px, 2.2vw, 13px)',
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(6, 182, 212, 0.3)';
-                  e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.6)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.3)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.6)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(6, 182, 212, 0.2)';
-                  e.currentTarget.style.borderColor = 'rgba(6, 182, 212, 0.4)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 208, 117, 0.2)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 208, 117, 0.4)';
                 }}
               >
                 {(() => {
@@ -4951,11 +4945,11 @@ function HomeContent() {
           {/* Humans Grid / Bred NFT Display */}
           <div
             style={{
-              backgroundColor: 'rgba(17, 24, 39, 0.8)',
+              backgroundColor: 'rgba(23, 30, 29, 0.8)',
               borderRadius: 'clamp(8px, 1.6vw, 12px)',
               padding: 'clamp(8px, 1.6vw, 12px)',
               marginBottom: 'clamp(6px, 1.2vw, 10px)',
-              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
@@ -5001,7 +4995,7 @@ function HomeContent() {
                     cursor: 'pointer',
                     borderRadius: 'clamp(12px, 2vw, 16px)',
                     border: 'clamp(2px, 0.4vw, 3px) solid rgba(34, 197, 94, 0.6)',
-                    backgroundColor: 'rgba(17, 24, 39, 0.6)',
+                    backgroundColor: 'rgba(23, 30, 29, 0.6)',
                     transition: 'all 0.2s ease',
                     overflow: 'hidden',
                     width: 'clamp(120px, 30vw, 180px)',
@@ -5017,7 +5011,7 @@ function HomeContent() {
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
-                    e.currentTarget.style.backgroundColor = 'rgba(17, 24, 39, 0.6)';
+                    e.currentTarget.style.backgroundColor = 'rgba(23, 30, 29, 0.6)';
                     e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >
@@ -5088,7 +5082,7 @@ function HomeContent() {
                       padding: 'clamp(8px, 1.6vw, 12px)',
                       backgroundColor: 'rgba(0, 0, 0, 0.2)',
                       borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.2)',
+                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.2)',
                     }}
                   >
                     {availableHumans.map((human) => (
@@ -5100,12 +5094,12 @@ function HomeContent() {
                         aspectRatio: '1 / 1',
                         borderRadius: 'clamp(6px, 1.2vw, 10px)',
                         border: selectedHumans.has(human.tokenId)
-                          ? 'clamp(2px, 0.4vw, 3px) solid rgba(6, 182, 212, 1)'
-                          : 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+                          ? 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)'
+                          : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
                         overflow: 'hidden',
                         position: 'relative',
                         boxShadow: selectedHumans.has(human.tokenId)
-                          ? '0 0 15px rgba(6, 182, 212, 0.6)'
+                          ? '0 0 15px rgba(255, 208, 117, 0.6)'
                           : 'none',
                         transition: 'all 0.2s ease',
                       }}
@@ -5127,7 +5121,7 @@ function HomeContent() {
                             position: 'absolute',
                             top: '4px',
                             right: '4px',
-                            backgroundColor: 'rgba(6, 182, 212, 1)',
+                            backgroundColor: 'rgba(255, 208, 117, 1)',
                             color: '#FFFFFF',
                             borderRadius: '50%',
                             width: 'clamp(18px, 3.6vw, 24px)',
@@ -5170,11 +5164,11 @@ function HomeContent() {
           {!showBreedSuccess && (
             <div
               style={{
-                backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                backgroundColor: 'rgba(23, 30, 29, 0.8)',
                 borderRadius: 'clamp(8px, 1.6vw, 12px)',
                 padding: 'clamp(10px, 2vw, 14px)',
                 marginBottom: 'clamp(6px, 1.2vw, 10px)',
-                border: `clamp(1.5px, 0.3vw, 2px) solid ${selectedHumans.size === 3 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(75, 85, 99, 0.4)'}`,
+                border: `clamp(1.5px, 0.3vw, 2px) solid ${selectedHumans.size === 3 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(255, 255, 255, 0.08)'}`,
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
@@ -5204,7 +5198,7 @@ function HomeContent() {
                     fontWeight: 600,
                     color: selectedHumans.size === 3
                       ? 'rgba(34, 197, 94, 1)'
-                      : 'rgba(156, 163, 175, 1)',
+                      : 'rgba(138, 144, 144, 1)',
                     transition: 'color 0.3s ease',
                   }}
                 >
@@ -5222,12 +5216,12 @@ function HomeContent() {
                   padding: 'clamp(8px, 1.6vw, 12px) clamp(16px, 3.2vw, 24px)',
                   fontSize: 'clamp(12px, 2.4vw, 14px)',
                   fontWeight: 700,
-                  color: selectedHumans.size === 3 ? '#FFFFFF' : 'rgba(156, 163, 175, 1)',
+                  color: selectedHumans.size === 3 ? '#FFFFFF' : 'rgba(138, 144, 144, 1)',
                   background: selectedHumans.size === 3
                     ? isConfirming
-                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.7), rgba(139, 92, 246, 0.7))'
-                      : 'linear-gradient(135deg, rgba(168, 85, 247, 1), rgba(139, 92, 246, 1))'
-                    : 'rgba(75, 85, 99, 0.5)',
+                      ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.7), rgba(197, 169, 123, 0.7))'
+                      : 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(197, 169, 123, 1))'
+                    : 'rgba(255, 255, 255, 0.08)',
                   border: 'none',
                   borderRadius: 'clamp(8px, 1.5vw, 10px)',
                   cursor: (!isWalletConnected || selectedHumans.size !== 3 || isConfirming)
@@ -5235,20 +5229,20 @@ function HomeContent() {
                     : 'pointer',
                   transition: 'all 0.3s ease',
                   boxShadow: selectedHumans.size === 3 && !isConfirming
-                    ? '0 0 15px rgba(168, 85, 247, 0.5)'
+                    ? '0 0 15px rgba(255, 208, 117, 0.5)'
                     : 'none',
                   flexShrink: 0,
                 }}
                 onMouseEnter={(e) => {
                   if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
                     e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.7)';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.7)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
                     e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.5)';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.5)';
                   }
                 }}
               >
@@ -5261,11 +5255,11 @@ function HomeContent() {
           {!showBreedSuccess && (
             <div
               style={{
-                backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                backgroundColor: 'rgba(23, 30, 29, 0.8)',
                 borderRadius: 'clamp(8px, 1.6vw, 12px)',
                 padding: 'clamp(8px, 1.6vw, 12px)',
                 marginBottom: 'clamp(6px, 1.2vw, 10px)',
-                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(75, 85, 99, 0.4)',
+                border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 255, 255, 0.08)',
                 flexShrink: 0,
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -5276,7 +5270,7 @@ function HomeContent() {
                 style={{
                   fontSize: 'clamp(11px, 2.2vw, 13px)',
                   fontWeight: 600,
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                 }}
               >
                 Wilfred&apos;s Fee:
@@ -5285,7 +5279,7 @@ function HomeContent() {
                 style={{
                   fontSize: 'clamp(12px, 2.6vw, 15px)',
                   fontWeight: 700,
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                 }}
               >
                 {breedFee
@@ -5311,20 +5305,20 @@ function HomeContent() {
                   fontSize: 'clamp(13px, 2.6vw, 16px)',
                   fontWeight: 700,
                   color: '#FFFFFF',
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 1), rgba(139, 92, 246, 1))',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(197, 169, 123, 1))',
                   border: 'none',
                   borderRadius: 'clamp(10px, 2vw, 14px)',
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
-                  boxShadow: '0 0 20px rgba(168, 85, 247, 0.5)',
+                  boxShadow: '0 0 20px rgba(255, 208, 117, 0.5)',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 0 30px rgba(168, 85, 247, 0.7)';
+                  e.currentTarget.style.boxShadow = '0 0 30px rgba(255, 208, 117, 0.7)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(168, 85, 247, 0.5)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 208, 117, 0.5)';
                 }}
               >
                 🥚 Go to Hatch
@@ -5372,10 +5366,10 @@ function HomeContent() {
                 fontWeight: 700,
                 color: '#FFFFFF',
                 background: !isWalletConnected || selectedHumans.size !== 3
-                  ? 'rgba(75, 85, 99, 0.5)'
+                  ? 'rgba(255, 255, 255, 0.08)'
                   : isConfirming
-                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.8), rgba(168, 85, 247, 0.8))'
-                  : 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.8), rgba(255, 208, 117, 0.8))'
+                  : 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))',
                 border: 'none',
                 borderRadius: 'clamp(10px, 2vw, 14px)',
                 cursor: (!isWalletConnected || selectedHumans.size !== 3 || isConfirming)
@@ -5387,19 +5381,19 @@ function HomeContent() {
                 transition: 'all 0.3s ease',
                 flexShrink: 0,
                 boxShadow: (isWalletConnected && selectedHumans.size === 3 && !isConfirming)
-                  ? '0 0 20px rgba(6, 182, 212, 0.5)'
+                  ? '0 0 20px rgba(255, 208, 117, 0.5)'
                   : 'none',
               }}
               onMouseEnter={(e) => {
                 if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 0 30px rgba(6, 182, 212, 0.7)';
+                  e.currentTarget.style.boxShadow = '0 0 30px rgba(255, 208, 117, 0.7)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (isWalletConnected && selectedHumans.size === 3 && !isConfirming) {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(6, 182, 212, 0.5)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(255, 208, 117, 0.5)';
                 }
               }}
             >
@@ -5455,32 +5449,6 @@ function HomeContent() {
             setSharedGameId(null); // Clear shared game ID when closing
           }}
           initialGameId={sharedGameId}
-        />
-      )}
-
-      {/* Unity WebGL Overlay */}
-      {showUnity && (
-        <UnityWebGL
-          buildUrl="/api/unity-build"
-          productName="WebGLBuild"
-          visible={showUnity}
-          onClose={closeUnity}
-          onStakeRequest={(tokenId) => {
-            console.log('[Unity→Page] Stake requested for tokenId:', tokenId);
-            // Close Unity and open staking UI with selected token
-            closeUnity();
-            setBreedStakeTab('stake');
-            setSelectedSnakesForStaking(new Set([tokenId]));
-            openBreed();
-          }}
-          onUnstakeRequest={(tokenId) => {
-            console.log('[Unity→Page] Unstake requested for tokenId:', tokenId);
-            // Close Unity and open staking UI with selected token
-            closeUnity();
-            setBreedStakeTab('stake');
-            setSelectedStakedSnakes(new Set([tokenId]));
-            openBreed();
-          }}
         />
       )}
 

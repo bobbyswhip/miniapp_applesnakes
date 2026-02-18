@@ -229,11 +229,11 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           maxWidth: 'clamp(20rem, 90vw, 28rem)',
           maxHeight: 'clamp(30rem, 85vh, 40rem)',
           overflowY: 'auto',
-          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(168, 85, 247, 0.08), rgba(34, 197, 94, 0.05))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(34, 197, 94, 0.3)',
+          background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(197, 169, 123, 0.08), rgba(255, 208, 117, 0.05))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
+          border: '2px solid rgba(255, 208, 117, 0.3)',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(34, 197, 94, 0.3), 0 0 100px rgba(168, 85, 247, 0.2)',
+          boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(197, 169, 123, 0.2)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -242,8 +242,8 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           className="rounded-t-2xl relative overflow-hidden"
           style={{
             padding: 'clamp(0.75rem, 2.5vh, 1rem)',
-            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(168, 85, 247, 0.3))',
-            borderBottom: '1px solid rgba(34, 197, 94, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+            borderBottom: '1px solid rgba(255, 208, 117, 0.3)',
           }}
         >
           <div className="flex items-center justify-between">
@@ -253,21 +253,21 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                 <h2
                   className="font-bold text-lg"
                   style={{
-                    background: 'linear-gradient(135deg, rgba(34, 197, 94, 1), rgba(168, 85, 247, 1))',
+                    background: 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(197, 169, 123, 1))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
                 >
                   {step === 'unlist' ? 'Manage Listing' : isBulkListing ? `List ${nftList.length} NFTs` : 'List on Marketplace'}
                 </h2>
-                <p className="text-green-200 text-sm">
+                <p className="text-[#e0e0e0] text-sm">
                   {isBulkListing ? `${nftList.length} NFTs selected` : primaryNft?.name}
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-green-300/80 hover:text-green-200 transition-colors text-xl"
+              className="text-[#c5a97b]/80 hover:text-[#ffd075] transition-colors text-xl"
             >
               ✕
             </button>
@@ -275,7 +275,7 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
         </div>
 
         {/* NFT Preview */}
-        <div className="p-4 border-b border-green-500/20">
+        <div className="p-4 border-b border-[rgba(255,208,117,0.2)]">
           {isBulkListing ? (
             // Grid preview for multiple NFTs
             <div>
@@ -289,16 +289,16 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                   />
                 ))}
                 {nftList.length > 6 && (
-                  <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400 text-sm">
+                  <div className="w-12 h-12 rounded-lg bg-[#1a2221] flex items-center justify-center text-[#8a9090] text-sm">
                     +{nftList.length - 6}
                   </div>
                 )}
               </div>
-              <p className="text-gray-400 text-sm">
+              <p className="text-[#8a9090] text-sm">
                 All {nftList.length} NFTs will be listed at the same price
               </p>
               {isApprovedForAll && (
-                <p className="text-green-400 text-xs mt-1">✓ Marketplace approved</p>
+                <p className="text-[#22c55e] text-xs mt-1">✓ Marketplace approved</p>
               )}
             </div>
           ) : (
@@ -313,10 +313,10 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                 <p className="text-white text-sm">Token ID: <span className="font-mono">#{primaryNft?.tokenId}</span></p>
                 <p className="text-white text-sm">Type: <span className="capitalize">{primaryNft?.nftType}</span></p>
                 {!collectionApproved && (
-                  <p className="text-yellow-400 text-xs mt-1">⚠️ Collection not yet approved</p>
+                  <p className="text-[#ffd075] text-xs mt-1">Collection not yet approved</p>
                 )}
                 {isApprovedForAll && (
-                  <p className="text-green-400 text-xs mt-1">✓ Marketplace approved</p>
+                  <p className="text-[#22c55e] text-xs mt-1">✓ Marketplace approved</p>
                 )}
               </div>
             </div>
@@ -327,8 +327,8 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
         <div className="p-4">
           {/* Collection not approved warning */}
           {!collectionApproved && (
-            <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
-              <p className="text-yellow-400 text-sm">
+            <div className="mb-4 p-3 bg-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.2)] rounded-lg">
+              <p className="text-[#ffd075] text-sm">
                 Approve collection to list your NFT{isBulkListing ? 's' : ''}.
               </p>
             </div>
@@ -338,7 +338,7 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           {step === 'input' && (
             <>
               <div className="mb-4">
-                <label className="block text-gray-400 text-sm mb-2">
+                <label className="block text-[#8a9090] text-sm mb-2">
                   Price per NFT (wASS)
                 </label>
                 <div className="relative">
@@ -349,11 +349,11 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                     placeholder="Enter price in wASS"
                     min="1"
                     step="0.1"
-                    className="w-full bg-gray-800/50 border border-green-500/30 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500"
+                    className="w-full bg-[#1a2221]/50 border border-[rgba(255,208,117,0.3)] rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-[#ffd075]"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">wASS</span>
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8a9090]">wASS</span>
                 </div>
-                <p className="text-gray-500 text-xs mt-1">
+                <p className="text-[#6b7575] text-xs mt-1">
                   Minimum: 1 wASS • 5% seller fee
                   {isBulkListing && ` • Each NFT listed at ${price || '0'} wASS`}
                 </p>
@@ -365,7 +365,7 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                   <button
                     key={p}
                     onClick={() => setPrice(p)}
-                    className="flex-1 py-2 px-3 bg-gray-800/50 border border-green-500/20 rounded-lg text-gray-300 hover:bg-green-900/30 hover:border-green-500/50 transition-colors text-sm"
+                    className="flex-1 py-2 px-3 bg-[#1a2221]/50 border border-[rgba(255,208,117,0.2)] rounded-lg text-[#cecece] hover:bg-[rgba(255,208,117,0.1)] hover:border-[rgba(255,208,117,0.4)] transition-colors text-sm"
                   >
                     {p}
                   </button>
@@ -377,8 +377,8 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                 disabled={!price || parseFloat(price) < 1 || isProcessing}
                 className="w-full py-3 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))',
-                  border: '2px solid rgba(34, 197, 94, 0.5)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.8), rgba(197, 169, 123, 0.8))',
+                  border: '2px solid rgba(255, 208, 117, 0.5)',
                   color: 'white',
                 }}
               >
@@ -393,13 +393,13 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           {/* Approve Step */}
           {step === 'approve' && (
             <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd075] mx-auto mb-4"></div>
               <p className="text-white font-medium mb-2">
                 {isApproving ? 'Confirm in wallet...' : 'Approving marketplace...'}
               </p>
-              <p className="text-gray-400 text-sm">One-time approval for marketplace</p>
+              <p className="text-[#8a9090] text-sm">One-time approval for marketplace</p>
               {approveError && (
-                <p className="text-red-400 text-sm mt-2">{approveError.message}</p>
+                <p className="text-[#FF3B5C] text-sm mt-2">{approveError.message}</p>
               )}
             </div>
           )}
@@ -407,18 +407,18 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           {/* List Step */}
           {step === 'list' && (
             <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd075] mx-auto mb-4"></div>
               <p className="text-white font-medium mb-2">
                 {isListing ? 'Confirm in wallet...' : `Creating ${isBulkListing ? 'listings' : 'listing'}...`}
               </p>
-              <p className="text-gray-400 text-sm">
+              <p className="text-[#8a9090] text-sm">
                 {isBulkListing
                   ? `Listing ${nftList.length} NFTs at ${price} wASS each`
                   : `Listing for ${price} wASS`
                 }
               </p>
               {listError && (
-                <p className="text-red-400 text-sm mt-2">{listError.message}</p>
+                <p className="text-[#FF3B5C] text-sm mt-2">{listError.message}</p>
               )}
             </div>
           )}
@@ -428,7 +428,7 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
             <div className="text-center py-4">
               <div className="text-5xl mb-4">🎉</div>
               <p className="text-white font-bold text-xl mb-2">Listed!</p>
-              <p className="text-gray-400 mb-4">
+              <p className="text-[#8a9090] mb-4">
                 {isBulkListing
                   ? `${nftList.length} NFTs are now for sale at ${price} wASS each`
                   : `Your NFT is now for sale at ${price} wASS`
@@ -438,8 +438,8 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
                 onClick={onClose}
                 className="w-full py-3 rounded-lg font-semibold"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))',
-                  border: '2px solid rgba(34, 197, 94, 0.5)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.8), rgba(197, 169, 123, 0.8))',
+                  border: '2px solid rgba(255, 208, 117, 0.5)',
                   color: 'white',
                 }}
               >
@@ -451,8 +451,8 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
           {/* Unlist Step (already listed) - only for single NFT */}
           {step === 'unlist' && listing && !isBulkListing && (
             <>
-              <div className="mb-4 p-3 bg-green-900/30 border border-green-500/30 rounded-lg">
-                <p className="text-green-400 font-medium">Currently Listed</p>
+              <div className="mb-4 p-3 bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg">
+                <p className="text-[#ffd075] font-medium">Currently Listed</p>
                 <p className="text-white text-2xl font-bold">{listing.priceFormatted} wASS</p>
               </div>
 
@@ -472,14 +472,14 @@ export function ListingModal({ nft, nfts, isOpen, onClose, onSuccess }: ListingM
 
                 <button
                   onClick={onClose}
-                  className="w-full py-3 rounded-lg font-semibold bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+                  className="w-full py-3 rounded-lg font-semibold bg-[#1a2221] text-[#cecece] hover:bg-[#1f2827] transition-colors"
                 >
                   Keep Listed
                 </button>
               </div>
 
               {unlistError && (
-                <p className="text-red-400 text-sm mt-2 text-center">{unlistError.message}</p>
+                <p className="text-[#FF3B5C] text-sm mt-2 text-center">{unlistError.message}</p>
               )}
             </>
           )}

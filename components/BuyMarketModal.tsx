@@ -248,8 +248,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             padding: '20px',
           }}
         >
-          <div className="bg-gray-800/50 p-6 rounded-lg animate-pulse">
-            <div className="h-32 bg-gray-700/50 rounded"></div>
+          <div className="bg-[#1a2221]/50 p-6 rounded-lg animate-pulse">
+            <div className="h-32 bg-[#1f2827]/50 rounded"></div>
           </div>
         </div>
       </>
@@ -287,12 +287,12 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
           width: 'clamp(280px, 92vw, 600px)',
           maxHeight: '90vh',
           overflowY: 'auto',
-          background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(168, 85, 247, 0.08), rgba(99, 102, 241, 0.05))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(139, 92, 246, 0.3)',
+          background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.05), rgba(255, 208, 117, 0.08), rgba(197, 169, 123, 0.05))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
+          border: '2px solid rgba(255, 208, 117, 0.3)',
           borderRadius: '16px',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(139, 92, 246, 0.3), 0 0 100px rgba(168, 85, 247, 0.2)',
+          boxShadow: '0 0 50px rgba(255, 208, 117, 0.15), 0 0 100px rgba(197, 169, 123, 0.1)',
           padding: '20px',
         }}
       >
@@ -309,21 +309,21 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
           className="text-2xl font-bold text-center mb-4"
           style={{
             color: '#fff',
-            textShadow: '0 0 20px rgba(168, 85, 247, 0.8)',
+            textShadow: '0 0 20px rgba(255, 208, 117, 0.6)',
           }}
         >
           Prediction Market
         </h2>
 
         {/* Game Info */}
-        <div className="bg-gray-800/50 p-4 rounded-lg mb-4">
+        <div className="bg-[#1a2221]/50 p-4 rounded-lg mb-4">
           <div className="flex justify-between items-center mb-2">
             <div className="text-white font-semibold">Game #{gameId.toString()}</div>
             <div className={`px-2 py-1 rounded text-xs font-semibold ${
               stateName === 'Active' ? 'bg-green-900/50 text-green-300' :
               stateName === 'Dealing' ? 'bg-yellow-900/50 text-yellow-300' :
               stateName === 'Busted' ? 'bg-red-900/50 text-red-300' :
-              'bg-gray-700/50 text-gray-300'
+              'bg-[#1f2827]/50 text-[#cecece]'
             }`}>
               {stateName}
             </div>
@@ -331,11 +331,11 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
 
           <div className="flex gap-4 text-sm mb-3">
             <div>
-              <div className="text-gray-400 text-xs">Player</div>
+              <div className="text-[#8a9090] text-xs">Player</div>
               <div className="text-white font-bold">{gameInfo.playerTotal.toString()}</div>
             </div>
             <div>
-              <div className="text-gray-400 text-xs">Dealer</div>
+              <div className="text-[#8a9090] text-xs">Dealer</div>
               <div className="text-white font-bold">{gameInfo.dealerTotal.toString()}</div>
             </div>
           </div>
@@ -354,8 +354,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
 
           {/* User Shares */}
           {(Number(userYesShares) > 0 || Number(userNoShares) > 0) && (
-            <div className="mt-3 pt-3 border-t border-gray-700">
-              <div className="text-gray-400 text-xs mb-2">Your Shares</div>
+            <div className="mt-3 pt-3 border-t border-[rgba(255,255,255,0.06)]">
+              <div className="text-[#8a9090] text-xs mb-2">Your Shares</div>
               <div className="flex gap-4 text-sm">
                 {Number(userYesShares) > 0 && (
                   <div>
@@ -380,7 +380,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             </div>
           )}
           {marketDisplay.resolved && (
-            <div className="mt-3 text-purple-300 text-xs text-center">
+            <div className="mt-3 text-[#ffe0a0] text-xs text-center">
               Market resolved
             </div>
           )}
@@ -393,7 +393,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               actionType === 'buy'
                 ? 'bg-green-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
             }`}
           >
             Buy
@@ -403,7 +403,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               actionType === 'sell'
                 ? 'bg-red-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
             }`}
           >
             Sell
@@ -417,7 +417,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               position === 'yes'
                 ? 'bg-green-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
             }`}
           >
             YES
@@ -427,7 +427,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
               position === 'no'
                 ? 'bg-red-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
             }`}
           >
             NO
@@ -442,8 +442,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
               disabled={!tokenBalance || tokenBalance === 0n}
               className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
                 paymentMethod === 'token'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-[#a88a5a] text-white'
+                  : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {tokenSymbol || 'Token'}
@@ -452,8 +452,8 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
               onClick={() => setPaymentMethod('eth')}
               className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
                 paymentMethod === 'eth'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  ? 'bg-[#a88a5a] text-white'
+                  : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
               }`}
             >
               ETH
@@ -463,7 +463,7 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
 
         {/* Amount Input */}
         <div className="mb-4">
-          <label className="block text-gray-300 text-sm mb-2">
+          <label className="block text-[#cecece] text-sm mb-2">
             {actionType === 'buy'
               ? `Amount (${paymentMethod === 'eth' ? 'ETH' : tokenSymbol || 'Tokens'})`
               : 'Shares to Sell'
@@ -474,11 +474,11 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.0"
-            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+            className="w-full px-4 py-3 bg-[#1f2827] border border-[rgba(255,255,255,0.1)] rounded-lg text-white focus:outline-none focus:border-[#c5a97b]"
           />
 
           {/* Balance display */}
-          <div className="mt-2 text-xs text-gray-400">
+          <div className="mt-2 text-xs text-[#8a9090]">
             {actionType === 'buy' && paymentMethod === 'token' && (
               <div>Balance: {formattedTokenBalance} {tokenSymbol}</div>
             )}
@@ -508,22 +508,22 @@ export function BuyMarketModal({ gameId, onClose }: BuyMarketModalProps) {
             isTxPending ||
             isTxConfirming
           }
-          className="w-full py-3 px-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
+          className="w-full py-3 px-6 bg-[#a88a5a] hover:bg-[#8a6d3b] disabled:bg-[#2a3533] disabled:cursor-not-allowed text-white font-bold rounded-lg transition-all"
         >
           {getButtonText()}
         </button>
 
         {/* Market Stats */}
-        <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="mt-4 pt-4 border-t border-[rgba(255,255,255,0.06)]">
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
-              <div className="text-gray-400">Total Deposits</div>
+              <div className="text-[#8a9090]">Total Deposits</div>
               <div className="text-white font-semibold">
                 {marketDisplay.totalDeposits ? formatUnits(marketDisplay.totalDeposits, tokenDecimals || 18) : '0'} {tokenSymbol}
               </div>
             </div>
             <div>
-              <div className="text-gray-400">Volume</div>
+              <div className="text-[#8a9090]">Volume</div>
               <div className="text-white font-semibold">
                 {marketDisplay.volume ? formatUnits(marketDisplay.volume, tokenDecimals || 18) : '0'} {tokenSymbol}
               </div>

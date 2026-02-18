@@ -49,8 +49,8 @@ export function WelcomeModal() {
         <div
           className="pointer-events-auto max-w-lg w-full glass rounded-2xl overflow-hidden animate-slide-up"
           style={{
-            boxShadow: '0 0 40px rgba(59, 130, 246, 0.3), inset 0 0 60px rgba(59, 130, 246, 0.05)',
-            border: '2px solid rgba(59, 130, 246, 0.2)',
+            boxShadow: '0 0 40px rgba(255, 208, 117, 0.2), inset 0 0 60px rgba(255, 208, 117, 0.03)',
+            border: '2px solid rgba(255, 208, 117, 0.15)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -58,14 +58,14 @@ export function WelcomeModal() {
           <div
             className="relative overflow-hidden p-6 pb-5"
             style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(147, 51, 234, 0.15) 100%)',
-              borderBottom: '1px solid rgba(59, 130, 246, 0.2)',
+              background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.1) 0%, rgba(197, 169, 123, 0.08) 100%)',
+              borderBottom: '1px solid rgba(255, 208, 117, 0.15)',
             }}
           >
             <div
               className="absolute inset-0 opacity-30"
               style={{
-                background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.4), transparent)',
+                background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.3), transparent)',
                 animation: 'shimmer 3s infinite',
               }}
             />
@@ -74,14 +74,14 @@ export function WelcomeModal() {
               <h1
                 className="text-3xl font-bold mb-2"
                 style={{
-                  background: 'linear-gradient(135deg, #3B82F6 0%, #8B5CF6 50%, #EC4899 100%)',
+                  background: 'linear-gradient(135deg, #ffd075 0%, #c5a97b 50%, #a68b5b 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                 }}
               >
                 Welcome to Apple Valley
               </h1>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-[#8a9090]">
                 Every action vests tokens in your wallet
               </p>
             </div>
@@ -91,25 +91,27 @@ export function WelcomeModal() {
           <div className="p-6 space-y-5">
             {/* Main Message */}
             <div
-              className="bg-gradient-to-br from-blue-950/40 via-purple-950/40 to-pink-950/40 border border-blue-500/30 rounded-xl p-5"
+              className="rounded-xl p-5"
               style={{
-                boxShadow: '0 0 20px rgba(59, 130, 246, 0.15), inset 0 0 20px rgba(147, 51, 234, 0.05)',
+                background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.06), rgba(197, 169, 123, 0.04))',
+                border: '1px solid rgba(255, 208, 117, 0.2)',
+                boxShadow: '0 0 20px rgba(255, 208, 117, 0.08), inset 0 0 20px rgba(197, 169, 123, 0.03)',
               }}
             >
-              <p className="text-gray-200 leading-relaxed text-sm mb-3">
+              <p className="text-[#e0e0e0] leading-relaxed text-sm mb-3">
                 There are no fees here. Every action is a swap through our new{' '}
                 <a
                   href={`https://basescan.org/address/${HOOK_ADDRESS}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-300 hover:text-blue-200 underline transition-colors"
+                  className="text-[#ffd075] hover:text-[#ffe0a0] underline transition-colors"
                 >
                   V4 Super Strategy Hook
                 </a>
                 . You receive 100% of your tokens from actions over 90 days.
               </p>
 
-              <div className="pt-3 border-t border-purple-500/20 space-y-1.5 text-xs text-gray-400">
+              <div className="pt-3 border-t border-[rgba(255,208,117,0.12)] space-y-1.5 text-xs text-[#8a9090]">
                 <p>Claim 1% daily and after 90 they fully unlock!</p>
                 <p>
                   Make your own NFT strategy at{' '}
@@ -117,7 +119,7 @@ export function WelcomeModal() {
                     href="https://pairable.io/#/contracts/superstrat"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-purple-300 hover:text-purple-200 underline"
+                    className="text-[#c5a97b] hover:text-[#ddc09a] underline"
                   >
                     pairable.io
                   </a>
@@ -131,8 +133,8 @@ export function WelcomeModal() {
                 onClick={handleWhitepaperClick}
                 className="px-4 py-3 rounded-lg font-medium text-sm text-white transition-all hover:scale-105"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(147, 51, 234, 0.2) 100%)',
-                  border: '2px solid rgba(59, 130, 246, 0.4)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.15) 0%, rgba(197, 169, 123, 0.1) 100%)',
+                  border: '2px solid rgba(255, 208, 117, 0.3)',
                 }}
               >
                 Read Docs
@@ -141,7 +143,7 @@ export function WelcomeModal() {
               <div
                 className="rounded-lg"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%)',
+                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(255, 208, 117, 0.15) 100%)',
                   border: '2px solid rgba(16, 185, 129, 0.4)',
                 }}
               >
@@ -162,7 +164,7 @@ export function WelcomeModal() {
             <div className="text-center">
               <button
                 onClick={handleClose}
-                className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                className="text-xs text-[#6b7575] hover:text-[#8a9090] transition-colors"
               >
                 Skip and explore
               </button>

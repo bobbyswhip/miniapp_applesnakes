@@ -84,10 +84,10 @@ export function TokenWarsPredictionMarkets({
 
   if (isLoading && markets.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-800/30 rounded-lg">
+      <div className="h-full flex items-center justify-center bg-[#1a2221]/30 rounded-lg">
         <div className="text-center">
-          <div className="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-2" />
-          <p className="text-gray-400 text-xs">Loading markets...</p>
+          <div className="w-8 h-8 border-3 border-[rgba(255,208,117,0.3)] border-t-[#c5a97b] rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-[#8a9090] text-xs">Loading markets...</p>
         </div>
       </div>
     );
@@ -95,12 +95,12 @@ export function TokenWarsPredictionMarkets({
 
   if (error) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-800/30 rounded-lg">
+      <div className="h-full flex items-center justify-center bg-[#1a2221]/30 rounded-lg">
         <div className="text-center">
           <p className="text-red-400 text-xs mb-2">Error: {error}</p>
           <button
             onClick={refresh}
-            className="px-3 py-1 bg-gray-700 text-white text-xs rounded hover:bg-gray-600"
+            className="px-3 py-1 bg-[#1f2827] text-white text-xs rounded hover:bg-[#2a3533]"
           >
             Retry
           </button>
@@ -111,28 +111,28 @@ export function TokenWarsPredictionMarkets({
 
   if (markets.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center bg-gray-800/30 rounded-lg">
-        <p className="text-gray-400 text-xs">No prediction markets for this war.</p>
+      <div className="h-full flex items-center justify-center bg-[#1a2221]/30 rounded-lg">
+        <p className="text-[#8a9090] text-xs">No prediction markets for this war.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-gray-800/30 rounded-lg">
+    <div className="h-full flex flex-col overflow-hidden bg-[#1a2221]/30 rounded-lg">
       {/* Compact Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-gray-700/50">
+      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-[rgba(255,255,255,0.04)]">
         <div className="flex items-center gap-2">
-          <span className="text-cyan-400 text-sm font-bold">🎲 Predictions</span>
-          <span className="px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 text-[10px] rounded">
+          <span className="text-[#ffd075] text-sm font-bold">🎲 Predictions</span>
+          <span className="px-1.5 py-0.5 bg-[#c5a97b]/20 text-[#ffd075] text-[10px] rounded">
             {markets.length} markets
           </span>
         </div>
         <button
           onClick={refresh}
-          className="p-1 hover:bg-gray-700 rounded transition-colors"
+          className="p-1 hover:bg-[#1f2827] rounded transition-colors"
           title="Refresh"
         >
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-[#8a9090]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </button>
@@ -177,7 +177,7 @@ export function TokenWarsPredictionMarkets({
 
         {/* User Positions Summary - Enhanced with currentValue, P&L */}
         {userPositions.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-700/50">
+          <div className="mt-3 pt-3 border-t border-[rgba(255,255,255,0.04)]">
             <h4 className="text-xs font-bold text-white mb-2">📈 Your Positions</h4>
             <div className="space-y-2">
               {userPositions.map((pos) => (
@@ -317,26 +317,26 @@ function CompactMarketCard({
   };
 
   return (
-    <div className="bg-gray-900/50 rounded-lg border border-gray-700/50 overflow-hidden">
+    <div className="bg-[#171e1d]/50 rounded-lg border border-[rgba(255,255,255,0.04)] overflow-hidden">
       {/* Compact Header - Always Visible */}
       <button
         onClick={onToggle}
-        className="w-full p-2 flex items-center justify-between hover:bg-gray-800/50 transition-colors"
+        className="w-full p-2 flex items-center justify-between hover:bg-[#1a2221]/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <span className="text-lg">{getMarketIcon()}</span>
           <div className="text-left">
             <div className="text-xs font-bold text-white">{getMarketLabel()}</div>
-            <div className="text-[10px] text-gray-400 truncate max-w-[150px]">{market.market.title}</div>
+            <div className="text-[10px] text-[#8a9090] truncate max-w-[150px]">{market.market.title}</div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <div className="text-xs font-bold text-cyan-400">{formatUSDC(market.stats.totalPool)}</div>
-            <div className="text-[10px] text-gray-400">{formatTimeRemaining(market.stats.timeRemaining)}</div>
+            <div className="text-xs font-bold text-[#ffd075]">{formatUSDC(market.stats.totalPool)}</div>
+            <div className="text-[10px] text-[#8a9090]">{formatTimeRemaining(market.stats.timeRemaining)}</div>
           </div>
           <svg
-            className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-[#8a9090] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -348,7 +348,7 @@ function CompactMarketCard({
 
       {/* Expanded Content */}
       {isExpanded && (
-        <div className="px-2 pb-2 border-t border-gray-700/50">
+        <div className="px-2 pb-2 border-t border-[rgba(255,255,255,0.04)]">
           {/* Outcomes - With Visual Slider */}
           <div className="mt-2 space-y-2">
             {market.outcomes.map((outcome) => (
@@ -361,8 +361,8 @@ function CompactMarketCard({
                 disabled={!isActive}
                 className={`w-full p-2 rounded-lg text-left transition-all ${
                   selectedOutcome === outcome.outcomeIndex
-                    ? 'bg-cyan-500/20 border border-cyan-500'
-                    : 'bg-gray-800/50 border border-transparent hover:bg-gray-700/50'
+                    ? 'bg-[#c5a97b]/20 border border-[#c5a97b]'
+                    : 'bg-[#1a2221]/50 border border-transparent hover:bg-[#1f2827]/50'
                 } ${!isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {/* Outcome Label + Odds */}
@@ -370,7 +370,7 @@ function CompactMarketCard({
                   <span className="text-xs font-medium text-white truncate">{outcome.label}</span>
                   <div className="flex gap-2 text-[10px]">
                     <span className="text-green-400">{formatOdds(outcome.yesOdds)}</span>
-                    <span className="text-gray-500">|</span>
+                    <span className="text-[#6b7575]">|</span>
                     <span className="text-red-400">{formatOdds(outcome.noOdds)}</span>
                   </div>
                 </div>
@@ -382,7 +382,7 @@ function CompactMarketCard({
                 </div>
 
                 {/* YES/NO Probability Slider */}
-                <div className="relative w-full h-4 rounded-full overflow-hidden bg-gray-700 flex mb-1">
+                <div className="relative w-full h-4 rounded-full overflow-hidden bg-[#1f2827] flex mb-1">
                   {/* YES Side (green) */}
                   <div
                     className="h-full bg-gradient-to-r from-green-600 to-green-500 transition-all duration-500"
@@ -396,7 +396,7 @@ function CompactMarketCard({
                 </div>
 
                 {/* Pool Info */}
-                <div className="text-[9px] text-gray-500 flex justify-between">
+                <div className="text-[9px] text-[#6b7575] flex justify-between">
                   <span>Pool: {formatUSDC(outcome.totalPool)}</span>
                   <span>YES: {formatUSDC(outcome.yesPool)} • NO: {formatUSDC(outcome.noPool)}</span>
                 </div>
@@ -406,7 +406,7 @@ function CompactMarketCard({
 
           {/* Betting Panel - Inline Compact */}
           {isActive && selectedOutcome !== null && userAddress && (
-            <div className="mt-2 p-2 bg-gray-800/50 rounded-lg">
+            <div className="mt-2 p-2 bg-[#1a2221]/50 rounded-lg">
               {/* Side Selection - Compact */}
               <div className="flex gap-1 mb-2">
                 <button
@@ -414,7 +414,7 @@ function CompactMarketCard({
                   className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-all ${
                     selectedSide === "yes"
                       ? 'bg-green-500/30 text-green-400 border border-green-500'
-                      : 'bg-gray-700/50 text-gray-400 border border-transparent'
+                      : 'bg-[#1f2827]/50 text-[#8a9090] border border-transparent'
                   }`}
                 >
                   YES {formatOdds(selectedOutcomeData?.yesOdds || 0)}
@@ -424,7 +424,7 @@ function CompactMarketCard({
                   className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-all ${
                     selectedSide === "no"
                       ? 'bg-red-500/30 text-red-400 border border-red-500'
-                      : 'bg-gray-700/50 text-gray-400 border border-transparent'
+                      : 'bg-[#1f2827]/50 text-[#8a9090] border border-transparent'
                   }`}
                 >
                   NO {formatOdds(selectedOutcomeData?.noOdds || 0)}
@@ -433,10 +433,10 @@ function CompactMarketCard({
 
               {/* Amount + Bet Button - Single Row */}
               <div className="flex gap-2 items-center">
-                <div className="flex items-center gap-1 bg-gray-900 rounded px-1">
+                <div className="flex items-center gap-1 bg-[#171e1d] rounded px-1">
                   <button
                     onClick={() => setBetAmount(Math.max(1, betAmount - 5))}
-                    className="w-6 h-6 text-gray-400 hover:text-white"
+                    className="w-6 h-6 text-[#8a9090] hover:text-white"
                   >
                     -
                   </button>
@@ -462,16 +462,16 @@ function CompactMarketCard({
                   />
                   <button
                     onClick={() => setBetAmount(betAmount + 5)}
-                    className="w-6 h-6 text-gray-400 hover:text-white"
+                    className="w-6 h-6 text-[#8a9090] hover:text-white"
                   >
                     +
                   </button>
                 </div>
                 <div className="flex-1 text-center">
-                  <span className="text-[10px] text-gray-400">Win: </span>
+                  <span className="text-[10px] text-[#8a9090]">Win: </span>
                   <span className="text-xs font-bold text-green-400">{formatUSDC(potentialWin)}</span>
                   {betPreview && betPreview.multiplier > 0 && (
-                    <span className="text-[9px] text-gray-500 ml-1">({betPreview.multiplier.toFixed(2)}x)</span>
+                    <span className="text-[9px] text-[#6b7575] ml-1">({betPreview.multiplier.toFixed(2)}x)</span>
                   )}
                 </div>
                 <button
@@ -479,7 +479,7 @@ function CompactMarketCard({
                   disabled={isPlacingBet || betAmount < MIN_BET_USDC}
                   className={`px-3 py-1.5 rounded font-bold text-[10px] transition-all ${
                     isPlacingBet
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      ? 'bg-[#2a3533] text-[#8a9090] cursor-not-allowed'
                       : selectedSide === 'yes'
                         ? 'bg-green-600 text-white hover:bg-green-500'
                         : 'bg-red-600 text-white hover:bg-red-500'
@@ -497,7 +497,7 @@ function CompactMarketCard({
 
           {/* Fee note - 1% on buy, 1% on sell */}
           {isActive && selectedOutcome !== null && userAddress && betPreview && (
-            <div className="text-[9px] text-gray-500 text-center mt-1">
+            <div className="text-[9px] text-[#6b7575] text-center mt-1">
               <span>Fee: {formatUSDC(betPreview.fee)} (1%)</span>
               <span className="mx-1">•</span>
               <span>Shares: {betPreview.expectedShares.toFixed(2)}</span>
@@ -506,10 +506,10 @@ function CompactMarketCard({
 
           {/* Show user position for this market */}
           {userPosition && userPosition.positions.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-cyan-700/30 bg-cyan-900/10 rounded-lg p-2">
-              <div className="text-[10px] text-cyan-400 font-bold mb-1.5">📊 Your Position</div>
+            <div className="mt-2 pt-2 border-t border-[rgba(255,208,117,0.15)] bg-[#3d2e1a]/10 rounded-lg p-2">
+              <div className="text-[10px] text-[#ffd075] font-bold mb-1.5">📊 Your Position</div>
               {userPosition.positions.map((pos) => (
-                <div key={`${pos.outcomeIndex}-${pos.side}`} className="flex items-center justify-between p-2 bg-gray-800/50 rounded-lg mb-1 border border-cyan-700/20">
+                <div key={`${pos.outcomeIndex}-${pos.side}`} className="flex items-center justify-between p-2 bg-[#1a2221]/50 rounded-lg mb-1 border border-[rgba(255,208,117,0.1)]">
                   <div className="flex-1">
                     <div className="flex items-center gap-1.5 mb-1">
                       <span className="text-xs text-white font-medium">{pos.outcomeLabel}</span>
@@ -517,10 +517,10 @@ function CompactMarketCard({
                         {pos.side.toUpperCase()}
                       </span>
                     </div>
-                    <div className="text-[11px] text-cyan-300 font-bold">
+                    <div className="text-[11px] text-[#ffe0a0] font-bold">
                       {pos.shares.toFixed(4)} shares
                     </div>
-                    <div className="text-[9px] text-gray-500">
+                    <div className="text-[9px] text-[#6b7575]">
                       Cost: {formatUSDC(pos.totalCost)}
                     </div>
                   </div>
@@ -554,7 +554,7 @@ function CompactMarketCard({
           )}
 
           {!userAddress && isActive && (
-            <div className="mt-2 text-center text-[10px] text-gray-500 py-2">
+            <div className="mt-2 text-center text-[10px] text-[#6b7575] py-2">
               Connect wallet to place bets
             </div>
           )}
@@ -578,25 +578,25 @@ function PositionCard({ position, warId, onSell }: PositionCardProps) {
   const isActive = position.market.isActive;
 
   return (
-    <div className="p-2 bg-gray-900/50 rounded-lg border border-cyan-700/20">
-      <div className="text-[10px] text-cyan-400 font-medium truncate mb-2">{position.market.title}</div>
+    <div className="p-2 bg-[#171e1d]/50 rounded-lg border border-[rgba(255,208,117,0.1)]">
+      <div className="text-[10px] text-[#ffd075] font-medium truncate mb-2">{position.market.title}</div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-4 gap-1 mb-2 text-center bg-gray-800/30 rounded-lg p-1.5">
+      <div className="grid grid-cols-4 gap-1 mb-2 text-center bg-[#1a2221]/30 rounded-lg p-1.5">
         <div>
-          <div className="text-[9px] text-gray-500">Invested</div>
+          <div className="text-[9px] text-[#6b7575]">Invested</div>
           <div className="text-[10px] text-white font-medium">{formatUSDC(position.totalInvested)}</div>
         </div>
         <div>
-          <div className="text-[9px] text-gray-500">Value</div>
-          <div className="text-[10px] text-cyan-400 font-bold">{formatUSDC(position.totalCurrentValue)}</div>
+          <div className="text-[9px] text-[#6b7575]">Value</div>
+          <div className="text-[10px] text-[#ffd075] font-bold">{formatUSDC(position.totalCurrentValue)}</div>
         </div>
         <div>
-          <div className="text-[9px] text-gray-500">If Wins</div>
-          <div className="text-[10px] text-blue-400 font-medium">{formatUSDC(position.totalPotentialPayout)}</div>
+          <div className="text-[9px] text-[#6b7575]">If Wins</div>
+          <div className="text-[10px] text-[#ffd075] font-medium">{formatUSDC(position.totalPotentialPayout)}</div>
         </div>
         <div>
-          <div className="text-[9px] text-gray-500">P&L</div>
+          <div className="text-[9px] text-[#6b7575]">P&L</div>
           <div className={`text-[10px] font-bold ${position.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {position.profitLoss >= 0 ? '+' : ''}{formatUSDC(position.profitLoss)}
           </div>
@@ -606,7 +606,7 @@ function PositionCard({ position, warId, onSell }: PositionCardProps) {
       {/* Individual positions */}
       <div className="space-y-1.5">
         {position.positions.map((pos) => (
-          <div key={`${pos.outcomeIndex}-${pos.side}`} className="flex items-center justify-between p-2 bg-gray-800/50 rounded-lg border border-gray-700/30">
+          <div key={`${pos.outcomeIndex}-${pos.side}`} className="flex items-center justify-between p-2 bg-[#1a2221]/50 rounded-lg border border-[rgba(255,255,255,0.03)]">
             <div className="flex-1">
               <div className="flex items-center gap-1.5 mb-1">
                 <span className="text-xs text-white font-medium">{pos.outcomeLabel}</span>
@@ -617,10 +617,10 @@ function PositionCard({ position, warId, onSell }: PositionCardProps) {
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/30 text-yellow-400 font-bold">🏆 WINNER</span>
                 )}
               </div>
-              <div className="text-[11px] text-cyan-300 font-bold">
+              <div className="text-[11px] text-[#ffe0a0] font-bold">
                 {pos.shares.toFixed(4)} shares
               </div>
-              <div className="text-[9px] text-gray-500">
+              <div className="text-[9px] text-[#6b7575]">
                 Cost: {formatUSDC(pos.totalCost)}
               </div>
             </div>
@@ -714,23 +714,23 @@ function SellModal({ isOpen, onClose, position, warId, onSuccess }: SellModalPro
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg p-4 max-w-sm w-full border border-gray-700">
+      <div className="bg-[#1a2221] rounded-lg p-4 max-w-sm w-full border border-[rgba(255,255,255,0.06)]">
         <h2 className="text-lg font-bold text-white mb-3">Sell Position</h2>
 
         {/* Position Info */}
-        <div className="mb-3 p-2 bg-gray-900/50 rounded">
+        <div className="mb-3 p-2 bg-[#171e1d]/50 rounded">
           <div className="font-medium text-white text-sm">{position.outcomeLabel}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-[#8a9090]">
             {position.side.toUpperCase()} - {position.shares.toFixed(2)} shares
           </div>
-          <div className="text-xs text-gray-400">
-            Current Value: <span className="font-bold text-cyan-400">{formatUSDC(position.currentValue)}</span>
+          <div className="text-xs text-[#8a9090]">
+            Current Value: <span className="font-bold text-[#ffd075]">{formatUSDC(position.currentValue)}</span>
           </div>
         </div>
 
         {/* Shares Input */}
         <div className="mb-3">
-          <label className="block text-xs text-gray-400 mb-1">Shares to Sell</label>
+          <label className="block text-xs text-[#8a9090] mb-1">Shares to Sell</label>
           <input
             type="number"
             value={sharesToSell}
@@ -738,21 +738,21 @@ function SellModal({ isOpen, onClose, position, warId, onSuccess }: SellModalPro
             min={0.01}
             max={position.shares}
             step={0.01}
-            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+            className="w-full bg-[#171e1d] border border-[rgba(255,255,255,0.06)] rounded px-3 py-2 text-white text-sm"
           />
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <button onClick={() => setSharesToSell(position.shares * 0.25)} className="hover:text-cyan-400">25%</button>
-            <button onClick={() => setSharesToSell(position.shares * 0.5)} className="hover:text-cyan-400">50%</button>
-            <button onClick={() => setSharesToSell(position.shares * 0.75)} className="hover:text-cyan-400">75%</button>
-            <button onClick={() => setSharesToSell(position.shares)} className="hover:text-cyan-400">Max</button>
+          <div className="flex justify-between text-xs text-[#6b7575] mt-1">
+            <button onClick={() => setSharesToSell(position.shares * 0.25)} className="hover:text-[#ffd075]">25%</button>
+            <button onClick={() => setSharesToSell(position.shares * 0.5)} className="hover:text-[#ffd075]">50%</button>
+            <button onClick={() => setSharesToSell(position.shares * 0.75)} className="hover:text-[#ffd075]">75%</button>
+            <button onClick={() => setSharesToSell(position.shares)} className="hover:text-[#ffd075]">Max</button>
           </div>
         </div>
 
         {/* Estimated Proceeds */}
         <div className="mb-3 p-2 bg-green-900/30 rounded border border-green-700/30">
-          <div className="text-xs text-gray-400">Estimated Proceeds</div>
+          <div className="text-xs text-[#8a9090]">Estimated Proceeds</div>
           <div className="text-xl font-bold text-green-400">{formatUSDC(estimatedProceeds)}</div>
-          <div className="text-[10px] text-gray-500">Actual amount may vary based on market conditions</div>
+          <div className="text-[10px] text-[#6b7575]">Actual amount may vary based on market conditions</div>
         </div>
 
         {/* Error */}
@@ -764,7 +764,7 @@ function SellModal({ isOpen, onClose, position, warId, onSuccess }: SellModalPro
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 px-3 py-2 border border-gray-600 rounded text-gray-300 hover:bg-gray-700 text-sm"
+            className="flex-1 px-3 py-2 border border-[rgba(255,255,255,0.1)] rounded text-[#cecece] hover:bg-[#1f2827] text-sm"
             disabled={isLoading}
           >
             Cancel

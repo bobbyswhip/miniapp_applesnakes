@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useX402Fetch } from './useX402Fetch';
+import { getNFTMetadataUrl, getNFTImageUrl } from '@/config';
 
 // =============================================================================
 // Types
@@ -190,15 +191,198 @@ export function useTraitSwapper(tokenId: number) {
         setOwnership(data.ownership);
       }
 
-      // Load current NFT image
+      // Load current NFT image from IPNS (with cache buster for fresh content)
+      // This ensures we always get the latest image, not stale EC2 API data
+      setImageUrl(getNFTImageUrl(tokenId));
+
+      // Fetch fresh metadata from IPNS to REPLACE stale EC2 data
+      // This is the source of truth for what's actually equipped on the NFT
+      console.log('[useTraitSwapper] EC2 currentTraits BEFORE IPNS override:', data.currentTraits);
       try {
-        const nftRes = await fetch(`https://api.applesnakes.com/api/nft/${tokenId}`);
-        const nftInfo = await nftRes.json();
-        if (nftInfo.success && nftInfo.nft?.imageCid) {
-          setImageUrl(`https://ipfs.io/ipfs/${nftInfo.nft.imageCid}`);
+        const metadataUrl = getNFTMetadataUrl(tokenId);
+        console.log('[useTraitSwapper] Fetching fresh IPNS metadata:', metadataUrl);
+        const metadataRes = await fetch(metadataUrl);
+        if (metadataRes.ok) {
+          const metadata = await metadataRes.json();
+          console.log('[useTraitSwapper] Raw IPNS metadata:', metadata);
+
+          // Extract traits from IPNS metadata attributes
+          if (metadata.attributes && Array.isArray(metadata.attributes)) {
+            // Map display names (IPNS) to API names (EC2)
+            const displayToApiName: Record<string, string> = {
+              'Hat': 'Accessory4',
+              'Weapons': 'Accessory1',
+              'Hip': 'Accessory2',
+              'Neck': 'Accessory3',
+              'Face': 'Accessory5',
+              'Shirt': 'Clothes',
+            };
+
+            // Context-aware IPNS value to item name mapping
+            // Some NFTs use old format (Shirt, Weapons) others use new format (Clothes, Accessory1)
+            // Need to handle BOTH formats since IPNS metadata varies per NFT
+            const ipnsValueToItemName: Record<string, Record<string, string>> = {
+              // Shirts - handle both 'Shirt' and 'Clothes' trait names
+              'Shirt': {
+                'Base': 'Base Shirt', 'Based': 'Based Shirt', 'Blue': 'Blue Shirt',
+                'Cyan': 'Cyan Shirt', 'Green': 'Green Shirt', 'Grey': 'Grey Shirt',
+                'Lime': 'Lime Shirt', 'Nougat': 'Nougat Shirt', 'Orange': 'Orange Shirt',
+                'Pink': 'Pink Shirt', 'Plum': 'Plum Shirt', 'Red': 'Red Shirt',
+                'Sun': 'Sun Shirt', 'White': 'White Shirt', 'Yellow': 'Yellow Shirt',
+              },
+              'Clothes': {
+                'Base': 'Base Shirt', 'Based': 'Based Shirt', 'Blue': 'Blue Shirt',
+                'Cyan': 'Cyan Shirt', 'Green': 'Green Shirt', 'Grey': 'Grey Shirt',
+                'Lime': 'Lime Shirt', 'Nougat': 'Nougat Shirt', 'Orange': 'Orange Shirt',
+                'Pink': 'Pink Shirt', 'Plum': 'Plum Shirt', 'Red': 'Red Shirt',
+                'Sun': 'Sun Shirt', 'White': 'White Shirt', 'Yellow': 'Yellow Shirt',
+              },
+              // Pants
+              'Pants': {
+                'Based': 'Based Pants', 'Blue': 'Blue Pants', 'Grey': 'Grey Pants',
+                'Purple': 'Purple Pants', 'Red': 'Red Pants', 'Sky': 'Sky Pants',
+                'Sol': 'Sol Pants', 'White': 'White Pants',
+              },
+              // Hair - handle both short names and long names
+              'Hair': {
+                'Blonde': 'Blonde Hair', 'Brown': 'Brown Hair',
+                'Buzz': 'Buzz Cut', 'BuzzCut': 'Buzz Cut',
+                'BuzzAlt': 'Buzz Cut Alt', 'BuzzCutAlt': 'Buzz Cut Alt',
+                'One': 'One Hair', 'OneHair': 'One Hair',
+                'OneAlt': 'One Hair Alt', 'OneHairAlt': 'One Hair Alt',
+                'Poop': 'Poop Hair', 'PoopHair': 'Poop Hair',
+                'Three': 'Three Hair', 'ThreeHair': 'Three Hair',
+                'ThreeAlt': 'Three Hair Alt', 'ThreeHairAlt': 'Three Hair Alt',
+              },
+              // Weapons - handle both 'Weapons' and 'Accessory1' trait names
+              'Weapons': {
+                'AppleShooter': 'Apple Shooter', 'BaseballBat': 'Baseball Bat',
+                'EarthWand': 'Earth Wand', 'ElectricWand': 'Electric Wand',
+                'FireWand': 'Fire Wand', 'WaterWand': 'Water Wand',
+                'Hammer': 'Hammer', 'Knife': 'Knife', 'Mace': 'Mace',
+                'Sickle': 'Sickle', 'Spear': 'Spear',
+              },
+              'Accessory1': {
+                'AppleShooter': 'Apple Shooter', 'BaseballBat': 'Baseball Bat',
+                'EarthWand': 'Earth Wand', 'ElectricWand': 'Electric Wand',
+                'FireWand': 'Fire Wand', 'WaterWand': 'Water Wand',
+                'Hammer': 'Hammer', 'Knife': 'Knife', 'Mace': 'Mace',
+                'Sickle': 'Sickle', 'Spear': 'Spear',
+              },
+              // Gloves - handle both 'Hands' trait name
+              'Hands': {
+                'GreyGloves': 'Grey Gloves', 'PinkGloves': 'Pink Gloves',
+                'PurpleGloves': 'Purple Gloves', 'RedGloves': 'Red Gloves',
+                'WhiteGloves': 'White Gloves',
+              },
+              // Hip/Fanny Packs - handle both 'Hip' and 'Accessory2'
+              'Hip': {
+                'PurpleFannyPack': 'Purple Fanny Pack', 'RedFannyPack': 'Red Fanny Pack',
+                'SkullFannyPack': 'Skull Fanny Pack', 'YellowFannyPack': 'Yellow Fanny Pack',
+              },
+              'Accessory2': {
+                'PurpleFannyPack': 'Purple Fanny Pack', 'RedFannyPack': 'Red Fanny Pack',
+                'SkullFannyPack': 'Skull Fanny Pack', 'YellowFannyPack': 'Yellow Fanny Pack',
+              },
+              // Neck/Amulets - handle both 'Neck' and 'Accessory3'
+              'Neck': {
+                'EtherealAmulet': 'Ethereal Amulet', 'AmuletOfApple': 'Amulet of Apple',
+                'AmuletOfHealth': 'Amulet of Health', 'BaseChain': 'Base Chain',
+              },
+              'Accessory3': {
+                'EtherealAmulet': 'Ethereal Amulet', 'AmuletOfApple': 'Amulet of Apple',
+                'AmuletOfHealth': 'Amulet of Health', 'BaseChain': 'Base Chain',
+              },
+              // Hats - handle both 'Hat' and 'Accessory4'
+              'Hat': {
+                'SantaHat': 'Santa Hat', 'DougDimmadome': 'Doug Dimmadome',
+                'BluePartyhat': 'Blue Partyhat',
+              },
+              'Accessory4': {
+                'SantaHat': 'Santa Hat', 'DougDimmadome': 'Doug Dimmadome',
+                'BluePartyhat': 'Blue Partyhat',
+              },
+              // Face - handle both 'Face' and 'Accessory5'
+              'Face': {
+                'WhiteBeard': 'White Beard',
+              },
+              'Accessory5': {
+                'WhiteBeard': 'White Beard',
+              },
+              // Background
+              'Background': {
+                'Cave': 'Cave Background', 'Moon': 'Moon Background',
+                'MountBlowamanjaro': 'Mount Blowamanjaro', 'Pond': 'Pond Background',
+                'Sun': 'Sun Background', 'Sunny': 'Sunny Background',
+                'TheLastEclipse': 'The Last Eclipse',
+              },
+            };
+
+            // Helper to get normalized value with context
+            const normalizeValue = (traitType: string, value: string): string => {
+              // Check context-specific mapping first
+              const traitMapping = ipnsValueToItemName[traitType];
+              if (traitMapping && traitMapping[value]) {
+                return traitMapping[value];
+              }
+              // Return original value if no mapping found
+              return value;
+            };
+
+            // Equippable traits that should be set to "None" if not in IPNS
+            // Include BOTH new format (Clothes, Accessory1-5) AND old format (Shirt, Weapons, Hat, etc.)
+            // EC2 API returns both formats with conflicting data, so we must reset both
+            const equippableTraits = [
+              // New format (API names)
+              'Clothes', 'Pants', 'Hands', 'Accessory1', 'Accessory2', 'Accessory3', 'Accessory4', 'Accessory5', 'Hair', 'Background',
+              // Old format (display names) - EC2 includes these with stale/wrong values
+              'Shirt', 'Weapons', 'Hat', 'Neck', 'Hip', 'Face',
+            ];
+
+            // Start with base traits from EC2, but clear all equippable traits
+            const freshTraits: Record<string, string> = { ...data.currentTraits };
+
+            // Reset all equippable traits to "None" first
+            // This ensures items not in IPNS show as unequipped
+            for (const trait of equippableTraits) {
+              freshTraits[trait] = 'None';
+            }
+
+            // Now apply what's actually in IPNS metadata
+            for (const attr of metadata.attributes) {
+              if (attr.trait_type && attr.value !== undefined) {
+                // Normalize trait name to EC2 format
+                const apiName = displayToApiName[attr.trait_type] || attr.trait_type;
+                // Normalize value to match item names using context-aware mapping
+                const rawValue = String(attr.value);
+                const normalizedValue = normalizeValue(attr.trait_type, rawValue);
+                // Debug: Log each trait mapping
+                if (rawValue !== normalizedValue || attr.trait_type !== apiName) {
+                  console.log(`[useTraitSwapper] Mapping: ${attr.trait_type}:${rawValue} → ${apiName}:${normalizedValue}`);
+                }
+                freshTraits[apiName] = normalizedValue;
+              }
+            }
+
+            console.log('[useTraitSwapper] Fresh traits from IPNS (normalized):', freshTraits);
+            console.log('[useTraitSwapper] Equippable traits set:', {
+              Clothes: freshTraits['Clothes'],
+              Pants: freshTraits['Pants'],
+              Hair: freshTraits['Hair'],
+              Hands: freshTraits['Hands'],
+              Accessory1: freshTraits['Accessory1'],
+              Accessory2: freshTraits['Accessory2'],
+              Accessory3: freshTraits['Accessory3'],
+              Accessory4: freshTraits['Accessory4'],
+              Accessory5: freshTraits['Accessory5'],
+            });
+            setCurrentTraits(freshTraits as CurrentTraits);
+            setSelectedTraits(freshTraits as CurrentTraits);
+          }
         }
-      } catch {
-        // Image fetch is optional
+      } catch (ipnsError) {
+        console.warn('[useTraitSwapper] Could not fetch fresh IPNS metadata, using EC2 data:', ipnsError);
+        // Fall back to EC2 data (already set above)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -211,9 +395,12 @@ export function useTraitSwapper(tokenId: number) {
   // Handle trait selection
   // =============================================================================
   const selectTrait = useCallback((trait: string, value: string) => {
+    console.log('[useTraitSwapper] selectTrait called:', trait, '->', value);
     setSelectedTraits(prev => {
       if (!prev) return prev;
-      return { ...prev, [trait]: value };
+      const newTraits = { ...prev, [trait]: value };
+      console.log('[useTraitSwapper] selectedTraits updated:', newTraits);
+      return newTraits;
     });
     setResult(null);
   }, []);

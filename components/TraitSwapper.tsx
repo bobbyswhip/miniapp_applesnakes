@@ -1,28 +1,19 @@
 // components/TraitSwapper.tsx
-// Trait Swapper Modal - refactored to follow trait-swap.md architecture
-// Allows users to change NFT appearance using inventory items with $0.05 USDC payment
-// After successful x402 payment, fetches fresh base64 preview from EC2 to bypass IPFS caching
+// Game-Style Trait Editor with Visual Inventory
+// Allows users to change NFT appearance by clicking items in inventory grid
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { UserNFT } from '@/hooks/useUserNFTs';
 import { useTraitSwapper } from '@/hooks/useTraitSwapper';
 import { useTraitCatalog } from '@/hooks/useTraitCatalog';
-import { TraitEditorPreview } from '@/components/LayerPreview';
+import { TOKEN_ID_TO_ITEM, ITEM_TOKEN_MAPPING } from '@/lib/itemTokenMapping';
 
 // EC2 API endpoint for preview generation
 const NFT_GENERATOR_URL = 'https://api.applesnakes.com';
 
-// Trait name conversion: Frontend NEW names → EC2 OLD names
-// EC2 backend uses the old Accessory naming convention
-const NEW_TO_OLD_TRAIT_NAMES: Record<string, string> = {
-  'Hat': 'Accessory4',
-  'Weapons': 'Accessory1',
-  'Hip': 'Accessory2',
-  'Neck': 'Accessory3',
-  'Face': 'Accessory5',
-  'Shirt': 'Clothes',
-};
+// Bonded Items metadata base for item images
+const ITEMS_IMAGE_BASE = 'https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images';
 
 // Reverse: EC2 OLD names → Frontend NEW names for display
 const OLD_TO_NEW_TRAIT_NAMES: Record<string, string> = {
@@ -34,80 +25,61 @@ const OLD_TO_NEW_TRAIT_NAMES: Record<string, string> = {
   'Clothes': 'Shirt',
 };
 
-// Convert frontend traits to EC2 format
-function convertToEC2Format(traits: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(traits)) {
-    const ec2Key = NEW_TO_OLD_TRAIT_NAMES[key] || key;
-    result[ec2Key] = value;
-  }
-  return result;
-}
-
-// Convert EC2 traits back to frontend display format
-function normalizeTraitsForDisplay(ec2Traits: Record<string, string>): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(ec2Traits)) {
-    const displayKey = OLD_TO_NEW_TRAIT_NAMES[key] || key;
-    result[displayKey] = value;
-  }
-  return result;
-}
-
-// Per trait-swap.md lines 983-996: ALL 13 trait dropdowns for humans
-// Display order matches HUMAN_LAYER_ORDER from trait-swap.md lines 44-59
-const HUMAN_DISPLAY_ORDER = [
-  'Background',  // 1. Scene background
-  'Skin',        // 2. Body appearance
-  'Pants',       // 3. Lower body clothing
-  'Shirt',       // 4. Upper body clothing (maps from "Clothes")
-  'Eyes',        // 5. Eye appearance
-  'Mouth',       // 6. Mouth appearance
-  'Hair',        // 7. Hair style
-  'Hands',       // 8. Gloves
-  'Neck',        // 9. Amulets, chains (Accessory3)
-  'Hip',         // 10. Fanny packs (Accessory2)
-  'Face',        // 11. Beards (Accessory5)
-  'Hat',         // 12. Headwear (Accessory4)
-  'Weapons',     // 13. Held items (Accessory1)
-];
-
-// Trait categories for organized display - ALL traits per trait-swap.md
-const TRAIT_CATEGORIES = {
-  'Core Appearance': ['Background', 'Skin', 'Eyes', 'Mouth'],
-  'Clothing': ['Pants', 'Shirt', 'Hair'],
-  'Accessories': ['Hands', 'Neck', 'Hip', 'Face', 'Hat', 'Weapons'],
+// Category icons for the inventory tabs
+const CATEGORY_ICONS: Record<string, string> = {
+  'All': '🎒',
+  'Clothes': '👕',
+  'Shirt': '👕',
+  'Pants': '👖',
+  'Hands': '🧤',
+  'Weapons': '⚔️',
+  'Accessory1': '⚔️',
+  'Hip': '👛',
+  'Accessory2': '👛',
+  'Neck': '📿',
+  'Accessory3': '📿',
+  'Hat': '🎩',
+  'Accessory4': '🎩',
+  'Face': '🧔',
+  'Accessory5': '🧔',
+  'Hair': '💇',
+  'Background': '🌄',
 };
 
-// Required traits that cannot be "None" (per trait-swap.md line 146)
-const REQUIRED_TRAITS = ['Background', 'Skin', 'Eyes', 'Mouth'];
-
-// Equippable traits that use inventory items
-const EQUIPPABLE_TRAITS = [
-  'Shirt', 'Pants', 'Hands', 'Weapons',
-  'Hip', 'Neck', 'Face', 'Hat',
-  'Hair', 'Background'
-];
-
-// Map frontend display names to API names (for traits that differ)
-const DISPLAY_TO_API_MAP: Record<string, string> = {
-  'Shirt': 'Clothes',      // API uses "Clothes", display uses "Shirt"
-  'Weapons': 'Accessory1',
-  'Hip': 'Accessory2',
-  'Neck': 'Accessory3',
-  'Hat': 'Accessory4',
-  'Face': 'Accessory5',
-};
-
-// Reverse map for API to display names
-const API_TO_DISPLAY_MAP: Record<string, string> = {
-  'Clothes': 'Shirt',
+// Display names for categories
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  'Clothes': 'Shirts',
+  'Shirt': 'Shirts',
+  'Pants': 'Pants',
+  'Hands': 'Gloves',
+  'Weapons': 'Weapons',
   'Accessory1': 'Weapons',
+  'Hip': 'Hip',
   'Accessory2': 'Hip',
+  'Neck': 'Neck',
   'Accessory3': 'Neck',
-  'Accessory4': 'Hat',
+  'Hat': 'Hats',
+  'Accessory4': 'Hats',
+  'Face': 'Face',
   'Accessory5': 'Face',
+  'Hair': 'Hair',
+  'Background': 'Backgrounds',
 };
+
+// Inventory category order
+const INVENTORY_CATEGORIES = [
+  'All',
+  'Clothes',
+  'Pants',
+  'Hands',
+  'Accessory1', // Weapons
+  'Accessory2', // Hip
+  'Accessory3', // Neck
+  'Accessory4', // Hat
+  'Accessory5', // Face
+  'Hair',
+  'Background',
+];
 
 interface TraitSwapperProps {
   nft: UserNFT;
@@ -116,13 +88,20 @@ interface TraitSwapperProps {
   onSuccess?: () => void;
 }
 
+interface InventoryItem {
+  tokenId: number;
+  name: string;
+  trait: string;
+  count: number;
+  imageUrl: string;
+  isEquipped: boolean;
+}
+
 export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperProps) {
   const {
-    nftData,
     currentTraits,
     selectedTraits,
     imageUrl,
-    availableItems,
     inventory,
     totalInventoryItems,
     result,
@@ -137,37 +116,120 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
     hasHatHairClash,
   } = useTraitSwapper(nft.tokenId);
 
-  // Load trait catalog for item images and metadata enhancement
-  const {
-    catalog,
-    loading: catalogLoading,
-    getCategoryById,
-    isItemOwned,
-    getItemCount,
-  } = useTraitCatalog();
+  // Load trait catalog for item images and metadata
+  const { loading: catalogLoading } = useTraitCatalog();
 
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showLayerPreview, setShowLayerPreview] = useState(true);
-
-  // State for x402 update flow and EC2 preview refresh
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [refreshedPreview, setRefreshedPreview] = useState<string | null>(null);
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Determine NFT type (humans are tokens 1-2697, snakes are 2698+)
   const nftType: 'human' | 'snake' = nft.tokenId <= 2697 ? 'human' : 'snake';
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Refresh preview from EC2 after successful x402 payment
-  // This bypasses IPFS caching by generating fresh base64 image from current DB state
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Build inventory items from the inventory object
+  const inventoryItems: InventoryItem[] = useMemo(() => {
+    if (!inventory || !selectedTraits) return [];
+
+    console.log('[TraitSwapper] Building inventory items, selectedTraits:', selectedTraits);
+
+    const items: InventoryItem[] = [];
+
+    for (const [tokenIdStr, count] of Object.entries(inventory)) {
+      const tokenId = Number(tokenIdStr);
+      if (tokenId === 0 || count <= 0) continue;
+
+      const itemInfo = TOKEN_ID_TO_ITEM[tokenId];
+      if (!itemInfo) continue;
+
+      // Check if this item is currently equipped
+      const traitValue = selectedTraits[itemInfo.trait];
+      const isEquipped = traitValue === itemInfo.name;
+
+      items.push({
+        tokenId,
+        name: itemInfo.name,
+        trait: itemInfo.trait,
+        count: Number(count),
+        imageUrl: `${ITEMS_IMAGE_BASE}/${tokenId}.png`,
+        isEquipped,
+      });
+    }
+
+    // Also add currently equipped items that might not be in inventory (on NFT)
+    // Use selectedTraits as source of truth for what's equipped (not currentTraits)
+    if (selectedTraits) {
+      for (const [trait, value] of Object.entries(selectedTraits)) {
+        if (!value || value === 'None') continue;
+
+        // Find the token ID for this equipped item
+        const traitMapping = ITEM_TOKEN_MAPPING[trait];
+        if (!traitMapping) continue;
+
+        const tokenId = traitMapping[value];
+        if (!tokenId || tokenId === 0) continue;
+
+        // Check if already in inventory
+        const existingItem = items.find(i => i.tokenId === tokenId);
+        if (existingItem) {
+          // Already in inventory, isEquipped already set correctly by first loop
+          // Don't overwrite - first loop already checked selectedTraits
+        } else {
+          // Add as equipped item (not in inventory, currently on NFT)
+          items.push({
+            tokenId,
+            name: value,
+            trait,
+            count: 0, // Not in inventory
+            imageUrl: `${ITEMS_IMAGE_BASE}/${tokenId}.png`,
+            isEquipped: true, // It's equipped because selectedTraits says so
+          });
+        }
+      }
+    }
+
+    return items;
+  }, [inventory, selectedTraits]);
+
+  // Filter items by selected category
+  const filteredItems = useMemo(() => {
+    if (selectedCategory === 'All') return inventoryItems;
+    return inventoryItems.filter(item => item.trait === selectedCategory);
+  }, [inventoryItems, selectedCategory]);
+
+  // Get categories that have items
+  const availableCategories = useMemo(() => {
+    const categories = new Set<string>();
+    categories.add('All');
+    for (const item of inventoryItems) {
+      categories.add(item.trait);
+    }
+    return INVENTORY_CATEGORIES.filter(cat => categories.has(cat));
+  }, [inventoryItems]);
+
+  // Handle clicking an inventory item to equip/unequip
+  const handleItemClick = useCallback((item: InventoryItem) => {
+    console.log('[TraitSwapper] Item clicked:', item.name, 'isEquipped:', item.isEquipped, 'trait:', item.trait);
+    if (item.isEquipped) {
+      // Unequip - set to None
+      console.log('[TraitSwapper] Unequipping:', item.trait, '-> None');
+      selectTrait(item.trait, 'None');
+    } else {
+      // Equip the item
+      console.log('[TraitSwapper] Equipping:', item.trait, '->', item.name);
+      selectTrait(item.trait, item.name);
+    }
+  }, [selectTrait]);
+
+  // Refresh preview from EC2 after successful update
   const refreshPreviewFromEC2 = useCallback(async () => {
     if (!nft.tokenId) return;
 
     try {
       console.log('[TraitSwapper] Fetching fresh preview from EC2...');
 
-      // Step 1: Get CURRENT traits from EC2 database
       const availableRes = await fetch(
         `${NFT_GENERATOR_URL}/api/customize/${nft.tokenId}/available`
       );
@@ -178,8 +240,6 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
         return;
       }
 
-      // Step 2: Filter to only OLD trait names (remove duplicate NEW names from response)
-      // The API returns BOTH old and new names, we need only the OLD names for EC2
       const NEW_TRAIT_NAMES = ['Hat', 'Weapons', 'Hip', 'Neck', 'Face', 'Shirt'];
       const cleanTraits: Record<string, string> = {};
 
@@ -189,9 +249,6 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
         }
       }
 
-      console.log('[TraitSwapper] Clean traits for preview:', cleanTraits);
-
-      // Step 3: Fetch fresh base64 preview from EC2
       const previewRes = await fetch(
         `${NFT_GENERATOR_URL}/api/customize/${nft.tokenId}/preview`,
         {
@@ -204,34 +261,71 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
       const previewData = await previewRes.json();
 
       if (previewData.success && previewData.preview) {
-        // Update the refreshed preview state with fresh base64 data
         setRefreshedPreview(previewData.preview);
         console.log('[TraitSwapper] Preview refreshed successfully from EC2!');
-      } else {
-        console.error('[TraitSwapper] EC2 preview failed:', previewData);
       }
     } catch (error) {
       console.error('[TraitSwapper] Failed to refresh preview from EC2:', error);
     }
   }, [nft.tokenId]);
 
-  // Fetch data when modal opens and reset states
+  // Fetch data when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchData();
-      setShowSuccess(false);
       setUpdateSuccess(false);
       setRefreshedPreview(null);
+      setLivePreviewUrl(null);
       setIsUpdating(false);
+      setSelectedCategory('All');
     }
   }, [isOpen, fetchData]);
 
-  // Handle successful swap
+  // Fetch live preview from EC2 when traits change (debounced)
   useEffect(() => {
-    if (result?.success) {
-      setShowSuccess(true);
-    }
-  }, [result]);
+    if (!isOpen || !selectedTraits || !hasChanges) return;
+
+    const timeoutId = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        // Build traits object for preview
+        const traitsForPreview: Record<string, string> = {};
+        for (const [key, value] of Object.entries(selectedTraits)) {
+          // Skip "None" values for preview
+          if (value && value !== 'None') {
+            traitsForPreview[key] = value;
+          }
+        }
+
+        console.log('[TraitSwapper] Fetching live preview from EC2...', traitsForPreview);
+
+        const previewRes = await fetch(
+          `${NFT_GENERATOR_URL}/api/customize/${nft.tokenId}/preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              traits: traitsForPreview,
+              type: nftType === 'snake' ? 'snake' : 'human'
+            }),
+          }
+        );
+
+        const previewData = await previewRes.json();
+
+        if (previewData.success && previewData.preview) {
+          setLivePreviewUrl(previewData.preview);
+          console.log('[TraitSwapper] Live preview loaded from EC2');
+        }
+      } catch (error) {
+        console.error('[TraitSwapper] Failed to fetch live preview:', error);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [isOpen, selectedTraits, hasChanges, nft.tokenId, nftType]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -245,10 +339,7 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
 
   if (!isOpen) return null;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Handle trait swap submission with x402 payment
-  // After success, immediately fetch fresh preview from EC2 to bypass IPFS caching
-  // ═══════════════════════════════════════════════════════════════════════════
+  // Handle trait swap submission
   const handleSubmit = async () => {
     const type = nft.isSnake ? 'snake' : 'apple';
 
@@ -261,11 +352,7 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
 
       if (swapResult.success) {
         console.log('[TraitSwapper] x402 payment successful, refreshing preview from EC2...');
-
-        // CRITICAL: Immediately fetch fresh preview from EC2 to bypass IPFS cache
-        // This ensures the user sees the updated NFT instantly
         await refreshPreviewFromEC2();
-
         setUpdateSuccess(true);
         onSuccess?.();
       } else {
@@ -278,464 +365,292 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
     }
   };
 
-  // Convert display trait name to API trait name
-  const toApiName = (displayName: string): string => {
-    return DISPLAY_TO_API_MAP[displayName] || displayName;
-  };
-
-  // Convert API trait name to display trait name
-  const toDisplayName = (apiName: string): string => {
-    return API_TO_DISPLAY_MAP[apiName] || apiName;
-  };
-
-  const getTraitDisplayName = (displayTrait: string): string => {
-    // Use the display name directly (already human-readable)
-    return displayTrait;
-  };
-
-  // Build options for a trait using availableItems from the verified-trait-swapper API
-  // The API returns only items the user owns + currently equipped items
-  const getOptionsForTrait = (displayTrait: string): Array<{ value: string; tokenId: number; imageUrl: string; rarity: string | null }> => {
-    // Convert display name to API name for lookup
-    const apiTrait = toApiName(displayTrait);
-
-    // Get options from the API (already filtered to owned items)
-    const apiOptions = availableItems[apiTrait] || ['None'];
-
-    // Enhance with catalog data for images and rarity if available
-    return apiOptions.map(name => {
-      if (name === 'None') {
-        return { value: 'None', tokenId: 0, imageUrl: '', rarity: null };
-      }
-
-      // Try to get enhanced data from catalog
-      if (catalog) {
-        const categoryData = catalog.traits[apiTrait];
-        if (categoryData) {
-          const option = categoryData.options.find(opt => opt.value === name);
-          if (option) {
-            return option;
-          }
-        }
-      }
-
-      // Fallback to basic option without enhancement
-      return { value: name, tokenId: 0, imageUrl: '', rarity: null };
-    });
-  };
-
-  const renderTraitSelector = (displayTrait: string) => {
-    // Convert display name to API name for data lookup
-    const apiTrait = toApiName(displayTrait);
-
-    const options = getOptionsForTrait(displayTrait);
-    const currentValue = selectedTraits?.[apiTrait] || 'None';
-    const originalValue = currentTraits?.[apiTrait] || 'None';
-    const isChanged = currentValue !== originalValue;
-    const isEquippable = EQUIPPABLE_TRAITS.includes(displayTrait);
-    const isRequired = REQUIRED_TRAITS.includes(displayTrait);
-
-    // Find the currently selected option for image preview
-    const selectedOption = options.find(opt => opt.value === currentValue);
-
-    return (
-      <div
-        key={displayTrait}
-        className="flex flex-col gap-1"
-        style={{
-          padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-          background: isChanged
-            ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15))'
-            : 'rgba(31, 41, 55, 0.5)',
-          borderRadius: '0.5rem',
-          border: isChanged
-            ? '1px solid rgba(59, 130, 246, 0.5)'
-            : '1px solid rgba(75, 85, 99, 0.3)',
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <label
-            className="font-semibold text-white flex items-center gap-1"
-            style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}
-          >
-            {/* Show item image preview if available */}
-            {selectedOption?.imageUrl && (
-              <img
-                src={selectedOption.imageUrl}
-                alt={selectedOption.value}
-                className="w-5 h-5 rounded object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-            )}
-            {getTraitDisplayName(displayTrait)}
-            {isRequired && (
-              <span className="text-red-400 ml-1" title="Required trait">*</span>
-            )}
-            {isEquippable && (
-              <span className="text-yellow-400" title="Uses inventory items">
-                🎒
-              </span>
-            )}
-          </label>
-          {isChanged && (
-            <span
-              className="px-2 py-0.5 rounded text-blue-400 bg-blue-500/20"
-              style={{ fontSize: 'clamp(0.625rem, 1.4vh, 0.75rem)' }}
-            >
-              Changed
-            </span>
-          )}
-        </div>
-        <select
-          value={currentValue}
-          onChange={(e) => {
-            // Don't allow required traits to be set to "None"
-            if (isRequired && e.target.value === 'None') return;
-            // Use API trait name for the hook
-            selectTrait(apiTrait, e.target.value);
-          }}
-          disabled={loading || catalogLoading}
-          className="w-full rounded-lg text-white transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
-          style={{
-            padding: 'clamp(0.375rem, 1.2vh, 0.5rem) clamp(0.5rem, 1.5vw, 0.75rem)',
-            fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)',
-            background: 'rgba(17, 24, 39, 0.8)',
-            border: '1px solid rgba(75, 85, 99, 0.5)',
-          }}
-        >
-          {options.map((option) => {
-            const owned = option.tokenId > 0 ? isItemOwned(option.tokenId, inventory) : true;
-            const count = option.tokenId > 0 ? getItemCount(option.tokenId, inventory) : 0;
-            const isEquipped = option.value === originalValue;
-            // Disable "None" option for required traits
-            const isDisabledNone = isRequired && option.value === 'None';
-
-            return (
-              <option
-                key={option.value}
-                value={option.value}
-                disabled={isDisabledNone}
-              >
-                {option.value}
-                {option.rarity ? ` [${option.rarity}]` : ''}
-                {isEquipped && option.value !== 'None' ? ' (equipped)' : ''}
-                {owned && count > 0 && !isEquipped ? ` (x${count})` : ''}
-              </option>
-            );
-          })}
-        </select>
-      </div>
-    );
-  };
-
-  // Per trait-swap.md: Show ALL traits, don't filter
-  // Previously this filtered out traits with no options - now we show all 13
-  const getDisplayableTraits = (category: string[]): string[] => {
-    // Return all traits in the category - don't filter
-    return category;
-  };
-
-  // Use NFT's image URL or the one from hook (if updated)
   const displayImageUrl = imageUrl || nft.imageUrl;
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-2 sm:p-4"
       onClick={onClose}
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
     >
       <div
         className="rounded-2xl w-full relative flex flex-col"
         style={{
-          maxWidth: 'clamp(22rem, 95vw, 32rem)',
-          maxHeight: 'clamp(32rem, 90vh, 48rem)',
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.08), rgba(236, 72, 153, 0.05))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(59, 130, 246, 0.3)',
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(59, 130, 246, 0.3), 0 0 100px rgba(147, 51, 234, 0.2)',
+          maxWidth: 'min(95vw, 900px)',
+          maxHeight: '95vh',
+          background: 'linear-gradient(135deg, rgba(23, 30, 29, 0.98), rgba(26, 34, 33, 0.98))',
+          border: '2px solid rgba(255, 208, 117, 0.2)',
+          boxShadow: '0 0 50px rgba(255, 208, 117, 0.12)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="rounded-t-2xl flex-shrink-0"
+          className="rounded-t-2xl flex-shrink-0 px-4 py-3"
           style={{
-            padding: 'clamp(0.75rem, 2.5vh, 1rem)',
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3))',
-            borderBottom: '1px solid rgba(59, 130, 246, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.15), rgba(197, 169, 123, 0.1))',
+            borderBottom: '1px solid rgba(255, 208, 117, 0.15)',
           }}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Show refreshed base64 preview from EC2 when available (no IPFS cache) */}
-              <div className="relative">
-                <img
-                  src={refreshedPreview || displayImageUrl}
-                  alt={nft.name}
-                  className={`rounded-lg object-cover transition-opacity ${isUpdating ? 'opacity-50' : 'opacity-100'}`}
-                  style={{
-                    width: 'clamp(2.5rem, 6vh, 3.5rem)',
-                    height: 'clamp(2.5rem, 6vh, 3.5rem)',
-                  }}
-                />
-                {isUpdating && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-              </div>
+              <img
+                src={refreshedPreview || displayImageUrl}
+                alt={nft.name}
+                className="w-10 h-10 rounded-lg object-cover"
+              />
               <div>
-                <h2
-                  className="font-bold"
-                  style={{
-                    fontSize: 'clamp(1rem, 2.5vh, 1.25rem)',
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 1), rgba(147, 51, 234, 1))',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  Edit Traits
+                <h2 className="font-bold text-lg text-white">
+                  ✨ Trait Editor
                 </h2>
-                <p
-                  className="text-blue-200"
-                  style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}
-                >
-                  {nft.name} • $0.05 USDC per change
+                <p className="text-sm text-[#8a9090]">
+                  {nft.name} • Click items to equip
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-blue-300/80 hover:text-blue-200 transition-colors"
-              style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}
+              className="text-[#8a9090] hover:text-white transition-colors text-xl p-1"
             >
               ✕
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: 'clamp(0.75rem, 2vh, 1rem)' }}>
-          {/* Loading State */}
-          {loading && !currentTraits && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-3" />
-              <p className="text-gray-400 text-sm">Loading traits...</p>
-            </div>
-          )}
+        {/* Main Content - Split Layout */}
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          {/* Left: Preview Panel */}
+          <div className="lg:w-1/2 p-4 flex flex-col border-b lg:border-b-0 lg:border-r border-[rgba(255,255,255,0.08)]">
+            {/* Live Preview */}
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <h3 className="text-sm font-medium text-[#8a9090] mb-2 flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+                Live Preview
+                {hasChanges && <span className="text-yellow-400 text-xs">(unsaved)</span>}
+              </h3>
 
-          {/* Error State */}
-          {error && !loading && (
-            <div
-              className="rounded-lg mb-4"
-              style={{
-                padding: 'clamp(0.75rem, 2vh, 1rem)',
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-              }}
-            >
-              <p className="text-red-400 text-sm">{error}</p>
-              <button
-                onClick={fetchData}
-                className="text-xs text-blue-400 hover:text-blue-300 mt-2"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
-
-          {/* Success State - Shows fresh base64 preview from EC2 (no IPFS caching!) */}
-          {(showSuccess || updateSuccess) && result?.success && (
-            <div
-              className="rounded-lg mb-4"
-              style={{
-                padding: 'clamp(0.75rem, 2vh, 1rem)',
-                background: 'rgba(34, 197, 94, 0.1)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-              }}
-            >
-              <div className="flex items-start gap-3">
-                {/* Show refreshed base64 preview from EC2 (preferred - no cache) */}
+              <div className="w-full max-w-[280px] aspect-square relative">
+                {/* Show EC2 preview when traits change, otherwise show IPNS image */}
                 {refreshedPreview ? (
+                  // After successful update - show refreshed preview
                   <img
                     src={refreshedPreview}
                     alt="Updated NFT"
-                    className="rounded-lg"
-                    style={{ width: '80px', height: '80px', objectFit: 'cover' }}
+                    className="w-full h-full rounded-xl border-2 border-green-500 object-cover"
                   />
-                ) : result.image?.url ? (
+                ) : livePreviewUrl && hasChanges ? (
+                  // When traits changed - show EC2 live preview
                   <img
-                    src={result.image.url}
-                    alt="Updated NFT"
-                    className="rounded-lg"
-                    style={{ width: '80px', height: '80px', objectFit: 'cover' }}
+                    src={livePreviewUrl}
+                    alt="Preview with changes"
+                    className="w-full h-full rounded-xl border-2 border-yellow-500 object-cover"
                   />
-                ) : null}
-                <div>
-                  <p className="text-green-400 font-semibold text-sm mb-1">
-                    ✨ NFT Updated Successfully!
-                  </p>
-                  {refreshedPreview && (
-                    <p className="text-green-300 text-xs mb-1">
-                      Image refreshed instantly (no IPFS delay)
-                    </p>
-                  )}
-                  {result.equipped && result.equipped.length > 0 && (
-                    <p className="text-green-300 text-xs">
-                      Equipped: {result.equipped.map(e => e.value).join(', ')}
-                    </p>
-                  )}
-                  {result.returned && result.returned.length > 0 && (
-                    <p className="text-blue-300 text-xs">
-                      Returned: {result.returned.map(r => r.value).join(', ')}
-                    </p>
-                  )}
-                  {result.hatHairClash?.applied && (
-                    <p className="text-yellow-300 text-xs mt-1">
-                      Note: {result.hatHairClash.reason}
-                    </p>
-                  )}
-                  {result.image?.ipfs?.url && (
-                    <a
-                      href={result.image.ipfs.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 mt-1 inline-block"
-                    >
-                      View on IPFS →
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+                ) : imageUrl ? (
+                  // No changes - show current IPNS image
+                  <img
+                    src={imageUrl}
+                    alt={nft.name}
+                    className="w-full h-full rounded-xl border-2 border-[rgba(255,255,255,0.1)] object-cover"
+                  />
+                ) : (
+                  // Loading state
+                  <div className="w-full h-full rounded-xl border-2 border-[rgba(255,255,255,0.1)] bg-[#1a2221] flex items-center justify-center">
+                    <div className="animate-spin w-8 h-8 border-2 border-[#ffd075] border-t-transparent rounded-full" />
+                  </div>
+                )}
 
-          {/* Hat/Hair Clash Warning */}
-          {hasHatHairClash && (
-            <div
-              className="rounded-lg mb-4"
-              style={{
-                padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-                background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-              }}
-            >
-              <p className="text-yellow-400 text-xs">
-                <strong>Note:</strong> Hair will be hidden when wearing a hat. The hair item will be returned to your inventory.
-              </p>
-            </div>
-          )}
-
-          {/* Live Preview Section - Side by Side Comparison */}
-          {currentTraits && selectedTraits && (
-            <div className="mb-4">
-              {/* Toggle Button */}
-              <button
-                onClick={() => setShowLayerPreview(!showLayerPreview)}
-                className="w-full mb-3 flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-sm"
-                style={{
-                  background: showLayerPreview
-                    ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.2))'
-                    : 'rgba(31, 41, 55, 0.5)',
-                  border: showLayerPreview
-                    ? '1px solid rgba(59, 130, 246, 0.4)'
-                    : '1px solid rgba(75, 85, 99, 0.3)',
-                }}
-              >
-                <span className="text-gray-300 flex items-center gap-2">
-                  <span>🎨</span>
-                  Live Preview
-                  {hasChanges && (
-                    <span className="text-yellow-400 text-xs">(changes pending)</span>
-                  )}
-                </span>
-                <span className="text-blue-400">{showLayerPreview ? '▼' : '▶'}</span>
-              </button>
-
-              {/* Preview Content */}
-              {showLayerPreview && (
-                <TraitEditorPreview
-                  tokenId={nft.tokenId}
-                  currentTraits={currentTraits}
-                  pendingTraits={selectedTraits}
-                  nftType={nftType}
-                  className="mb-2"
-                />
-              )}
-            </div>
-          )}
-
-          {/* Inventory Summary */}
-          {currentTraits && (
-            <div
-              className="rounded-lg mb-4"
-              style={{
-                padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
-              }}
-            >
-              <p className="text-blue-300 text-xs">
-                📦 Your Inventory: <span className="font-bold text-white">{totalInventoryItems}</span> items
-              </p>
-            </div>
-          )}
-
-          {/* Trait Selectors */}
-          {currentTraits && selectedTraits && (
-            <div className="space-y-4">
-              {Object.entries(TRAIT_CATEGORIES).map(([category, traits]) => {
-                const displayableTraits = getDisplayableTraits(traits);
-                if (displayableTraits.length === 0) return null;
-
-                return (
-                  <div key={category}>
-                    <h3
-                      className="text-gray-400 font-semibold mb-2"
-                      style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}
-                    >
-                      {category}
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {displayableTraits.map(trait => renderTraitSelector(trait))}
+                {/* Loading overlay when fetching preview */}
+                {previewLoading && (
+                  <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full mx-auto mb-2" />
+                      <span className="text-yellow-400 text-xs">Generating preview...</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
 
-          {/* Status Message */}
-          {statusMessage && (
-            <div
-              className="rounded-lg mt-4"
-              style={{
-                padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-                background: 'rgba(147, 51, 234, 0.1)',
-                border: '1px solid rgba(147, 51, 234, 0.3)',
-              }}
-            >
-              <p className="text-purple-300 text-xs text-center">{statusMessage}</p>
+              {/* Hat/Hair Clash Warning */}
+              {hasHatHairClash && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                  <p className="text-yellow-400 text-xs text-center">
+                    ⚠️ Hair will be hidden when wearing a hat
+                  </p>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {updateSuccess && result?.success && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
+                  <p className="text-green-400 text-sm text-center font-medium">
+                    ✨ NFT Updated Successfully!
+                  </p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Right: Inventory Panel */}
+          <div className="lg:w-1/2 p-4 flex flex-col overflow-hidden">
+            {/* Loading State */}
+            {(loading || catalogLoading) && !currentTraits && (
+              <div className="flex-1 flex flex-col items-center justify-center">
+                <div className="w-8 h-8 border-4 border-[rgba(255,208,117,0.2)] border-t-[#ffd075] rounded-full animate-spin mb-3" />
+                <p className="text-[#8a9090] text-sm">Loading inventory...</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="rounded-lg p-3 bg-red-500/10 border border-red-500/30 mb-4">
+                <p className="text-red-400 text-sm">{error}</p>
+                <button
+                  onClick={fetchData}
+                  className="text-xs text-[#ffd075] hover:text-[#ffe0a0] mt-2"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {/* Inventory Content */}
+            {currentTraits && selectedTraits && (
+              <>
+                {/* Category Tabs */}
+                <div className="flex-shrink-0 mb-3">
+                  <div className="flex gap-1 overflow-x-auto pb-2 scrollbar-thin">
+                    {availableCategories.map((cat) => {
+                      const displayName = cat === 'All' ? 'All' : CATEGORY_DISPLAY_NAMES[cat] || cat;
+                      const icon = CATEGORY_ICONS[cat] || '📦';
+                      const isActive = selectedCategory === cat;
+                      const count = cat === 'All'
+                        ? inventoryItems.length
+                        : inventoryItems.filter(i => i.trait === cat).length;
+
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setSelectedCategory(cat)}
+                          className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            isActive
+                              ? 'bg-[rgba(255,208,117,0.15)] text-[#ffd075] border border-[rgba(255,208,117,0.3)]'
+                              : 'bg-[#1a2221]/50 text-[#8a9090] border border-[rgba(255,255,255,0.08)] hover:bg-[#1f2827]/50'
+                          }`}
+                        >
+                          <span className="mr-1">{icon}</span>
+                          {displayName}
+                          <span className="ml-1 opacity-60">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Inventory Grid */}
+                <div className="flex-1 overflow-y-auto">
+                  {filteredItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-[#6b7575]">
+                      <span className="text-4xl mb-2">📦</span>
+                      <p className="text-sm">No items in this category</p>
+                      <p className="text-xs mt-1">Bridge items to your inventory first</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {filteredItems.map((item) => (
+                        <button
+                          key={`${item.tokenId}-${item.trait}`}
+                          onClick={() => handleItemClick(item)}
+                          className={`relative aspect-square rounded-xl overflow-hidden transition-all transform hover:scale-105 ${
+                            item.isEquipped
+                              ? 'ring-2 ring-green-500 ring-offset-2 ring-offset-[#171e1d]'
+                              : 'hover:ring-2 hover:ring-[rgba(255,208,117,0.4)]'
+                          }`}
+                          style={{
+                            background: item.isEquipped
+                              ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.2))'
+                              : 'rgba(26, 34, 33, 0.8)',
+                            border: item.isEquipped
+                              ? '2px solid rgba(34, 197, 94, 0.5)'
+                              : '1px solid rgba(255, 255, 255, 0.08)',
+                          }}
+                          title={`${item.name}${item.isEquipped ? ' (Equipped)' : ''}`}
+                        >
+                          {/* Item Image */}
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/placeholder-item.png';
+                            }}
+                          />
+
+                          {/* Equipped Badge */}
+                          {item.isEquipped && (
+                            <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                              <span className="text-white text-xs">✓</span>
+                            </div>
+                          )}
+
+                          {/* Count Badge */}
+                          {item.count > 1 && (
+                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/70 text-white text-xs font-bold">
+                              x{item.count}
+                            </div>
+                          )}
+
+                          {/* Category Icon */}
+                          <div className="absolute top-1 left-1 w-5 h-5 rounded bg-black/50 flex items-center justify-center">
+                            <span className="text-xs">{CATEGORY_ICONS[item.trait] || '📦'}</span>
+                          </div>
+
+                          {/* Item Name Tooltip on Hover */}
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 opacity-0 hover:opacity-100 transition-opacity">
+                            <p className="text-white text-[10px] font-medium truncate text-center">
+                              {item.name}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Inventory Summary */}
+                <div className="flex-shrink-0 mt-3 pt-3 border-t border-[rgba(255,255,255,0.08)]">
+                  <div className="flex items-center justify-between text-xs text-[#8a9090]">
+                    <span>📦 {totalInventoryItems} items in inventory</span>
+                    <span>
+                      {inventoryItems.filter(i => i.isEquipped).length} equipped
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Footer Actions */}
         <div
-          className="flex-shrink-0 border-t border-blue-500/20"
-          style={{ padding: 'clamp(0.75rem, 2vh, 1rem)' }}
+          className="flex-shrink-0 px-4 py-3 border-t border-[rgba(255,255,255,0.08)]"
+          style={{
+            background: 'rgba(23, 30, 29, 0.8)',
+          }}
         >
+          {/* Status Message */}
+          {statusMessage && (
+            <div className="mb-3 px-3 py-2 rounded-lg bg-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.2)]">
+              <p className="text-[#ffd075] text-xs text-center">{statusMessage}</p>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={resetChanges}
-              disabled={!hasChanges || loading}
-              className="flex-1 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!hasChanges || loading || isUpdating}
+              className="flex-1 py-2.5 px-4 rounded-lg text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-                fontSize: 'clamp(0.875rem, 2vh, 1rem)',
-                background: 'rgba(75, 85, 99, 0.8)',
-                border: '1px solid rgba(75, 85, 99, 0.5)',
+                background: 'rgba(31, 40, 39, 0.6)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
               }}
             >
               Reset
@@ -743,43 +658,31 @@ export function TraitSwapper({ nft, isOpen, onClose, onSuccess }: TraitSwapperPr
             <button
               onClick={handleSubmit}
               disabled={!hasChanges || loading || isUpdating}
-              className="flex-[2] text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-[2] py-2.5 px-4 rounded-lg text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
-                padding: 'clamp(0.5rem, 1.5vh, 0.75rem)',
-                fontSize: 'clamp(0.875rem, 2vh, 1rem)',
                 background: hasChanges && !loading && !isUpdating
-                  ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8))'
-                  : 'rgba(75, 85, 99, 0.5)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.6), rgba(197, 169, 123, 0.5))'
+                  : 'rgba(31, 40, 39, 0.6)',
                 border: hasChanges && !loading && !isUpdating
-                  ? '1px solid rgba(59, 130, 246, 0.5)'
-                  : '1px solid rgba(75, 85, 99, 0.3)',
+                  ? '1px solid rgba(255, 208, 117, 0.4)'
+                  : '1px solid rgba(255, 255, 255, 0.08)',
                 boxShadow: hasChanges && !loading && !isUpdating
-                  ? '0 0 20px rgba(59, 130, 246, 0.3)'
+                  ? '0 0 20px rgba(255, 208, 117, 0.2)'
                   : 'none',
               }}
             >
               {isUpdating ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="animate-spin">⏳</span>
-                  Updating NFT...
+                  Updating...
                 </span>
               ) : loading ? (
-                '⏳ Processing...'
+                '⏳ Loading...'
               ) : (
-                `Apply Changes ($0.05)`
+                `✨ Apply Changes ($0.05)`
               )}
             </button>
           </div>
-          <button
-            onClick={onClose}
-            className="w-full mt-2 text-gray-400 hover:text-white transition-colors"
-            style={{
-              padding: 'clamp(0.5rem, 1.5vh, 0.625rem)',
-              fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)',
-            }}
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

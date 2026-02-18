@@ -64,7 +64,7 @@ export function WalletConnect() {
                     <button
                       onClick={() => handleConnectClick(openConnectModal)}
                       type="button"
-                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] border border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                      className="w-full bg-gradient-to-r from-[#ffd075] to-[#c5a97b] hover:from-[#c5a97b] hover:to-[#a68b5b] text-[#0a0d0c] font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg shadow-[rgba(255,208,117,0.15)] hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] border border-[rgba(255,208,117,0.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                       disabled={isLoading}
                     >
                       {isLoading ? 'Connecting...' : 'Connect Wallet'}
@@ -88,7 +88,7 @@ export function WalletConnect() {
                   <div className="flex gap-3">
                     <button
                       onClick={openChainModal}
-                      className="flex items-center gap-2 glass hover:border-blue-500/50 text-white font-medium py-3 px-5 rounded-xl transition-all duration-200"
+                      className="flex items-center gap-2 glass hover:border-[rgba(255,208,117,0.3)] text-white font-medium py-3 px-5 rounded-xl transition-all duration-200"
                       type="button"
                     >
                       {chain.hasIcon && (
@@ -113,7 +113,7 @@ export function WalletConnect() {
                     <button
                       onClick={openAccountModal}
                       type="button"
-                      className="flex-1 glass hover:border-blue-500/50 text-white font-medium py-3 px-5 rounded-xl transition-all duration-200 truncate"
+                      className="flex-1 glass hover:border-[rgba(255,208,117,0.3)] text-white font-medium py-3 px-5 rounded-xl transition-all duration-200 truncate"
                     >
                       {account.displayName}
                     </button>

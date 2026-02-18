@@ -16,6 +16,9 @@ import { IPNS_GATEWAY, IPNS_KEY } from '@/config';
  * - Next.js automatic optimization
  */
 
+// Cache version - increment to bust browser/CDN cache
+const NFT_CACHE_VERSION = 'v2';
+
 // Multiple gateways for redundancy - IPNS first (always latest), then IPFS fallbacks
 const IPFS_GATEWAYS = [
   `${IPNS_GATEWAY}/ipns/${IPNS_KEY}/`, // IPNS gateway (always latest) - for tokenId.png format
@@ -64,13 +67,22 @@ const NFTImageComponent = function NFTImage({
   const fullImageUrl = (() => {
     if (!ipfsPath) return '';
 
-    // If it's already a full URL (from Alchemy), use it directly
+    // If it's already a full URL, add cache buster if from our gateway
     if (ipfsPath.startsWith('http://') || ipfsPath.startsWith('https://')) {
+      // Add cache buster to our IPNS gateway URLs
+      if (ipfsPath.includes('applesnakes.myfilebase.com/ipns') && !ipfsPath.includes('?')) {
+        return `${ipfsPath}?${NFT_CACHE_VERSION}`;
+      }
       return ipfsPath;
     }
 
-    // Otherwise, treat as IPFS path and use gateway
-    return `${IPFS_GATEWAYS[gatewayIndex]}${ipfsPath}`;
+    // Otherwise, treat as IPFS path and use gateway with cache buster
+    const baseUrl = `${IPFS_GATEWAYS[gatewayIndex]}${ipfsPath}`;
+    // Add cache buster for IPNS gateway
+    if (gatewayIndex === 0) {
+      return `${baseUrl}?${NFT_CACHE_VERSION}`;
+    }
+    return baseUrl;
   })();
 
   // Default alt text if not provided
@@ -98,12 +110,12 @@ const NFTImageComponent = function NFTImage({
   if (!ipfsPath) {
     return (
       <div
-        className={`flex items-center justify-center bg-gray-800 rounded ${className}`}
+        className={`flex items-center justify-center bg-[#1a2221] rounded ${className}`}
         style={{ width: displayWidth, height: displayHeight }}
       >
         <div className="text-center p-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-          <p className="text-xs text-gray-400">Loading...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd075] mx-auto mb-2"></div>
+          <p className="text-xs text-[#8a9090]">Loading...</p>
         </div>
       </div>
     );
@@ -112,13 +124,13 @@ const NFTImageComponent = function NFTImage({
   if (hasError) {
     return (
       <div
-        className={`flex items-center justify-center bg-gray-800 rounded ${className}`}
+        className={`flex items-center justify-center bg-[#1a2221] rounded ${className}`}
         style={{ width: displayWidth, height: displayHeight }}
       >
         <div className="text-center p-4">
-          <span className="text-4xl mb-2">{isJailed ? '⛓️' : '🐍'}</span>
-          <p className="text-xs text-gray-400">#{tokenId}</p>
-          <p className="text-xs text-gray-500 mt-1">Image unavailable</p>
+          <span className="text-4xl mb-2">{isJailed ? '\u26D3\uFE0F' : '\uD83D\uDC0D'}</span>
+          <p className="text-xs text-[#8a9090]">#{tokenId}</p>
+          <p className="text-xs text-[#6b7575] mt-1">Image unavailable</p>
         </div>
       </div>
     );
@@ -129,11 +141,11 @@ const NFTImageComponent = function NFTImage({
       {/* Loading placeholder */}
       {isLoading && (
         <div
-          className="absolute inset-0 bg-gray-800 animate-pulse rounded flex items-center justify-center"
+          className="absolute inset-0 bg-[#1a2221] animate-pulse rounded flex items-center justify-center"
         >
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-xs text-gray-400 mt-2">Loading...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd075] mx-auto"></div>
+            <p className="text-xs text-[#8a9090] mt-2">Loading...</p>
           </div>
         </div>
       )}
@@ -157,7 +169,7 @@ const NFTImageComponent = function NFTImage({
       {/* Jailed indicator badge */}
       {isJailed && !isLoading && (
         <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1">
-          ⛓️ JAILED
+          {'\u26D3\uFE0F'} JAILED
         </div>
       )}
     </div>
@@ -191,10 +203,10 @@ export function NFTGallery({
   // Get emoji for NFT type
   const getTypeEmoji = (type: string) => {
     switch (type) {
-      case 'human': return '🧑';
-      case 'snake': return '🐍';
-      case 'warden': return '⚔️';
-      case 'egg': return '🥚';
+      case 'human': return '\uD83E\uDDD1';
+      case 'snake': return '\uD83D\uDC0D';
+      case 'warden': return '\u2694\uFE0F';
+      case 'egg': return '\uD83E\uDD5A';
       default: return '';
     }
   };
@@ -205,7 +217,7 @@ export function NFTGallery({
         <button
           key={nft.tokenId}
           onClick={() => onNFTClick?.(nft)}
-          className="group relative transition-all duration-200 hover:scale-105 hover:shadow-xl flex flex-col bg-gray-800/50 rounded-xl overflow-hidden border border-gray-700/50 hover:border-blue-500/50"
+          className="group relative transition-all duration-200 hover:scale-105 hover:shadow-xl flex flex-col bg-[#1a2221]/50 rounded-xl overflow-hidden border border-[rgba(255,255,255,0.04)] hover:border-[rgba(255,208,117,0.3)]"
         >
           {/* Square Image Container */}
           <div className="relative aspect-square w-full overflow-hidden">
@@ -231,13 +243,13 @@ export function NFTGallery({
           </div>
 
           {/* Name and Status */}
-          <div className="p-3 bg-gray-900/80 backdrop-blur-sm">
+          <div className="p-3 bg-[#171e1d]/80 backdrop-blur-sm">
             <p className="text-white text-sm font-semibold text-center truncate">
               {nft.name}
             </p>
             {nft.isJailed && (
               <p className="text-red-400 text-xs text-center mt-1 flex items-center justify-center gap-1">
-                ⛓️ Jailed
+                {'\u26D3\uFE0F'} Jailed
               </p>
             )}
           </div>

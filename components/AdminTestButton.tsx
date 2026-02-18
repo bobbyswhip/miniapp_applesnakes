@@ -52,19 +52,19 @@ export function AdminTestButton({ warId, warSymbol, onSuccess }: AdminTestButton
 
   if (showConfirm) {
     return (
-      <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 rounded-lg px-3 py-2">
-        <span className="text-xs text-red-300">End war now?</span>
+      <div className="flex items-center gap-2 bg-[#FF3B5C]/20 border border-[#FF3B5C]/50 rounded-lg px-3 py-2">
+        <span className="text-xs text-[#FF3B5C]/80">End war now?</span>
         <button
           onClick={handleTestTimer}
           disabled={loading}
-          className="px-2 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50"
+          className="px-2 py-1 text-xs font-medium bg-[#FF3B5C] hover:bg-[#e0334f] text-white rounded transition-colors disabled:opacity-50"
         >
           {loading ? '...' : 'Yes'}
         </button>
         <button
           onClick={() => setShowConfirm(false)}
           disabled={loading}
-          className="px-2 py-1 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+          className="px-2 py-1 text-xs font-medium bg-[#2a3533] hover:bg-[#1f2827] text-white rounded transition-colors"
         >
           No
         </button>
@@ -76,7 +76,7 @@ export function AdminTestButton({ warId, warSymbol, onSuccess }: AdminTestButton
     <button
       onClick={() => setShowConfirm(true)}
       disabled={loading}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/50 rounded-lg transition-colors disabled:opacity-50"
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[rgba(255,208,117,0.15)] hover:bg-[rgba(255,208,117,0.25)] text-[#ffd075] border border-[rgba(255,208,117,0.4)] rounded-lg transition-colors disabled:opacity-50"
       title={`End ${warSymbol || 'war'} in 5 seconds for testing`}
     >
       <span>&#9889;</span>
@@ -127,19 +127,19 @@ export function CancelWarButton({ warId, warSymbol, onCancelled }: CancelWarButt
 
   if (showConfirm) {
     return (
-      <div className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 rounded-lg px-3 py-2">
-        <span className="text-xs text-red-300">Cancel {warSymbol || 'war'}?</span>
+      <div className="flex items-center gap-2 bg-[#FF3B5C]/20 border border-[#FF3B5C]/50 rounded-lg px-3 py-2">
+        <span className="text-xs text-[#FF3B5C]/80">Cancel {warSymbol || 'war'}?</span>
         <button
           onClick={handleCancel}
           disabled={loading}
-          className="px-2 py-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50"
+          className="px-2 py-1 text-xs font-medium bg-[#FF3B5C] hover:bg-[#e0334f] text-white rounded transition-colors disabled:opacity-50"
         >
           {loading ? '...' : 'Yes'}
         </button>
         <button
           onClick={() => setShowConfirm(false)}
           disabled={loading}
-          className="px-2 py-1 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+          className="px-2 py-1 text-xs font-medium bg-[#2a3533] hover:bg-[#1f2827] text-white rounded transition-colors"
         >
           No
         </button>
@@ -151,7 +151,7 @@ export function CancelWarButton({ warId, warSymbol, onCancelled }: CancelWarButt
     <button
       onClick={() => setShowConfirm(true)}
       disabled={loading}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/50 rounded-lg transition-colors disabled:opacity-50"
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#FF3B5C]/20 hover:bg-[#FF3B5C]/30 text-[#FF3B5C] border border-[#FF3B5C]/50 rounded-lg transition-colors disabled:opacity-50"
       title={`Cancel ${warSymbol || 'war'} (keeps data)`}
     >
       <span>&#x2715;</span>
@@ -218,9 +218,9 @@ export function RemoveWarButton({ warId, warSymbol, onRemoved }: RemoveWarButton
   };
 
   const getButtonStyle = () => {
-    if (confirmStep === 0) return 'bg-red-900/30 hover:bg-red-900/50 text-red-500 border-red-900/50';
-    if (confirmStep === 1) return 'bg-red-700/50 hover:bg-red-700/70 text-red-200 border-red-700/50';
-    return 'bg-red-600 hover:bg-red-700 text-white border-red-600 font-bold';
+    if (confirmStep === 0) return 'bg-[#FF3B5C]/15 hover:bg-[#FF3B5C]/25 text-[#FF3B5C] border-[#FF3B5C]/30';
+    if (confirmStep === 1) return 'bg-[#FF3B5C]/30 hover:bg-[#FF3B5C]/40 text-[#FF3B5C]/80 border-[#FF3B5C]/40';
+    return 'bg-[#FF3B5C] hover:bg-[#e0334f] text-white border-[#FF3B5C] font-bold';
   };
 
   return (
@@ -238,7 +238,7 @@ export function RemoveWarButton({ warId, warSymbol, onRemoved }: RemoveWarButton
         <button
           onClick={() => setConfirmStep(0)}
           disabled={loading}
-          className="px-2 py-1 text-xs font-medium bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+          className="px-2 py-1 text-xs font-medium bg-[#2a3533] hover:bg-[#1f2827] text-white rounded transition-colors"
         >
           Cancel
         </button>

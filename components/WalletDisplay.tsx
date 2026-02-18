@@ -26,20 +26,20 @@ export function WalletDisplay() {
     <div className="space-y-4">
       {/* Wallet Address */}
       <div className="glass rounded-xl p-5 space-y-3">
-        <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
+        <p className="text-xs text-[#8a9090] uppercase tracking-wide font-medium">
           Wallet Address
         </p>
         <div className="flex items-center justify-between gap-3">
-          <code className="text-lg font-mono text-blue-400">
+          <code className="text-lg font-mono text-[#ffd075]">
             {address ? formatAddress(address) : '0x...'}
           </code>
           <button
             onClick={copyToClipboard}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 hover:bg-[#1a2221] rounded-lg transition-colors"
             title="Copy address"
           >
             <svg
-              className="w-5 h-5 text-gray-400 hover:text-white"
+              className="w-5 h-5 text-[#8a9090] hover:text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -53,31 +53,31 @@ export function WalletDisplay() {
             </svg>
           </button>
         </div>
-        <p className="text-xs text-gray-500 font-mono break-all">{address}</p>
+        <p className="text-xs text-[#6b7575] font-mono break-all">{address}</p>
       </div>
 
       {/* Balance */}
       {balance && (
         <div className="glass rounded-xl p-5 space-y-3">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
+          <p className="text-xs text-[#8a9090] uppercase tracking-wide font-medium">
             Balance
           </p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold text-white">
               {parseFloat(balance.formatted).toFixed(4)}
             </span>
-            <span className="text-lg text-gray-400 font-medium">{balance.symbol}</span>
+            <span className="text-lg text-[#8a9090] font-medium">{balance.symbol}</span>
           </div>
         </div>
       )}
 
       {/* Network Info */}
       <div className="glass rounded-xl p-5 space-y-3">
-        <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
+        <p className="text-xs text-[#8a9090] uppercase tracking-wide font-medium">
           Network
         </p>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-[#22c55e] rounded-full animate-pulse" />
           <span className="text-base font-medium text-white">{chain?.name || 'Base'}</span>
         </div>
       </div>
@@ -85,7 +85,7 @@ export function WalletDisplay() {
       {/* Disconnect Button */}
       <button
         onClick={() => disconnect()}
-        className="w-full glass hover:border-red-500/50 hover:bg-red-500/10 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200"
+        className="w-full glass hover:border-[#FF3B5C]/50 hover:bg-[#FF3B5C]/10 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200"
       >
         Disconnect Wallet
       </button>

@@ -446,12 +446,12 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
           maxHeight: '90vh',
           overflowY: 'auto',
           overflowX: 'hidden',
-          background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
+          background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(255, 208, 117, 0.08), rgba(197, 169, 123, 0.05))',
           backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+          border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
           borderRadius: 'clamp(10px, 2vw, 16px)',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(6, 182, 212, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+          boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(255, 208, 117, 0.2), inset 0 0 30px rgba(255, 208, 117, 0.05)',
           padding: 'clamp(12px, 2.5vw, 20px)',
         }}
       >
@@ -459,7 +459,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent)',
+            background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.1), transparent)',
             animation: 'shimmer 3s infinite',
             zIndex: 1,
             borderRadius: 'clamp(10px, 2vw, 16px)',
@@ -488,7 +488,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
               style={{
                 fontSize: 'clamp(16px, 4vw, 24px)',
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, rgba(6, 182, 212, 1) 0%, rgba(168, 85, 247, 1) 50%, rgba(236, 72, 153, 1) 100%)',
+                background: 'linear-gradient(135deg, rgba(255, 208, 117, 1) 0%, rgba(255, 208, 117, 1) 50%, rgba(197, 169, 123, 1) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -516,8 +516,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                 fontWeight: 600,
                 color: activeTab === 'jail' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)',
                 background: activeTab === 'jail'
-                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))'
-                  : 'rgba(6, 182, 212, 0.2)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))'
+                  : 'rgba(255, 208, 117, 0.2)',
                 border: 'none',
                 borderRadius: 'clamp(6px, 1.2vw, 10px)',
                 cursor: 'pointer',
@@ -535,8 +535,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                 fontWeight: 600,
                 color: activeTab === 'bail' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)',
                 background: activeTab === 'bail'
-                  ? 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))'
-                  : 'rgba(6, 182, 212, 0.2)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))'
+                  : 'rgba(255, 208, 117, 0.2)',
                 border: 'none',
                 borderRadius: 'clamp(6px, 1.2vw, 10px)',
                 cursor: 'pointer',
@@ -643,7 +643,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                       flex: 1,
                       padding: 'clamp(8px, 1.6vw, 12px)',
                       backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.3)',
+                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.3)',
                       borderRadius: 'clamp(6px, 1.2vw, 10px)',
                       color: '#FFFFFF',
                       fontSize: 'clamp(10px, 2vw, 12px)',
@@ -655,7 +655,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                     disabled={!jailTarget.trim() || loadingTarget}
                     style={{
                       padding: 'clamp(8px, 1.6vw, 12px) clamp(12px, 2.4vw, 16px)',
-                      backgroundColor: (!jailTarget.trim() || loadingTarget) ? 'rgba(6, 182, 212, 0.3)' : 'rgba(6, 182, 212, 1)',
+                      backgroundColor: (!jailTarget.trim() || loadingTarget) ? 'rgba(255, 208, 117, 0.3)' : 'rgba(255, 208, 117, 1)',
                       border: 'none',
                       borderRadius: 'clamp(6px, 1.2vw, 10px)',
                       color: '#FFFFFF',
@@ -711,7 +711,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                         padding: 'clamp(8px, 1.6vw, 12px)',
                         backgroundColor: 'rgba(0, 0, 0, 0.2)',
                         borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.2)',
+                        border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.2)',
                       }}
                     >
                       {targetNFTs.map((nft) => (
@@ -723,12 +723,12 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                             aspectRatio: '1 / 1',
                             borderRadius: 'clamp(6px, 1.2vw, 10px)',
                             border: selectedJailNFTs.has(nft.tokenId)
-                              ? 'clamp(2px, 0.4vw, 3px) solid rgba(6, 182, 212, 1)'
-                              : 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+                              ? 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)'
+                              : 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
                             overflow: 'hidden',
                             position: 'relative',
                             boxShadow: selectedJailNFTs.has(nft.tokenId)
-                              ? '0 0 15px rgba(6, 182, 212, 0.6)'
+                              ? '0 0 15px rgba(255, 208, 117, 0.6)'
                               : 'none',
                             transition: 'all 0.2s ease',
                           }}
@@ -749,7 +749,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                                 position: 'absolute',
                                 top: '4px',
                                 right: '4px',
-                                backgroundColor: 'rgba(6, 182, 212, 1)',
+                                backgroundColor: 'rgba(255, 208, 117, 1)',
                                 color: '#FFFFFF',
                                 borderRadius: '50%',
                                 width: 'clamp(18px, 3.6vw, 24px)',
@@ -844,8 +844,8 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                         fontWeight: 700,
                         color: '#FFFFFF',
                         background: (selectedJailNFTs.size === 0 || isJailPending || isJailConfirming)
-                          ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(168, 85, 247, 0.3))'
-                          : 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
+                          ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(255, 208, 117, 0.3))'
+                          : 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(255, 208, 117, 1))',
                         border: 'none',
                         borderRadius: 'clamp(10px, 2vw, 14px)',
                         cursor: (selectedJailNFTs.size === 0 || isJailPending || isJailConfirming) ? 'not-allowed' : 'pointer',
@@ -876,7 +876,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                         flexShrink: 0,
                       }}
                     >
-                      powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(6, 182, 212, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
+                      powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255, 208, 117, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
                     </div>
                   </>
                 )}
@@ -938,7 +938,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                       padding: 'clamp(8px, 1.6vw, 12px)',
                       backgroundColor: 'rgba(0, 0, 0, 0.2)',
                       borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.2)',
+                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.2)',
                     }}
                   >
                     {jailedNFTs.map((nft) => (
@@ -1020,7 +1020,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                       padding: 'clamp(8px, 1.6vw, 12px)',
                       backgroundColor: 'rgba(0, 0, 0, 0.2)',
                       borderRadius: 'clamp(6px, 1.2vw, 10px)',
-                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, 0.2)',
+                      border: 'clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, 0.2)',
                       fontSize: 'clamp(10px, 2vw, 12px)',
                       color: 'rgba(255, 255, 255, 0.7)',
                     }}
@@ -1101,7 +1101,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                       flexShrink: 0,
                     }}
                   >
-                    powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(6, 182, 212, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
+                    powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255, 208, 117, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
                   </div>
                 </>
               )}
@@ -1120,7 +1120,7 @@ export function JailInterface({ onClose }: JailInterfaceProps) {
                     flexShrink: 0,
                   }}
                 >
-                  powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(6, 182, 212, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
+                  powered by the <a href="https://pairable.io/#/contracts/superstrat" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(255, 208, 117, 1)', textDecoration: 'none', fontWeight: 600 }}>Pairable</a> NFT super strategy hook
                 </div>
               )}
             </>

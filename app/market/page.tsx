@@ -192,32 +192,32 @@ function BuyModal({ listing, isOpen, onClose, onSuccess }: BuyModalProps) {
       <div
         className="rounded-2xl w-full max-w-md relative"
         style={{
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(168, 85, 247, 0.08))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(59, 130, 246, 0.3)',
+          background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.05), rgba(255, 208, 117, 0.08))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
+          border: '2px solid rgba(197, 169, 123, 0.3)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(168, 85, 247, 0.3))' }}>
+        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(255, 208, 117, 0.3))' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🛒</span>
               <div>
                 <h2 className="font-bold text-lg text-white">Buy NFT</h2>
-                <p className="text-blue-200 text-sm">{listing.name || `#${listing.tokenId.toString()}`}</p>
+                <p className="text-[#ffd075] text-sm">{listing.name || `#${listing.tokenId.toString()}`}</p>
               </div>
             </div>
-            <button onClick={onClose} className="text-blue-300 hover:text-blue-200 text-xl">✕</button>
+            <button onClick={onClose} className="text-[#c5a97b] hover:text-[#ffd075] text-xl">✕</button>
           </div>
         </div>
 
-        <div className="p-4 border-b border-blue-500/20">
+        <div className="p-4 border-b border-[rgba(255,208,117,0.2)]">
           <div className="flex items-center gap-4">
             <img src={listing.imageUrl || getNFTImageUrl(Number(listing.tokenId))} alt={listing.name || `NFT #${listing.tokenId}`} className="w-24 h-24 rounded-lg object-cover" />
             <div className="flex-1">
-              <p className="text-gray-400 text-sm">Price</p>
+              <p className="text-[#8a9090] text-sm">Price</p>
               <p className="text-3xl font-bold text-white">{listing.priceFormatted} wASS</p>
-              <p className="text-gray-500 text-xs mt-1">≈ {ethNeededFormatted} ETH</p>
+              <p className="text-[#6b7575] text-xs mt-1">≈ {ethNeededFormatted} ETH</p>
             </div>
           </div>
         </div>
@@ -226,35 +226,35 @@ function BuyModal({ listing, isOpen, onClose, onSuccess }: BuyModalProps) {
           {step === 'select' && (
             <>
               <div className="mb-4">
-                <p className="text-gray-400 text-sm mb-2">Payment Method</p>
+                <p className="text-[#8a9090] text-sm mb-2">Payment Method</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setPaymentMethod('wass')} className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'wass' ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-800/50'}`}>
+                  <button onClick={() => setPaymentMethod('wass')} className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'wass' ? 'border-green-500 bg-[rgba(34,197,94,0.1)]' : 'border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50'}`}>
                     <p className="font-bold text-white">wASS</p>
-                    <p className="text-xs text-gray-400">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
+                    <p className="text-xs text-[#8a9090]">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
                     {!hasEnoughWass && <p className="text-xs text-red-400 mt-1">Insufficient</p>}
                   </button>
-                  <button onClick={() => setPaymentMethod('eth')} className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'eth' ? 'border-blue-500 bg-blue-900/30' : 'border-gray-700 bg-gray-800/50'}`}>
+                  <button onClick={() => setPaymentMethod('eth')} className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'eth' ? 'border-[rgba(255,208,117,0.4)] bg-[rgba(255,208,117,0.1)]' : 'border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50'}`}>
                     <p className="font-bold text-white">ETH</p>
-                    <p className="text-xs text-gray-400">{ethBalanceData ? parseFloat(formatUnits(ethBalanceData.value, 18)).toFixed(4) : '0'} available</p>
+                    <p className="text-xs text-[#8a9090]">{ethBalanceData ? parseFloat(formatUnits(ethBalanceData.value, 18)).toFixed(4) : '0'} available</p>
                     {!hasEnoughEth && <p className="text-xs text-red-400 mt-1">Insufficient</p>}
                   </button>
                 </div>
               </div>
-              <button onClick={handleBuy} disabled={isProcessing || (paymentMethod === 'wass' && !hasEnoughWass) || (paymentMethod === 'eth' && !hasEnoughEth)} className="w-full py-3 rounded-lg font-semibold disabled:opacity-50" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8))', color: 'white' }}>
+              <button onClick={handleBuy} disabled={isProcessing || (paymentMethod === 'wass' && !hasEnoughWass) || (paymentMethod === 'eth' && !hasEnoughEth)} className="w-full py-3 rounded-lg font-semibold disabled:opacity-50" style={{ background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.8), rgba(255, 208, 117, 0.8))', color: '#0a0d0c' }}>
                 {needsApproval ? 'Approve & Buy' : 'Buy Now'}
               </button>
             </>
           )}
           {step === 'approve' && (
             <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd075] mx-auto mb-4"></div>
               <p className="text-white font-medium mb-2">{isApproving ? 'Confirm in wallet...' : 'Approving wASS...'}</p>
               {approveError && <p className="text-red-400 text-sm mt-2">{approveError.message}</p>}
             </div>
           )}
           {step === 'buy' && (
             <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd075] mx-auto mb-4"></div>
               <p className="text-white font-medium mb-2">{(isBuyingWass || isBuyingEth) ? 'Confirm in wallet...' : 'Processing...'}</p>
               {(buyWassError || buyEthError) && <p className="text-red-400 text-sm mt-2">{(buyWassError || buyEthError)?.message}</p>}
             </div>
@@ -388,13 +388,13 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
       <div
         className="rounded-2xl w-full max-w-md relative"
         style={{
-          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(168, 85, 247, 0.08))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
+          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05), rgba(255, 208, 117, 0.08))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
           border: '2px solid rgba(34, 197, 94, 0.3)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(168, 85, 247, 0.3))' }}>
+        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(255, 208, 117, 0.3))' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">{isPresale ? '🎯' : '📈'}</span>
@@ -412,44 +412,44 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
             <>
               {/* Payment Method Selector */}
               <div className="mb-4">
-                <p className="text-gray-400 text-sm mb-2">Payment Method</p>
+                <p className="text-[#8a9090] text-sm mb-2">Payment Method</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setPaymentMethod('wass')}
-                    className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'wass' ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                    className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'wass' ? 'border-green-500 bg-[rgba(34,197,94,0.1)]' : 'border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50'}`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <img src="/Images/Token.png" alt="wASS" className="w-5 h-5" />
                       <span className="font-bold text-white">wASS</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
+                    <p className="text-xs text-[#8a9090] mt-1">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
                   </button>
                   <button
                     onClick={() => setPaymentMethod('eth')}
-                    className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'eth' ? 'border-blue-500 bg-blue-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                    className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === 'eth' ? 'border-[rgba(255,208,117,0.4)] bg-[rgba(255,208,117,0.1)]' : 'border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50'}`}
                   >
                     <div className="flex items-center justify-center gap-2">
                       <img src="/Images/Ether.png" alt="ETH" className="w-5 h-5" />
                       <span className="font-bold text-white">ETH</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">{ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} available</p>
+                    <p className="text-xs text-[#8a9090] mt-1">{ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} available</p>
                   </button>
                 </div>
               </div>
 
               {/* Item Info */}
-              <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+              <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-400">Phase</span>
+                  <span className="text-[#8a9090]">Phase</span>
                   <span className={`font-medium ${isPresale ? 'text-yellow-400' : 'text-green-400'}`}>{item.phaseName}</span>
                 </div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-400">Price per Item</span>
+                  <span className="text-[#8a9090]">Price per Item</span>
                   <span className="text-white">{formatItemPrice(item.currentPrice, 4)} wASS</span>
                 </div>
                 {isPresale && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-400">Remaining</span>
+                    <span className="text-[#8a9090]">Remaining</span>
                     <span className="text-white">{item.presaleRemaining.toString()} / {item.presaleSupply.toString()}</span>
                   </div>
                 )}
@@ -457,7 +457,7 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
 
               {/* Amount Input */}
               <div className="mb-4">
-                <label className="block text-gray-400 text-sm mb-2">Amount to Buy</label>
+                <label className="block text-[#8a9090] text-sm mb-2">Amount to Buy</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -465,11 +465,11 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
                     onChange={(e) => setAmount(e.target.value)}
                     min="1"
                     max={isPresale ? item.presaleRemaining.toString() : '1000'}
-                    className="flex-1 bg-gray-800/50 border border-green-500/30 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500"
+                    className="flex-1 bg-[#1a2221]/50 border border-green-500/30 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-green-500"
                   />
                   <div className="flex gap-1">
                     {['1', '5', '10'].map((qty) => (
-                      <button key={qty} onClick={() => setAmount(qty)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                      <button key={qty} onClick={() => setAmount(qty)} className="px-3 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#cecece] hover:bg-[#1f2827] text-sm">
                         {qty}
                       </button>
                     ))}
@@ -478,20 +478,20 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
               </div>
 
               {/* Cost Summary */}
-              <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+              <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                 <div className="flex justify-between text-sm font-bold">
                   <span className="text-white">Total Cost</span>
                   <span className="text-green-400">{formatWass(totalCost, 4)} wASS</span>
                 </div>
                 {paymentMethod === 'eth' && (
-                  <div className="flex justify-between text-xs mt-1 text-blue-400">
+                  <div className="flex justify-between text-xs mt-1 text-[#ffd075]">
                     <span>Paid via OTC Router</span>
                     <span>{isQuoting ? 'Quoting...' : `~${ethQuote || '?'} ETH`}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs mt-1">
-                  <span className="text-gray-500">Your {paymentMethod === 'wass' ? 'wASS' : 'ETH'} Balance</span>
-                  <span className={paymentMethod === 'wass' ? (hasEnoughWass ? 'text-gray-400' : 'text-red-400') : 'text-gray-400'}>
+                  <span className="text-[#6b7575]">Your {paymentMethod === 'wass' ? 'wASS' : 'ETH'} Balance</span>
+                  <span className={paymentMethod === 'wass' ? (hasEnoughWass ? 'text-[#8a9090]' : 'text-red-400') : 'text-[#8a9090]'}>
                     {paymentMethod === 'wass' ? `${parseFloat(wassBalanceFormatted).toFixed(2)} wASS` : `${ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} ETH`}
                   </span>
                 </div>
@@ -516,7 +516,7 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
               <p className="text-white font-medium mb-2">
                 {isPresaleApproving || isCurveApproving ? 'Approving wASS...' : paymentMethod === 'eth' ? 'Swapping ETH → wASS...' : 'Processing purchase...'}
               </p>
-              <p className="text-gray-400 text-sm">Confirm in your wallet</p>
+              <p className="text-[#8a9090] text-sm">Confirm in your wallet</p>
             </div>
           )}
 
@@ -524,7 +524,7 @@ function ItemBuyModal({ item, isOpen, onClose, onSuccess }: ItemBuyModalProps) {
             <div className="text-center py-8">
               <div className="text-5xl mb-4">🎉</div>
               <p className="text-white font-bold text-xl mb-2">Purchased!</p>
-              <p className="text-gray-400 mb-4">You bought {amountNum} item{amountNum > 1 ? 's' : ''}</p>
+              <p className="text-[#8a9090] mb-4">You bought {amountNum} item{amountNum > 1 ? 's' : ''}</p>
               <button onClick={onClose} className="w-full py-3 rounded-lg font-semibold" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))', color: 'white' }}>Done</button>
             </div>
           )}
@@ -591,13 +591,13 @@ function ItemSellModal({ item, isOpen, onClose, onSuccess }: ItemSellModalProps)
       <div
         className="rounded-2xl w-full max-w-md relative"
         style={{
-          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(168, 85, 247, 0.08))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(255, 208, 117, 0.08))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
           border: '2px solid rgba(239, 68, 68, 0.3)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(168, 85, 247, 0.3))' }}>
+        <div className="rounded-t-2xl p-4" style={{ background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(255, 208, 117, 0.3))' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">📉</span>
@@ -613,19 +613,19 @@ function ItemSellModal({ item, isOpen, onClose, onSuccess }: ItemSellModalProps)
         <div className="p-4">
           {step === 'input' && (
             <>
-              <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+              <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-400">Your Balance</span>
+                  <span className="text-[#8a9090]">Your Balance</span>
                   <span className="text-white">{item.userBalance.toString()} items</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Current Price</span>
+                  <span className="text-[#8a9090]">Current Price</span>
                   <span className="text-white">{formatItemPrice(item.currentPrice, 4)} wASS</span>
                 </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-400 text-sm mb-2">Amount to Sell</label>
+                <label className="block text-[#8a9090] text-sm mb-2">Amount to Sell</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -633,23 +633,23 @@ function ItemSellModal({ item, isOpen, onClose, onSuccess }: ItemSellModalProps)
                     onChange={(e) => setAmount(e.target.value)}
                     min="1"
                     max={item.userBalance.toString()}
-                    className="flex-1 bg-gray-800/50 border border-red-500/30 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-red-500"
+                    className="flex-1 bg-[#1a2221]/50 border border-red-500/30 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-red-500"
                   />
-                  <button onClick={() => setAmount(item.userBalance.toString())} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                  <button onClick={() => setAmount(item.userBalance.toString())} className="px-4 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#cecece] hover:bg-[#1f2827] text-sm">
                     Max
                   </button>
                 </div>
               </div>
 
-              <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+              <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                 <div className="flex justify-between text-sm font-bold">
                   <span className="text-white">You Receive</span>
                   <span className="text-green-400">{quote ? quote.netReturnFormatted : '0'} wASS</span>
                 </div>
                 {quote && (
                   <div className="flex justify-between text-xs mt-1">
-                    <span className="text-gray-500">Fee (5%)</span>
-                    <span className="text-gray-400">{quote.feeFormatted} wASS</span>
+                    <span className="text-[#6b7575]">Fee (5%)</span>
+                    <span className="text-[#8a9090]">{quote.feeFormatted} wASS</span>
                   </div>
                 )}
               </div>
@@ -671,7 +671,7 @@ function ItemSellModal({ item, isOpen, onClose, onSuccess }: ItemSellModalProps)
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
               <p className="text-white font-medium mb-2">Processing sale...</p>
-              <p className="text-gray-400 text-sm">Confirm in your wallet</p>
+              <p className="text-[#8a9090] text-sm">Confirm in your wallet</p>
             </div>
           )}
 
@@ -679,7 +679,7 @@ function ItemSellModal({ item, isOpen, onClose, onSuccess }: ItemSellModalProps)
             <div className="text-center py-8">
               <div className="text-5xl mb-4">💰</div>
               <p className="text-white font-bold text-xl mb-2">Sold!</p>
-              <p className="text-gray-400 mb-4">You sold {amountNum} item{amountNum > 1 ? 's' : ''}</p>
+              <p className="text-[#8a9090] mb-4">You sold {amountNum} item{amountNum > 1 ? 's' : ''}</p>
               <button onClick={onClose} className="w-full py-3 rounded-lg font-semibold" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))', color: 'white' }}>Done</button>
             </div>
           )}
@@ -697,21 +697,21 @@ function ListingCard({ listing, onBuy, isOwner }: { listing: ListingWithMetadata
   return (
     <div
       className="rounded-xl overflow-hidden transition-all hover:scale-[1.02] cursor-pointer"
-      style={{ background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(31, 41, 55, 0.9))', border: '1px solid rgba(75, 85, 99, 0.3)' }}
+      style={{ background: 'linear-gradient(135deg, rgba(10, 13, 12, 0.9), rgba(23, 30, 29, 0.9))', border: '1px solid rgba(255, 255, 255, 0.06)' }}
       onClick={() => !isOwner && onBuy(listing)}
     >
       <div className="relative aspect-square">
         <img src={listing.imageUrl || getNFTImageUrl(Number(listing.tokenId))} alt={listing.name || `NFT #${listing.tokenId}`} className="w-full h-full object-cover" />
-        {isOwner && <div className="absolute top-2 right-2 px-2 py-1 bg-purple-600 rounded text-xs text-white font-medium">Your Listing</div>}
+        {isOwner && <div className="absolute top-2 right-2 px-2 py-1 bg-[#c5a97b] rounded text-xs text-white font-medium">Your Listing</div>}
       </div>
       <div className="p-3">
         <p className="text-white font-medium text-sm truncate">{listing.name || `AppleSnake #${listing.tokenId}`}</p>
         <div className="flex items-center justify-between mt-2">
           <div>
-            <p className="text-gray-500 text-xs">Price</p>
+            <p className="text-[#6b7575] text-xs">Price</p>
             <p className="text-green-400 font-bold">{listing.priceFormatted} wASS</p>
           </div>
-          {!isOwner && <button className="px-3 py-1.5 rounded-lg text-sm font-medium" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8))', color: 'white' }}>Buy</button>}
+          {!isOwner && <button className="px-3 py-1.5 rounded-lg text-sm font-medium" style={{ background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.8), rgba(255, 208, 117, 0.8))', color: '#0a0d0c' }}>Buy</button>}
         </div>
       </div>
     </div>
@@ -729,15 +729,19 @@ function ItemCard({ item, onBuy, onSell }: { item: BondedItemWithBalance; onBuy:
   const canBuy = isPresale || isCurve;
   const canSell = isCurve && item.userBalance > 0n;
 
-  const phaseColor = isPresale ? 'yellow' : isCurve ? 'green' : 'purple';
+  const phaseStyles = isPresale
+    ? { badge: 'bg-yellow-500/30 text-yellow-400 border border-yellow-500/50', price: 'text-yellow-400' }
+    : isCurve
+    ? { badge: 'bg-green-500/30 text-green-400 border border-green-500/50', price: 'text-green-400' }
+    : { badge: 'bg-[rgba(255,208,117,0.3)] text-[#ffd075] border border-[rgba(255,208,117,0.5)]', price: 'text-[#ffd075]' };
 
   return (
     <div
       className="rounded-xl overflow-hidden transition-all hover:scale-[1.02]"
-      style={{ background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(31, 41, 55, 0.9))', border: `1px solid rgba(${isPresale ? '234, 179, 8' : isCurve ? '34, 197, 94' : '168, 85, 247'}, 0.3)` }}
+      style={{ background: 'linear-gradient(135deg, rgba(10, 13, 12, 0.9), rgba(23, 30, 29, 0.9))', border: `1px solid rgba(${isPresale ? '234, 179, 8' : isCurve ? '34, 197, 94' : '255, 208, 117'}, 0.3)` }}
     >
       {/* Item Image */}
-      <div className="relative aspect-square bg-gradient-to-br from-gray-700 to-gray-800">
+      <div className="relative aspect-square bg-gradient-to-br from-[#1f2827] to-[#1a2221]">
         <img
           src={item.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${item.tokenId.toString()}.png`}
           alt={item.name || `Item #${item.tokenId.toString()}`}
@@ -749,11 +753,11 @@ function ItemCard({ item, onBuy, onSell }: { item: BondedItemWithBalance; onBuy:
             target.parentElement!.innerHTML = `<span class="text-6xl flex items-center justify-center h-full">${isPresale ? '🎯' : isCurve ? '📈' : '💎'}</span>`;
           }}
         />
-        <div className={`absolute top-2 left-2 px-2 py-1 rounded text-xs font-medium bg-${phaseColor}-500/30 text-${phaseColor}-400 border border-${phaseColor}-500/50`}>
+        <div className={`absolute top-2 left-2 px-2 py-1 rounded text-xs font-medium ${phaseStyles.badge}`}>
           {item.phaseName}
         </div>
         {item.userBalance > 0n && (
-          <div className="absolute top-2 right-2 px-2 py-1 bg-blue-600 rounded text-xs text-white font-medium">
+          <div className="absolute top-2 right-2 px-2 py-1 bg-[#c5a97b] rounded text-xs text-white font-medium">
             x{item.userBalance.toString()}
           </div>
         )}
@@ -761,16 +765,16 @@ function ItemCard({ item, onBuy, onSell }: { item: BondedItemWithBalance; onBuy:
 
       <div className="p-3">
         <p className="text-white font-medium text-sm">{item.name || `Item #${item.tokenId}`}</p>
-        <p className="text-gray-500 text-xs">#{item.tokenId.toString()}</p>
+        <p className="text-[#6b7575] text-xs">#{item.tokenId.toString()}</p>
 
         {/* Progress bar for presale */}
         {isPresale && (
           <div className="mt-2">
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-400">Progress</span>
+              <span className="text-[#8a9090]">Progress</span>
               <span className="text-yellow-400">{item.presaleProgress}%</span>
             </div>
-            <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-[#1f2827] rounded-full overflow-hidden">
               <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${item.presaleProgress}%` }} />
             </div>
           </div>
@@ -778,13 +782,13 @@ function ItemCard({ item, onBuy, onSell }: { item: BondedItemWithBalance; onBuy:
 
         {/* Price */}
         <div className="mt-2">
-          <p className="text-gray-500 text-xs">Price</p>
-          <p className={`font-bold text-${phaseColor}-400`}>{formatItemPrice(item.currentPrice)} wASS</p>
+          <p className="text-[#6b7575] text-xs">Price</p>
+          <p className={`font-bold ${phaseStyles.price}`}>{formatItemPrice(item.currentPrice)} wASS</p>
         </div>
 
         {/* Stats for curve */}
         {isCurve && item.curve && (
-          <div className="mt-2 text-xs text-gray-400">
+          <div className="mt-2 text-xs text-[#8a9090]">
             <span>Liquidity: {item.curve.realWassFormatted} wASS</span>
           </div>
         )}
@@ -810,7 +814,7 @@ function ItemCard({ item, onBuy, onSell }: { item: BondedItemWithBalance; onBuy:
             </button>
           )}
           {isRare && (
-            <button disabled className="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-700 text-gray-400 cursor-not-allowed">
+            <button disabled className="flex-1 py-2 rounded-lg text-sm font-medium bg-[#1f2827] text-[#8a9090] cursor-not-allowed">
               Marketplace Only
             </button>
           )}
@@ -909,7 +913,7 @@ export default function MarketPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">🏪 Marketplace</h1>
-            <p className="text-gray-400">Trade AppleSnakes NFTs and Items for wASS</p>
+            <p className="text-[#8a9090]">Trade AppleSnakes NFTs and Items for wASS</p>
           </div>
           <ConnectButton />
         </div>
@@ -920,8 +924,8 @@ export default function MarketPage() {
             onClick={() => setActiveTab('nfts')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
               activeTab === 'nfts'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ? 'bg-[#c5a97b] text-white'
+                : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
             }`}
           >
             🎨 NFTs
@@ -931,7 +935,7 @@ export default function MarketPage() {
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
               activeTab === 'items'
                 ? 'bg-green-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
             }`}
           >
             📦 Items {items.length > 0 && <span className="ml-1 text-xs">({items.length})</span>}
@@ -945,39 +949,39 @@ export default function MarketPage() {
           <>
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gray-800/50 rounded-lg p-4">
-                <p className="text-gray-400 text-sm mb-1">Listed</p>
+              <div className="bg-[#1a2221]/50 rounded-lg p-4">
+                <p className="text-[#8a9090] text-sm mb-1">Listed</p>
                 <p className="text-3xl font-bold text-white">{listings.length}</p>
               </div>
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                 <p className="text-green-400 text-sm mb-1">Total Sales</p>
                 <p className="text-3xl font-bold text-green-400">{nftStats ? nftStats.totalSales.toString() : '0'}</p>
               </div>
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                <p className="text-purple-400 text-sm mb-1">Volume</p>
-                <p className="text-2xl font-bold text-purple-400">{nftStats ? parseFloat(nftStats.totalVolumeFormatted).toFixed(0) : '0'} wASS</p>
+              <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg p-4">
+                <p className="text-[#ffd075] text-sm mb-1">Volume</p>
+                <p className="text-2xl font-bold text-[#ffd075]">{nftStats ? parseFloat(nftStats.totalVolumeFormatted).toFixed(0) : '0'} wASS</p>
               </div>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                <p className="text-blue-400 text-sm mb-1">Fee</p>
-                <p className="text-3xl font-bold text-blue-400">{nftStats ? nftStats.feePercent : 5}%</p>
+              <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg p-4">
+                <p className="text-[#ffd075] text-sm mb-1">Fee</p>
+                <p className="text-3xl font-bold text-[#ffd075]">{nftStats ? nftStats.feePercent : 5}%</p>
               </div>
             </div>
 
             {/* Filters */}
             <div className="flex items-center gap-4">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="bg-[#1a2221] border border-[rgba(255,255,255,0.06)] rounded-lg px-4 py-2 text-white">
                 <option value="newest">Newest First</option>
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
               </select>
-              <button onClick={fetchListings} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700">🔄 Refresh</button>
+              <button onClick={fetchListings} className="px-4 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#cecece] hover:bg-[#1f2827]">🔄 Refresh</button>
             </div>
 
             {/* Loading/Error/Empty States */}
             {isLoadingListings && (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading listings...</p>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd075] mx-auto mb-4"></div>
+                <p className="text-[#8a9090]">Loading listings...</p>
               </div>
             )}
 
@@ -992,7 +996,7 @@ export default function MarketPage() {
               <div className="text-center py-12">
                 <span className="text-6xl mb-4 block">🏪</span>
                 <h2 className="text-2xl font-bold text-white mb-2">No Listings Yet</h2>
-                <p className="text-gray-400 mb-4">Be the first to list your NFT!</p>
+                <p className="text-[#8a9090] mb-4">Be the first to list your NFT!</p>
                 <a href="/my-nfts" className="inline-block px-6 py-3 rounded-lg font-medium" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.8), rgba(22, 163, 74, 0.8))', color: 'white' }}>Go to My NFTs</a>
               </div>
             )}
@@ -1023,13 +1027,13 @@ export default function MarketPage() {
                 <p className="text-green-400 text-sm mb-1">📈 Trading</p>
                 <p className="text-3xl font-bold text-green-400">{tradingItems.length}</p>
               </div>
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                <p className="text-purple-400 text-sm mb-1">💎 Rare</p>
-                <p className="text-3xl font-bold text-purple-400">{rareItems.length}</p>
+              <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg p-4">
+                <p className="text-[#ffd075] text-sm mb-1">💎 Rare</p>
+                <p className="text-3xl font-bold text-[#ffd075]">{rareItems.length}</p>
               </div>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                <p className="text-blue-400 text-sm mb-1">Volume</p>
-                <p className="text-2xl font-bold text-blue-400">{itemStats ? itemStats.totalVolumeFormatted : '0'} wASS</p>
+              <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg p-4">
+                <p className="text-[#ffd075] text-sm mb-1">Volume</p>
+                <p className="text-2xl font-bold text-[#ffd075]">{itemStats ? itemStats.totalVolumeFormatted : '0'} wASS</p>
               </div>
             </div>
 
@@ -1043,10 +1047,10 @@ export default function MarketPage() {
                     itemFilter === filter
                       ? filter === 'presale' ? 'bg-yellow-600 text-white'
                         : filter === 'trading' ? 'bg-green-600 text-white'
-                        : filter === 'rare' ? 'bg-purple-600 text-white'
-                        : filter === 'owned' ? 'bg-blue-600 text-white'
-                        : 'bg-gray-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                        : filter === 'rare' ? 'bg-[#c5a97b] text-white'
+                        : filter === 'owned' ? 'bg-[#c5a97b] text-white'
+                        : 'bg-[#2a3533] text-white'
+                      : 'bg-[#1a2221] text-[#8a9090] hover:bg-[#1f2827]'
                   }`}
                 >
                   {filter === 'all' && '🏠 All'}
@@ -1056,14 +1060,14 @@ export default function MarketPage() {
                   {filter === 'owned' && `💰 Owned (${ownedItems.length})`}
                 </button>
               ))}
-              <button onClick={() => refetchItems()} className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 ml-auto">🔄 Refresh</button>
+              <button onClick={() => refetchItems()} className="px-4 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.06)] rounded-lg text-[#cecece] hover:bg-[#1f2827] ml-auto">🔄 Refresh</button>
             </div>
 
             {/* Loading State */}
             {itemsLoading && (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading items...</p>
+                <p className="text-[#8a9090]">Loading items...</p>
               </div>
             )}
 
@@ -1074,7 +1078,7 @@ export default function MarketPage() {
                 <h2 className="text-2xl font-bold text-white mb-2">
                   {itemFilter === 'owned' ? 'No Items Owned' : 'No Items Found'}
                 </h2>
-                <p className="text-gray-400 mb-4">
+                <p className="text-[#8a9090] mb-4">
                   {itemFilter === 'presale' && 'No items currently in presale'}
                   {itemFilter === 'trading' && 'No items currently trading on bonding curves'}
                   {itemFilter === 'rare' && 'No rare items available'}

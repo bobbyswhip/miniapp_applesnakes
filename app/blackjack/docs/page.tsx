@@ -13,10 +13,10 @@ export default function BlackjackDocsRedirect() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+    <div className="min-h-screen bg-[#171e1d] flex items-center justify-center">
       <div className="text-center">
         <div className="text-4xl mb-4">🃏</div>
-        <p className="text-gray-400">Redirecting to docs...</p>
+        <p className="text-[#8a9090]">Redirecting to docs...</p>
       </div>
     </div>
   );

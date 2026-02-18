@@ -97,23 +97,23 @@ export function ContractFees() {
     <div className="w-full max-w-2xl">
       <div className="glass rounded-2xl p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700/50 pb-4">
+        <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] pb-4">
           <h2 className="text-2xl font-bold text-white">Contract Fees</h2>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isWalletConnected && !isWrongNetwork ? 'bg-green-500' : isWrongNetwork ? 'bg-yellow-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-400">
+            <div className={`w-2 h-2 rounded-full ${isWalletConnected && !isWrongNetwork ? 'bg-[#22c55e]' : isWrongNetwork ? 'bg-[#ffd075]' : 'bg-[#FF3B5C]'}`} />
+            <span className="text-sm text-[#8a9090]">
               {isWalletConnected ? (isWrongNetwork ? 'Wrong Network' : 'Connected') : 'Not Connected'}
             </span>
           </div>
         </div>
 
         {/* Contract Info */}
-        <div className="bg-gray-800/50 rounded-lg p-4 space-y-2">
-          <p className="text-xs text-gray-400 uppercase">NFT Contract</p>
-          <code className="text-sm font-mono text-blue-400 break-all">
+        <div className="bg-[#1a2221]/50 rounded-lg p-4 space-y-2">
+          <p className="text-xs text-[#8a9090] uppercase">NFT Contract</p>
+          <code className="text-sm font-mono text-[#ffd075] break-all">
             {contracts.nft.address}
           </code>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#6b7575]">
             Network: {chain?.name || 'Base Mainnet'} (Chain ID: {chain?.id || base.id})
           </p>
         </div>
@@ -122,11 +122,11 @@ export function ContractFees() {
 
         {/* Wrong Network Warning */}
         {isWrongNetwork && (
-          <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4 flex items-center gap-3">
-            <span className="text-yellow-400 text-xl">⚠️</span>
+          <div className="bg-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.4)] rounded-lg p-4 flex items-center gap-3">
+            <span className="text-[#ffd075] text-xl">⚠️</span>
             <div className="flex-1">
-              <p className="text-yellow-400 text-sm font-semibold">Wrong Network Detected</p>
-              <p className="text-yellow-300 text-xs mt-1">
+              <p className="text-[#ffd075] text-sm font-semibold">Wrong Network Detected</p>
+              <p className="text-[#c5a97b] text-xs mt-1">
                 You&apos;re connected to {chain?.name || 'unknown network'}. Please switch to Base Mainnet (Chain ID: {base.id}) to view fees.
               </p>
             </div>
@@ -135,38 +135,38 @@ export function ContractFees() {
 
         {/* Error State */}
         {isWalletConnected && !isWrongNetwork && hasError && !isLoading && (
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 space-y-3">
+          <div className="bg-[#FF3B5C]/10 border border-[#FF3B5C]/50 rounded-lg p-4 space-y-3">
             <div className="flex items-start gap-3">
-              <span className="text-red-400 text-xl">❌</span>
+              <span className="text-[#FF3B5C] text-xl">❌</span>
               <div className="flex-1">
-                <p className="text-red-400 text-sm font-semibold">Error Loading Contract Fees</p>
-                <p className="text-red-300 text-xs mt-1">
+                <p className="text-[#FF3B5C] text-sm font-semibold">Error Loading Contract Fees</p>
+                <p className="text-[#FF3B5C]/80 text-xs mt-1">
                   Unable to read fees from contract. This may be due to contract access restrictions or network issues.
                 </p>
               </div>
             </div>
-            <div className="bg-red-500/5 rounded p-3 space-y-2">
-              <p className="text-xs text-red-200 font-mono">Debug Information:</p>
+            <div className="bg-[#FF3B5C]/5 rounded p-3 space-y-2">
+              <p className="text-xs text-[#FF3B5C]/70 font-mono">Debug Information:</p>
               {breedError && (
-                <div className="text-xs text-red-300">
+                <div className="text-xs text-[#FF3B5C]/80">
                   <span className="font-semibold">Breed Fee Error:</span>
                   <pre className="mt-1 overflow-x-auto">{String((breedError as Error)?.message || 'Unknown error')}</pre>
                 </div>
               )}
               {jailError && (
-                <div className="text-xs text-red-300 mt-2">
+                <div className="text-xs text-[#FF3B5C]/80 mt-2">
                   <span className="font-semibold">Jail Fee Error:</span>
                   <pre className="mt-1 overflow-x-auto">{String((jailError as Error)?.message || 'Unknown error')}</pre>
                 </div>
               )}
               {unhatchError && (
-                <div className="text-xs text-red-300 mt-2">
+                <div className="text-xs text-[#FF3B5C]/80 mt-2">
                   <span className="font-semibold">Unhatch Fee Error:</span>
                   <pre className="mt-1 overflow-x-auto">{String((unhatchError as Error)?.message || 'Unknown error')}</pre>
                 </div>
               )}
               {evolveError && (
-                <div className="text-xs text-red-300 mt-2">
+                <div className="text-xs text-[#FF3B5C]/80 mt-2">
                   <span className="font-semibold">Evolve Fee Error:</span>
                   <pre className="mt-1 overflow-x-auto">{String((evolveError as Error)?.message || 'Unknown error')}</pre>
                 </div>
@@ -179,69 +179,69 @@ export function ContractFees() {
         {isWalletConnected && !isWrongNetwork && !isLoading && !hasError && (breedFee !== undefined || jailFee || unhatchFee || evolveFee) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Breed Fee */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/30 rounded-xl p-5 space-y-3">
+            <div className="bg-gradient-to-br from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] border border-[rgba(255,208,117,0.3)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🧬</span>
                 <h3 className="font-semibold text-white">Breed Fee</h3>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-purple-400">
+                <p className="text-3xl font-bold text-[#ffd075]">
                   {breedFee !== undefined ? formatEther(breedFee as bigint) : '...'}
                 </p>
-                <p className="text-xs text-gray-400">ETH</p>
+                <p className="text-xs text-[#8a9090]">ETH</p>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#6b7575]">
                 Fee to breed 3 humans into a snake
               </p>
             </div>
 
             {/* Jail Fee */}
-            <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/10 border border-orange-500/30 rounded-xl p-5 space-y-3">
+            <div className="bg-gradient-to-br from-[rgba(197,169,123,0.08)] to-[rgba(197,169,123,0.08)] border border-[rgba(197,169,123,0.3)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">⛓️</span>
                 <h3 className="font-semibold text-white">Jail Fee</h3>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-orange-400">
+                <p className="text-3xl font-bold text-[#c5a97b]">
                   {jailFee ? formatEther(jailFee as bigint) : '0'}
                 </p>
-                <p className="text-xs text-gray-400">ETH</p>
+                <p className="text-xs text-[#8a9090]">ETH</p>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#6b7575]">
                 Fee to jail/unjail an NFT
               </p>
             </div>
 
             {/* Unhatch Fee */}
-            <div className="bg-gradient-to-br from-cyan-500/10 to-cyan-600/10 border border-cyan-500/30 rounded-xl p-5 space-y-3">
+            <div className="bg-gradient-to-br from-[rgba(255,208,117,0.06)] to-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.2)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🥚</span>
                 <h3 className="font-semibold text-white">Unhatch Fee</h3>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-cyan-400">
+                <p className="text-3xl font-bold text-[#ffd075]">
                   {unhatchFee ? formatEther(unhatchFee as bigint) : '0'}
                 </p>
-                <p className="text-xs text-gray-400">ETH</p>
+                <p className="text-xs text-[#8a9090]">ETH</p>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#6b7575]">
                 Fee to unhatch an egg NFT
               </p>
             </div>
 
             {/* Evolve Fee */}
-            <div className="bg-gradient-to-br from-pink-500/10 to-pink-600/10 border border-pink-500/30 rounded-xl p-5 space-y-3">
+            <div className="bg-gradient-to-br from-[rgba(197,169,123,0.06)] to-[rgba(197,169,123,0.08)] border border-[rgba(197,169,123,0.2)] rounded-xl p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">✨</span>
                 <h3 className="font-semibold text-white">Evolve Fee</h3>
               </div>
               <div className="space-y-1">
-                <p className="text-3xl font-bold text-pink-400">
+                <p className="text-3xl font-bold text-[#c5a97b]">
                   {evolveFee ? formatEther(evolveFee as bigint) : '0'}
                 </p>
-                <p className="text-xs text-gray-400">ETH</p>
+                <p className="text-xs text-[#8a9090]">ETH</p>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#6b7575]">
                 Fee to evolve an NFT
               </p>
             </div>
@@ -250,9 +250,9 @@ export function ContractFees() {
 
         {/* Success Message */}
         {isWalletConnected && !isWrongNetwork && !isLoading && !hasError && (breedFee !== undefined || jailFee || unhatchFee || evolveFee) && (
-          <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 flex items-center gap-3">
-            <span className="text-green-400 text-xl">✅</span>
-            <p className="text-green-400 text-sm">
+          <div className="bg-[#22c55e]/10 border border-[#22c55e]/50 rounded-lg p-4 flex items-center gap-3">
+            <span className="text-[#22c55e] text-xl">✅</span>
+            <p className="text-[#22c55e] text-sm">
               Successfully connected to NFT contract on {chain?.name || 'Base Mainnet'}!
             </p>
           </div>

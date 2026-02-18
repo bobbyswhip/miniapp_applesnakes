@@ -106,11 +106,11 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
   if (marketLoading) {
     return (
-      <div className="bg-gray-900 rounded-2xl border border-gray-700 p-6">
+      <div className="bg-[#171e1d] rounded-2xl border border-[rgba(255,255,255,0.06)] p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-700 rounded w-1/3" />
-          <div className="h-32 bg-gray-700 rounded" />
-          <div className="h-12 bg-gray-700 rounded" />
+          <div className="h-6 bg-[#1f2827] rounded w-1/3" />
+          <div className="h-32 bg-[#1f2827] rounded" />
+          <div className="h-12 bg-[#1f2827] rounded" />
         </div>
       </div>
     );
@@ -118,10 +118,10 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
   if (marketError || !market) {
     return (
-      <div className="bg-gray-900 rounded-2xl border border-red-500/50 p-6">
+      <div className="bg-[#171e1d] rounded-2xl border border-red-500/50 p-6">
         <p className="text-red-400">{marketError || 'Failed to load market'}</p>
         {onClose && (
-          <button onClick={onClose} className="mt-4 text-cyan-400 hover:underline">
+          <button onClick={onClose} className="mt-4 text-[#ffd075] hover:underline">
             ← Back
           </button>
         )}
@@ -132,24 +132,24 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
   const title = market.title || 'Prediction Market';
 
   return (
-    <div className="bg-gray-900 rounded-2xl border border-gray-700 overflow-hidden">
+    <div className="bg-[#171e1d] rounded-2xl border border-[rgba(255,255,255,0.06)] overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-900/50 to-pink-900/50 p-6 border-b border-gray-700">
+      <div className="bg-gradient-to-r from-[#3d2e1a]/50 to-[#3d2e1a]/50 p-6 border-b border-[rgba(255,255,255,0.06)]">
         <div className="flex justify-between items-start">
           <div>
             {onClose && (
-              <button onClick={onClose} className="text-gray-400 hover:text-white mb-2 text-sm">
+              <button onClick={onClose} className="text-[#8a9090] hover:text-white mb-2 text-sm">
                 ← Back
               </button>
             )}
             <h2 className="text-2xl font-bold text-white">{title}</h2>
             {market.description && (
-              <p className="text-gray-400 mt-1">{market.description}</p>
+              <p className="text-[#8a9090] mt-1">{market.description}</p>
             )}
           </div>
           <div className="text-right">
             <div className={`px-3 py-1 rounded-full text-sm mb-2 inline-block ${
-              isResolved ? 'bg-purple-500/20 text-purple-400' :
+              isResolved ? 'bg-[#c5a97b]/20 text-[#ffd075]' :
               isActive ? 'bg-green-500/20 text-green-400' :
               'bg-red-500/20 text-red-400'
             }`}>
@@ -161,13 +161,13 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
         {/* Stats Row */}
         <div className="grid grid-cols-2 gap-4 mt-4">
           <div className="text-center">
-            <p className="text-gray-400 text-sm">Total Pool</p>
+            <p className="text-[#8a9090] text-sm">Total Pool</p>
             <p className="text-xl font-bold text-green-400">{formatUSDC(totalPool)}</p>
           </div>
           <div className="text-center">
-            <p className="text-gray-400 text-sm">Time Left</p>
+            <p className="text-[#8a9090] text-sm">Time Left</p>
             <p className={`text-xl font-bold font-mono ${
-              timeLeftDisplay === 'Ended' ? 'text-red-400' : 'text-cyan-400'
+              timeLeftDisplay === 'Ended' ? 'text-red-400' : 'text-[#ffd075]'
             }`}>{timeLeftDisplay}</p>
           </div>
         </div>
@@ -188,8 +188,8 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
                   isWinner
                     ? 'border-green-500 bg-green-500/10'
                     : isSelected
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-gray-700 bg-gray-800/50'
+                    ? 'border-[#c5a97b] bg-[#c5a97b]/10'
+                    : 'border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50'
                 }`}
               >
                 {/* Outcome Header */}
@@ -207,7 +207,7 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
                         </span>
                       )}
                     </div>
-                    <span className="text-gray-400">
+                    <span className="text-[#8a9090]">
                       {formatUSDC(outcome.totalPool)} pool
                     </span>
                   </div>
@@ -274,12 +274,12 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
                   {isResolved && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className={`p-3 rounded-lg text-center ${
-                        isWinner ? 'bg-green-500/30 text-green-400' : 'bg-gray-700/50 text-gray-500'
+                        isWinner ? 'bg-green-500/30 text-green-400' : 'bg-[#1f2827]/50 text-[#6b7575]'
                       }`}>
                         YES: {(outcome.yesProbability * 100).toFixed(1)}%
                       </div>
                       <div className={`p-3 rounded-lg text-center ${
-                        !isWinner ? 'bg-red-500/30 text-red-400' : 'bg-gray-700/50 text-gray-500'
+                        !isWinner ? 'bg-red-500/30 text-red-400' : 'bg-[#1f2827]/50 text-[#6b7575]'
                       }`}>
                         NO: {(outcome.noProbability * 100).toFixed(1)}%
                       </div>
@@ -294,18 +294,18 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
       {/* User Positions */}
       {isConnected && positions.length > 0 && (
-        <div className="p-6 border-t border-gray-700">
+        <div className="p-6 border-t border-[rgba(255,255,255,0.06)]">
           <h3 className="text-lg font-semibold text-white mb-4">Your Positions</h3>
           <div className="space-y-2">
             {positions.map((pos, idx) => (
-              <div key={idx} className="p-3 bg-gray-800 rounded-lg flex justify-between items-center">
+              <div key={idx} className="p-3 bg-[#1a2221] rounded-lg flex justify-between items-center">
                 <div>
                   <span className={`px-2 py-0.5 rounded text-sm mr-2 ${
                     pos.side === 'yes' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                   }`}>
                     {pos.side.toUpperCase()}
                   </span>
-                  <span className="text-gray-300">
+                  <span className="text-[#cecece]">
                     {outcomes.find(o => o.index === pos.outcomeIndex)?.label || `Outcome ${pos.outcomeIndex}`}
                   </span>
                 </div>
@@ -323,7 +323,7 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
       {/* Trading Panel */}
       {isConnected && (
-        <div className="p-6 border-t border-gray-700 bg-gray-800/50">
+        <div className="p-6 border-t border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50">
           {/* Claimable Winnings */}
           {hasClaimable && (
             <div className="mb-4 p-4 bg-green-500/20 border border-green-500/50 rounded-xl">
@@ -334,7 +334,7 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
               <button
                 onClick={handleClaim}
                 disabled={claiming}
-                className="w-full py-3 bg-green-500 hover:bg-green-400 disabled:bg-gray-600 text-white font-bold rounded-lg transition-all"
+                className="w-full py-3 bg-green-500 hover:bg-green-400 disabled:bg-[#2a3533] text-white font-bold rounded-lg transition-all"
               >
                 {claiming ? 'Claiming...' : 'Claim Winnings'}
               </button>
@@ -343,7 +343,7 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
           {/* Bet Form */}
           {canBet && selectedOutcome !== null && (
-            <div className="p-4 bg-gray-900 rounded-xl border border-blue-500/50">
+            <div className="p-4 bg-[#171e1d] rounded-xl border border-[rgba(255,208,117,0.5)]">
               <div className="flex items-center gap-2 mb-3">
                 <span className={`px-3 py-1 rounded-full text-sm font-bold ${
                   selectedSide === 'yes' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
@@ -356,14 +356,14 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
               </div>
 
               <div className="mb-4">
-                <p className="text-gray-400 text-sm mb-2">Amount (USDC)</p>
+                <p className="text-[#8a9090] text-sm mb-2">Amount (USDC)</p>
                 <div className="flex gap-2">
                   <input
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white text-lg focus:border-blue-500 focus:outline-none"
+                    className="flex-1 bg-[#1f2827] border border-[rgba(255,255,255,0.1)] rounded-lg px-4 py-3 text-white text-lg focus:border-[#c5a97b] focus:outline-none"
                     min="1"
                     step="1"
                   />
@@ -378,8 +378,8 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
                     onClick={() => setAmount(val.toString())}
                     className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                       amount === val.toString()
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        ? 'bg-[#a88a5a] text-white'
+                        : 'bg-[#1f2827] text-[#cecece] hover:bg-[#2a3533]'
                     }`}
                   >
                     ${val}
@@ -389,14 +389,14 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
               {/* Potential payout */}
               {potentialPayout > 0 && (
-                <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                <div className="mb-4 p-3 bg-[#1a2221] rounded-lg">
                   <div className="flex justify-between">
-                    <span className="text-gray-400">Potential Payout</span>
+                    <span className="text-[#8a9090]">Potential Payout</span>
                     <span className="text-white font-bold">{formatUSDC(potentialPayout)}</span>
                   </div>
                   <div className="flex justify-between text-sm mt-1">
-                    <span className="text-gray-500">Odds</span>
-                    <span className="text-gray-400">
+                    <span className="text-[#6b7575]">Odds</span>
+                    <span className="text-[#8a9090]">
                       {formatOdds(selectedSide === 'yes' ? selectedOutcomeData?.yesOdds ?? 0 : selectedOutcomeData?.noOdds ?? 0)}
                     </span>
                   </div>
@@ -410,7 +410,7 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
                 className={`w-full py-4 font-bold text-lg rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                   selectedSide === 'yes'
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white'
-                    : 'bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-400 hover:to-pink-400 text-white'
+                    : 'bg-gradient-to-r from-red-500 to-[#c5a97b] hover:from-red-400 hover:to-[#ffd075] text-white'
                 }`}
               >
                 {betLoading
@@ -436,8 +436,8 @@ export function PredictionMarketPanel({ marketId, warId, onClose }: PredictionMa
 
       {/* Connect Wallet Prompt */}
       {!isConnected && canBet && (
-        <div className="p-6 border-t border-gray-700 bg-gray-800/50 text-center">
-          <p className="text-gray-400 mb-4">Connect your wallet to place bets</p>
+        <div className="p-6 border-t border-[rgba(255,255,255,0.06)] bg-[#1a2221]/50 text-center">
+          <p className="text-[#8a9090] mb-4">Connect your wallet to place bets</p>
         </div>
       )}
     </div>

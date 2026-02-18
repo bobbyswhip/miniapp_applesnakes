@@ -233,18 +233,26 @@ export function usePoolTrades(poolAddress?: string): UsePoolTradesReturn {
       // Fallback to GeckoTerminal (limited history but has price data)
       const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${effectivePoolAddress}/trades?trade_volume_in_usd_greater_than=0`;
 
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-        cache: 'no-store',
-      });
+      let data: GeckoTradesResponse;
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Accept': 'application/json',
+          },
+          cache: 'no-store',
+        });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        data = await response.json();
+      } catch (fetchErr) {
+        // GeckoTerminal may fail due to CORS in browser - fail silently
+        console.warn('[usePoolTrades] GeckoTerminal fetch failed:', fetchErr);
+        setIsLoading(false);
+        return;
       }
-
-      const data: GeckoTradesResponse = await response.json();
 
       // Normalize trades for UI - data is wrapped in attributes
       const normalizedTrades: PoolTrade[] = (data.data || []).map((item) => {

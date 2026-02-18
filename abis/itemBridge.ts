@@ -116,8 +116,8 @@ export const ITEM_BRIDGE_ABI = [
   },
 ] as const;
 
-// Contract address for ItemBridge v1.02
-export const ITEM_BRIDGE_ADDRESS = '0xF799bDC992f7B7F78a138FC17913908e7a332710' as const;
+// Contract address for ItemBridge v1.04
+export const ITEM_BRIDGE_ADDRESS = '0xc92adf6B4A55b9f58AcCb4EC07b5728473e4533c' as const;
 
 // BondedItems V7 address (for approval)
 export const BONDED_ITEMS_ADDRESS = '0xE89F37D8F1fc369B11fdAA2b0362D4D290f2cfdd' as const;

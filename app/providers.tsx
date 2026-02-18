@@ -18,6 +18,7 @@ const MiniKitProvider = MiniKitProviderOriginal as ComponentType<{
 import { NFTProvider } from '@/contexts/NFTContext';
 import { TransactionProvider } from '@/contexts/TransactionContext';
 import { useAutoConnect } from '@/hooks/useAutoConnect';
+import { MigrationModal } from '@/components/MigrationModal';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +48,10 @@ export function Providers({ children }: { children: ReactNode }) {
           <RainbowKitProvider>
             <AutoConnectWrapper>
               <TransactionProvider>
-                <NFTProvider>{children}</NFTProvider>
+                <NFTProvider>
+                  {children}
+                  <MigrationModal />
+                </NFTProvider>
               </TransactionProvider>
             </AutoConnectWrapper>
           </RainbowKitProvider>

@@ -112,14 +112,14 @@ export default function UnityAuthPage() {
   }, [isConnected, address, nonce, status, handleAuthenticate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-700">
+    <div className="min-h-screen bg-gradient-to-b from-[#171e1d] to-[#0a0d0c] flex items-center justify-center p-4">
+      <div className="bg-[#1a2221] rounded-2xl p-8 max-w-md w-full shadow-2xl border border-[rgba(255,255,255,0.08)]">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-white mb-2">
             🐍 AppleSnakes Login
           </h1>
-          <p className="text-gray-400 text-sm">
+          <p className="text-[#8a9090] text-sm">
             Connect your wallet to sign in to the game
           </p>
         </div>
@@ -135,10 +135,10 @@ export default function UnityAuthPage() {
         )}
 
         {status === 'verifying' && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+          <div className="bg-[rgba(255,208,117,0.06)] border border-[rgba(255,208,117,0.2)] rounded-lg p-4 mb-6">
             <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent" />
-              <span className="text-blue-500">Verifying signature...</span>
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-[rgba(255,208,117,0.4)] border-t-transparent" />
+              <span className="text-[#ffd075]">Verifying signature...</span>
             </div>
           </div>
         )}
@@ -171,19 +171,19 @@ export default function UnityAuthPage() {
         <div className="flex flex-col items-center gap-4">
           {!isConnected ? (
             <>
-              <p className="text-gray-300 text-center mb-2">
+              <p className="text-[#cecece] text-center mb-2">
                 Connect your wallet to continue
               </p>
               <ConnectButton />
             </>
           ) : (
             <>
-              <div className="w-full bg-gray-700/50 rounded-lg p-4 mb-4">
-                <div className="text-gray-400 text-xs mb-1">Connected Wallet</div>
+              <div className="w-full bg-[#1f2827]/50 rounded-lg p-4 mb-4">
+                <div className="text-[#8a9090] text-xs mb-1">Connected Wallet</div>
                 <div className="text-white font-mono text-sm truncate">
                   {address}
                 </div>
-                <div className="text-gray-400 text-xs mt-2">
+                <div className="text-[#8a9090] text-xs mt-2">
                   Chain: {chain?.name || 'Unknown'}
                 </div>
               </div>
@@ -210,8 +210,8 @@ export default function UnityAuthPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-gray-700">
-          <p className="text-gray-500 text-xs text-center">
+        <div className="mt-8 pt-6 border-t border-[rgba(255,255,255,0.08)]">
+          <p className="text-[#6b7575] text-xs text-center">
             By signing in, you confirm ownership of your wallet address.
             <br />
             No transaction fees will be charged.

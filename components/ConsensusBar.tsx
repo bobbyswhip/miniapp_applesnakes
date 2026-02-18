@@ -5,14 +5,14 @@ import type { VoteConsensus, DexConsensus, PairConsensus } from '@/types/token-w
 
 // DEX colors
 const DEX_COLORS = {
-  v4: { bg: 'bg-purple-500', gradient: 'from-purple-600 to-purple-500', text: 'text-purple-400' },
-  aerodrome: { bg: 'bg-blue-500', gradient: 'from-blue-600 to-blue-500', text: 'text-blue-400' },
+  v4: { bg: 'bg-[#c5a97b]', gradient: 'from-[#a88a5a] to-[#c5a97b]', text: 'text-[#ffd075]' },
+  aerodrome: { bg: 'bg-[#c5a97b]', gradient: 'from-[#a88a5a] to-[#c5a97b]', text: 'text-[#ffd075]' },
   hydrex: { bg: 'bg-orange-500', gradient: 'from-orange-600 to-orange-500', text: 'text-orange-400' },
 };
 
 // Pair colors
 const PAIR_COLORS = {
-  eth: { bg: 'bg-indigo-500', gradient: 'from-indigo-600 to-indigo-500', text: 'text-indigo-400' },
+  eth: { bg: 'bg-[#c5a97b]', gradient: 'from-[#a88a5a] to-[#c5a97b]', text: 'text-[#ffd075]' },
   wass: { bg: 'bg-green-500', gradient: 'from-green-600 to-green-500', text: 'text-green-400' },
 };
 
@@ -75,32 +75,32 @@ function DexBar({
         <div className="flex justify-between text-[9px] sm:text-xs mb-1 sm:mb-1.5">
           <div className="flex items-center gap-0.5 sm:gap-1">
             <span className={`font-semibold ${DEX_COLORS.v4.text}`}>Uniswap</span>
-            <span className="text-gray-500 hidden xs:inline">${dex?.v4.votes ?? 0}</span>
-            <span className={`font-bold ${leading === 'v4' ? DEX_COLORS.v4.text : 'text-gray-500'}`}>
+            <span className="text-[#6b7575] hidden xs:inline">${dex?.v4.votes ?? 0}</span>
+            <span className={`font-bold ${leading === 'v4' ? DEX_COLORS.v4.text : 'text-[#6b7575]'}`}>
               {v4Percent.toFixed(0)}%
             </span>
           </div>
           <div className="flex items-center gap-0.5 sm:gap-1">
             <span className={`font-semibold ${DEX_COLORS.aerodrome.text}`}>Aerodrome</span>
-            <span className="text-gray-500 hidden xs:inline">${dex?.aerodrome.votes ?? 0}</span>
-            <span className={`font-bold ${leading === 'aerodrome' ? DEX_COLORS.aerodrome.text : 'text-gray-500'}`}>
+            <span className="text-[#6b7575] hidden xs:inline">${dex?.aerodrome.votes ?? 0}</span>
+            <span className={`font-bold ${leading === 'aerodrome' ? DEX_COLORS.aerodrome.text : 'text-[#6b7575]'}`}>
               {aerodromePercent.toFixed(0)}%
             </span>
           </div>
           <div className="flex items-center gap-0.5 sm:gap-1">
             <span className={`font-semibold ${DEX_COLORS.hydrex.text}`}>Hydrex</span>
-            <span className="text-gray-500 hidden xs:inline">${dex?.hydrex.votes ?? 0}</span>
-            <span className={`font-bold ${leading === 'hydrex' ? DEX_COLORS.hydrex.text : 'text-gray-500'}`}>
+            <span className="text-[#6b7575] hidden xs:inline">${dex?.hydrex.votes ?? 0}</span>
+            <span className={`font-bold ${leading === 'hydrex' ? DEX_COLORS.hydrex.text : 'text-[#6b7575]'}`}>
               {hydrexPercent.toFixed(0)}%
             </span>
           </div>
         </div>
       )}
 
-      <div className="text-[9px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1">DEX Vote</div>
+      <div className="text-[9px] sm:text-xs text-[#6b7575] mb-0.5 sm:mb-1">DEX Vote</div>
 
       <div
-        className="relative w-full rounded-full overflow-hidden bg-gray-700 flex"
+        className="relative w-full rounded-full overflow-hidden bg-[#1f2827] flex"
         style={{ height: Math.max(16, height - 4) }}
       >
         {/* V4 Uniswap segment (purple) */}
@@ -135,7 +135,7 @@ function DexBar({
       </div>
 
       {dex?.isTie && (
-        <p className="text-center text-[9px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">
+        <p className="text-center text-[9px] sm:text-xs text-[#8a9090] mt-0.5 sm:mt-1">
           Tie! Aerodrome wins as tiebreaker
         </p>
       )}
@@ -164,26 +164,26 @@ function PairBar({
           <div className="flex items-center gap-0.5 sm:gap-1">
             <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3 sm:w-4 sm:h-4" />
             <span className={`font-semibold ${PAIR_COLORS.eth.text}`}>ETH</span>
-            <span className="text-gray-500 hidden xs:inline">${pair?.eth.votes ?? 0}</span>
-            <span className={`font-bold ${leading === 'eth' ? PAIR_COLORS.eth.text : 'text-gray-500'}`}>
+            <span className="text-[#6b7575] hidden xs:inline">${pair?.eth.votes ?? 0}</span>
+            <span className={`font-bold ${leading === 'eth' ? PAIR_COLORS.eth.text : 'text-[#6b7575]'}`}>
               {ethPercent.toFixed(0)}%
             </span>
           </div>
           <div className="flex items-center gap-0.5 sm:gap-1">
-            <span className={`font-bold ${leading === 'wass' ? PAIR_COLORS.wass.text : 'text-gray-500'}`}>
+            <span className={`font-bold ${leading === 'wass' ? PAIR_COLORS.wass.text : 'text-[#6b7575]'}`}>
               {wassPercent.toFixed(0)}%
             </span>
-            <span className="text-gray-500 hidden xs:inline">${pair?.wass.votes ?? 0}</span>
+            <span className="text-[#6b7575] hidden xs:inline">${pair?.wass.votes ?? 0}</span>
             <span className={`font-semibold ${PAIR_COLORS.wass.text}`}>wASS</span>
             <img src="/Images/Token.png" alt="wASS" className="w-3 h-3 sm:w-4 sm:h-4" />
           </div>
         </div>
       )}
 
-      <div className="text-[9px] sm:text-xs text-gray-500 mb-0.5 sm:mb-1">Pair Vote</div>
+      <div className="text-[9px] sm:text-xs text-[#6b7575] mb-0.5 sm:mb-1">Pair Vote</div>
 
       <div
-        className="relative w-full rounded-full overflow-hidden bg-gray-700"
+        className="relative w-full rounded-full overflow-hidden bg-[#1f2827]"
         style={{ height: Math.max(16, height - 4) }}
       >
         {/* ETH side (indigo/purple) */}
@@ -217,7 +217,7 @@ function PairBar({
       </div>
 
       {pair?.isTie && (
-        <p className="text-center text-[9px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">
+        <p className="text-center text-[9px] sm:text-xs text-[#8a9090] mt-0.5 sm:mt-1">
           Tie! ETH wins as tiebreaker
         </p>
       )}

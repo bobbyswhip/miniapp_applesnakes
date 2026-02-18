@@ -25,10 +25,10 @@ export default function TokenWarRedirect() {
 
   // Show loading while redirecting
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-900">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#171e1d]">
       <div className="text-center">
-        <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
-        <p className="text-gray-400">Opening Token Wars...</p>
+        <div className="w-12 h-12 border-4 border-[rgba(255,208,117,0.2)] border-t-[#ffd075] rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-[#8a9090]">Opening Token Wars...</p>
       </div>
     </main>
   );

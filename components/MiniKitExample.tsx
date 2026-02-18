@@ -35,18 +35,18 @@ export function MiniKitExample() {
   }
 
   return (
-    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+    <div className="p-4 bg-[rgba(255,208,117,0.05)] dark:bg-[rgba(255,208,117,0.06)] rounded-lg border border-[rgba(255,208,117,0.2)] dark:border-[rgba(255,208,117,0.15)]">
       <h3 className="text-lg font-semibold mb-2">Base MiniApp Status</h3>
       <div className="space-y-2 text-sm">
         <div>
           <span className="font-medium">MiniApp Ready:</span>{' '}
-          <span className={isMiniAppReady ? 'text-green-600' : 'text-gray-600'}>
+          <span className={isMiniAppReady ? 'text-green-600' : 'text-[#6b7575]'}>
             {isMiniAppReady ? '✓ Yes' : '○ Initializing'}
           </span>
         </div>
         <div>
           <span className="font-medium">Running in MiniApp:</span>{' '}
-          <span className={isInMiniApp ? 'text-green-600' : 'text-gray-600'}>
+          <span className={isInMiniApp ? 'text-green-600' : 'text-[#6b7575]'}>
             {isInMiniApp ? '✓ Yes' : '✗ No (Browser)'}
           </span>
         </div>
@@ -59,8 +59,8 @@ export function MiniKitExample() {
       </div>
 
       {isInMiniApp && (
-        <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded border border-blue-300 dark:border-blue-700">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
+        <div className="mt-4 p-3 bg-white dark:bg-[#1a2221] rounded border border-[rgba(255,208,117,0.2)] dark:border-[rgba(255,208,117,0.2)]">
+          <p className="text-xs text-[#6b7575] dark:text-[#8a9090]">
             🎉 Your app is running as a Base miniapp!
             <br />
             MiniKit features are fully available.
@@ -69,8 +69,8 @@ export function MiniKitExample() {
       )}
 
       {!isInMiniApp && (
-        <div className="mt-4 p-3 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
+        <div className="mt-4 p-3 bg-white dark:bg-[#1a2221] rounded border border-[rgba(255,255,255,0.1)] dark:border-[rgba(255,255,255,0.08)]">
+          <p className="text-xs text-[#6b7575] dark:text-[#8a9090]">
             ℹ️ Running in browser mode.
             <br />
             Test as a Base miniapp by opening in the Base app.

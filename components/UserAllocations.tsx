@@ -26,7 +26,7 @@ export function UserAllocations({ walletAddress }: Props) {
 
   if (!walletAddress) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-64 text-[#8a9090]">
         <div className="text-2xl mb-2">🔐</div>
         <p className="text-sm">Connect wallet to view allocations</p>
       </div>
@@ -36,8 +36,8 @@ export function UserAllocations({ walletAddress }: Props) {
   if (loading && !wallet) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-3" />
-        <p className="text-gray-400 text-sm">Loading allocations...</p>
+        <div className="w-8 h-8 border-4 border-[rgba(255,208,117,0.3)] border-t-[#c5a97b] rounded-full animate-spin mb-3" />
+        <p className="text-[#8a9090] text-sm">Loading allocations...</p>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function UserAllocations({ walletAddress }: Props) {
     // Show a friendly message for API errors (endpoint may not exist yet)
     const isApiUnavailable = error.includes('API error') || error.includes('non-JSON');
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-64 text-[#8a9090]">
         <div className="text-2xl mb-2">{isApiUnavailable ? '🚀' : '⚠️'}</div>
         <p className="text-sm font-medium text-white">
           {isApiUnavailable ? 'Coming Soon' : 'Error Loading'}
@@ -58,7 +58,7 @@ export function UserAllocations({ walletAddress }: Props) {
         </p>
         <button
           onClick={refresh}
-          className="mt-3 text-xs text-blue-400 hover:text-blue-300 px-3 py-1 border border-blue-400/30 rounded"
+          className="mt-3 text-xs text-[#ffd075] hover:text-[#ffe0a0] px-3 py-1 border border-[rgba(255,208,117,0.3)] rounded"
         >
           Retry
         </button>
@@ -68,7 +68,7 @@ export function UserAllocations({ walletAddress }: Props) {
 
   if (!hasAllocations && !hasActiveIcos) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-64 text-[#8a9090]">
         <div className="text-2xl mb-2">📦</div>
         <p className="text-sm font-medium">No Token Allocations</p>
         <p className="text-xs mt-1">Participate in Token Wars to earn tokens!</p>
@@ -79,27 +79,27 @@ export function UserAllocations({ walletAddress }: Props) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Summary Header - Compact */}
-      <div className="flex-shrink-0 bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-lg p-2 mb-2">
+      <div className="flex-shrink-0 bg-gradient-to-r from-[#3d2e1a]/30 to-[#3d2e1a]/30 rounded-lg p-2 mb-2">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-bold text-white">Your Allocations</span>
-          <span className="text-[10px] text-gray-400">{(wallet?.activeIcos?.count ?? 0) + (wallet?.launchedAirdrops?.totalSharesCount ?? wallet?.totalSharesCount ?? 0)} positions</span>
+          <span className="text-[10px] text-[#8a9090]">{(wallet?.activeIcos?.count ?? 0) + (wallet?.launchedAirdrops?.totalSharesCount ?? wallet?.totalSharesCount ?? 0)} positions</span>
         </div>
 
         <div className="grid grid-cols-4 gap-2 text-center">
           <div>
-            <div className="text-[10px] text-gray-400">Invested</div>
+            <div className="text-[10px] text-[#8a9090]">Invested</div>
             <div className="text-xs font-bold text-white">${wallet?.summary?.totalUsdcInvested ?? wallet?.totalUsdcInvested ?? 0}</div>
           </div>
           <div>
-            <div className="text-[10px] text-gray-400">Active ICOs</div>
+            <div className="text-[10px] text-[#8a9090]">Active ICOs</div>
             <div className="text-xs font-bold text-green-400">{wallet?.activeIcos?.count ?? 0}</div>
           </div>
           <div>
-            <div className="text-[10px] text-gray-400">Airdrops</div>
-            <div className="text-xs font-bold text-purple-400">{wallet?.launchedAirdrops?.totalSharesCount ?? wallet?.totalSharesCount ?? 0}</div>
+            <div className="text-[10px] text-[#8a9090]">Airdrops</div>
+            <div className="text-xs font-bold text-[#ffd075]">{wallet?.launchedAirdrops?.totalSharesCount ?? wallet?.totalSharesCount ?? 0}</div>
           </div>
           <div>
-            <div className="text-[10px] text-gray-400">Completed</div>
+            <div className="text-[10px] text-[#8a9090]">Completed</div>
             <div className="text-xs font-bold text-yellow-400">{wallet?.launchedAirdrops?.completedCount ?? wallet?.completedCount ?? 0}</div>
           </div>
         </div>
@@ -108,10 +108,10 @@ export function UserAllocations({ walletAddress }: Props) {
         {(wallet?.launchedAirdrops?.totalSharesCount ?? wallet?.totalSharesCount ?? 0) > 0 && (
         <div className="mt-2">
           <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-gray-400">Distribution Progress</span>
+            <span className="text-[#8a9090]">Distribution Progress</span>
             <span className="text-white">{(wallet?.launchedAirdrops?.overallProgress ?? wallet?.overallProgress ?? 0).toFixed(1)}%</span>
           </div>
-          <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-[#1f2827] rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-500"
               style={{ width: `${wallet?.launchedAirdrops?.overallProgress ?? wallet?.overallProgress ?? 0}%` }}
@@ -123,7 +123,7 @@ export function UserAllocations({ walletAddress }: Props) {
 
       {/* Drip Info - Very Compact */}
       {dripConfig && (
-        <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 bg-gray-800/50 rounded-lg mb-2 text-[10px] text-gray-400">
+        <div className="flex-shrink-0 flex items-center gap-2 px-2 py-1.5 bg-[#1a2221]/50 rounded-lg mb-2 text-[10px] text-[#8a9090]">
           <span>Drip: {dripConfig.intervalFormatted}</span>
           <span>•</span>
           <span>{dripConfig.percentPerDrip}%/drip</span>
@@ -185,7 +185,7 @@ export function UserAllocations({ walletAddress }: Props) {
 
 function AllocationCard({ share }: { share: AirdropShare }) {
   return (
-    <div className={`p-2 rounded-lg ${share.isComplete ? 'bg-gray-800/50' : 'bg-gray-800/50 border border-yellow-500/20'}`}>
+    <div className={`p-2 rounded-lg ${share.isComplete ? 'bg-[#1a2221]/50' : 'bg-[#1a2221]/50 border border-yellow-500/20'}`}>
       {/* Header with Token Image */}
       <div className="flex justify-between items-start mb-1.5">
         <div className="flex items-center gap-2 min-w-0">
@@ -196,38 +196,38 @@ function AllocationCard({ share }: { share: AirdropShare }) {
           />
           <div className="min-w-0">
             <div className="font-bold text-sm text-white truncate">{share.tokenSymbol}</div>
-            <div className="text-[10px] text-gray-400 truncate">{share.tokenName}</div>
+            <div className="text-[10px] text-[#8a9090] truncate">{share.tokenName}</div>
           </div>
         </div>
         <div className="text-right flex-shrink-0">
-          <div className="text-[10px] text-gray-400">Share</div>
-          <div className="text-xs font-bold text-purple-400">{share.sharePercent.toFixed(2)}%</div>
+          <div className="text-[10px] text-[#8a9090]">Share</div>
+          <div className="text-xs font-bold text-[#ffd075]">{share.sharePercent.toFixed(2)}%</div>
         </div>
       </div>
 
       {/* Token Amounts - Compact Grid */}
       <div className="grid grid-cols-3 gap-2 mb-1.5 text-[10px]">
         <div>
-          <div className="text-gray-500">Total</div>
+          <div className="text-[#6b7575]">Total</div>
           <div className="font-medium text-white truncate">{share.formatted.totalAllocation}</div>
         </div>
         <div>
-          <div className="text-gray-500">Received</div>
+          <div className="text-[#6b7575]">Received</div>
           <div className="font-medium text-green-400 truncate">{share.formatted.tokensSent}</div>
         </div>
         <div>
-          <div className="text-gray-500">Remaining</div>
+          <div className="text-[#6b7575]">Remaining</div>
           <div className="font-medium text-yellow-400 truncate">{share.formatted.tokensRemaining}</div>
         </div>
       </div>
 
       {/* Progress Bar */}
       <div className="mb-1.5">
-        <div className="flex justify-between text-[9px] text-gray-500 mb-0.5">
+        <div className="flex justify-between text-[9px] text-[#6b7575] mb-0.5">
           <span>{share.dripCount} drips</span>
           <span>{share.percentDistributed.toFixed(1)}%</span>
         </div>
-        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-1 bg-[#1f2827] rounded-full overflow-hidden">
           <div
             className={`h-full transition-all duration-500 ${share.isComplete ? 'bg-green-500' : 'bg-yellow-500'}`}
             style={{ width: `${share.percentDistributed}%` }}
@@ -239,12 +239,12 @@ function AllocationCard({ share }: { share: AirdropShare }) {
       {!share.isComplete ? (
         <div className="flex justify-between text-[10px]">
           <div>
-            <span className="text-gray-500">Next: </span>
+            <span className="text-[#6b7575]">Next: </span>
             <span className="text-yellow-400 font-mono">{share.timeToNextDripFormatted}</span>
           </div>
           <div>
-            <span className="text-gray-500">Done in: </span>
-            <span className="text-gray-300">{share.timeToCompleteFormatted}</span>
+            <span className="text-[#6b7575]">Done in: </span>
+            <span className="text-[#cecece]">{share.timeToCompleteFormatted}</span>
           </div>
         </div>
       ) : (
@@ -261,7 +261,7 @@ function AllocationCard({ share }: { share: AirdropShare }) {
         href={`https://basescan.org/token/${share.tokenAddress}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-1.5 pt-1.5 border-t border-gray-700/50 text-[9px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5"
+        className="mt-1.5 pt-1.5 border-t border-[rgba(255,255,255,0.04)] text-[9px] text-[#ffd075] hover:text-[#ffe0a0] flex items-center gap-0.5"
       >
         View on Basescan
         <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,13 +277,13 @@ function ActiveIcoCard({ ico }: { ico: ActiveIco }) {
   const statusColors: Record<string, string> = {
     active: 'text-green-400',
     launching: 'text-yellow-400',
-    ended: 'text-blue-400',
-    cancelled: 'text-gray-400',
+    ended: 'text-[#ffd075]',
+    cancelled: 'text-[#8a9090]',
     failed: 'text-red-400',
   };
 
   return (
-    <div className="p-2 rounded-lg bg-gray-800/50 border border-green-500/20">
+    <div className="p-2 rounded-lg bg-[#1a2221]/50 border border-green-500/20">
       {/* Header with Token Image */}
       <div className="flex justify-between items-start mb-1.5">
         <div className="flex items-center gap-2 min-w-0">
@@ -295,7 +295,7 @@ function ActiveIcoCard({ ico }: { ico: ActiveIco }) {
           />
           <div className="min-w-0">
             <div className="font-bold text-sm text-white truncate">{ico.tokenSymbol}</div>
-            <div className="text-[10px] text-gray-400 truncate">
+            <div className="text-[10px] text-[#8a9090] truncate">
               {ico.tokenName}
               <span className={`ml-1 ${statusColors[ico.status]}`}>
                 ({ico.status})
@@ -304,38 +304,38 @@ function ActiveIcoCard({ ico }: { ico: ActiveIco }) {
           </div>
         </div>
         <div className="text-right flex-shrink-0">
-          <div className="text-[10px] text-gray-400">Share</div>
-          <div className="text-xs font-bold text-purple-400">{ico.userSharePercent.toFixed(2)}%</div>
+          <div className="text-[10px] text-[#8a9090]">Share</div>
+          <div className="text-xs font-bold text-[#ffd075]">{ico.userSharePercent.toFixed(2)}%</div>
         </div>
       </div>
 
       {/* Stats Grid - Compact */}
       <div className="grid grid-cols-3 gap-2 mb-1.5 text-[10px]">
         <div>
-          <div className="text-gray-500">Invested</div>
+          <div className="text-[#6b7575]">Invested</div>
           <div className="font-medium text-white">${ico.userContribution}</div>
         </div>
         <div>
-          <div className="text-gray-500">Total Raised</div>
+          <div className="text-[#6b7575]">Total Raised</div>
           <div className="font-medium text-green-400">
             ${ico.totalRaised}
-            {ico.targetAmount && <span className="text-gray-500">/${ico.targetAmount}</span>}
+            {ico.targetAmount && <span className="text-[#6b7575]">/${ico.targetAmount}</span>}
           </div>
         </div>
         <div>
-          <div className="text-gray-500">Participants</div>
-          <div className="font-medium text-blue-400">{ico.participantCount}</div>
+          <div className="text-[#6b7575]">Participants</div>
+          <div className="font-medium text-[#ffd075]">{ico.participantCount}</div>
         </div>
       </div>
 
       {/* Progress Bar (if target exists) */}
       {ico.targetAmount && (
         <div className="mb-1.5">
-          <div className="flex justify-between text-[9px] text-gray-500 mb-0.5">
+          <div className="flex justify-between text-[9px] text-[#6b7575] mb-0.5">
             <span>Funding</span>
             <span>{ico.percentRaised.toFixed(1)}%</span>
           </div>
-          <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-1 bg-[#1f2827] rounded-full overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all"
               style={{ width: `${Math.min(ico.percentRaised, 100)}%` }}
@@ -348,10 +348,10 @@ function ActiveIcoCard({ ico }: { ico: ActiveIco }) {
       <div className="flex justify-between items-center text-[10px]">
         <div>
           {ico.isEnded ? (
-            <span className="text-blue-400">Ended</span>
+            <span className="text-[#ffd075]">Ended</span>
           ) : (
             <>
-              <span className="text-gray-500">Ends in: </span>
+              <span className="text-[#6b7575]">Ends in: </span>
               <span className="text-green-400 font-mono">{ico.timeRemainingFormatted}</span>
             </>
           )}
@@ -364,12 +364,12 @@ function ActiveIcoCard({ ico }: { ico: ActiveIco }) {
           ) : (
             <>
               {ico.winningDex && (
-                <span className="bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-[9px]">
+                <span className="bg-[#c5a97b]/20 text-[#ffd075] px-1.5 py-0.5 rounded text-[9px]">
                   {ico.winningDex.toUpperCase()}
                 </span>
               )}
               {ico.winningPair && (
-                <span className="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[9px]">
+                <span className="bg-[#c5a97b]/20 text-[#ffd075] px-1.5 py-0.5 rounded text-[9px]">
                   {ico.winningPair.toUpperCase()}
                 </span>
               )}

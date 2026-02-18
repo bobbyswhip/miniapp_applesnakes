@@ -24,7 +24,7 @@ export default function MyNFTsPage() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center space-y-6">
           <h1 className="text-4xl font-bold text-white">My AppleSnakes</h1>
-          <p className="text-gray-400">Connect your wallet to view your NFT collection</p>
+          <p className="text-[#8a9090]">Connect your wallet to view your NFT collection</p>
           <ConnectButton />
         </div>
       </div>
@@ -35,8 +35,8 @@ export default function MyNFTsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="text-gray-400">Loading your NFTs...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#ffd075] mx-auto"></div>
+          <p className="text-[#8a9090]">Loading your NFTs...</p>
         </div>
       </div>
     );
@@ -59,8 +59,8 @@ export default function MyNFTsPage() {
         <div className="text-center space-y-4">
           <span className="text-6xl">🐍</span>
           <h2 className="text-2xl font-bold text-white">No AppleSnakes Yet</h2>
-          <p className="text-gray-400">You don&apos;t own any AppleSnakes NFTs</p>
-          <p className="text-sm text-gray-500">Mint or buy some to get started!</p>
+          <p className="text-[#8a9090]">You don&apos;t own any AppleSnakes NFTs</p>
+          <p className="text-sm text-[#6b7575]">Mint or buy some to get started!</p>
         </div>
       </div>
     );
@@ -76,7 +76,7 @@ export default function MyNFTsPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">My AppleSnakes</h1>
-            <p className="text-gray-400">
+            <p className="text-[#8a9090]">
               You own <span className="text-white font-semibold">{nfts.length}</span> AppleSnakes
             </p>
           </div>
@@ -85,8 +85,8 @@ export default function MyNFTsPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-gray-800/50 rounded-lg p-4">
-            <p className="text-gray-400 text-sm mb-1">Total NFTs</p>
+          <div className="bg-[#1a2221]/50 rounded-lg p-4">
+            <p className="text-[#8a9090] text-sm mb-1">Total NFTs</p>
             <p className="text-3xl font-bold text-white">{nfts.length}</p>
           </div>
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
@@ -97,17 +97,17 @@ export default function MyNFTsPage() {
             <p className="text-red-400 text-sm mb-1">Jailed ⛓️</p>
             <p className="text-3xl font-bold text-red-400">{jailedCount}</p>
           </div>
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-            <p className="text-purple-400 text-sm mb-1">Floor Value</p>
-            <p className="text-2xl font-bold text-purple-400">TBD</p>
+          <div className="bg-[rgba(255,208,117,0.1)] border border-[rgba(255,208,117,0.3)] rounded-lg p-4">
+            <p className="text-[#ffd075] text-sm mb-1">Floor Value</p>
+            <p className="text-2xl font-bold text-[#ffd075]">TBD</p>
           </div>
         </div>
 
         {/* Filters (Optional - can add later) */}
         {/* <div className="flex gap-2">
-          <button className="px-4 py-2 bg-gray-800 rounded-lg text-white">All</button>
-          <button className="px-4 py-2 bg-gray-800/50 rounded-lg text-gray-400">Free</button>
-          <button className="px-4 py-2 bg-gray-800/50 rounded-lg text-gray-400">Jailed</button>
+          <button className="px-4 py-2 bg-[#1a2221] rounded-lg text-white">All</button>
+          <button className="px-4 py-2 bg-[#1a2221]/50 rounded-lg text-[#8a9090]">Free</button>
+          <button className="px-4 py-2 bg-[#1a2221]/50 rounded-lg text-[#8a9090]">Jailed</button>
         </div> */}
 
         {/* NFT Gallery */}

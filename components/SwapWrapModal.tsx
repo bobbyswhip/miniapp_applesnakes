@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt, useReadContract, useBalance } from 'wagmi';
 import { parseEther, formatEther, formatUnits } from 'viem';
 import { base } from 'wagmi/chains';
-import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, OPENSEA_COLLECTION_URL } from '@/config';
+import { getContracts, QUOTER_ADDRESS, QUOTER_ABI, OPENSEA_COLLECTION_URL, POOL_CONFIG } from '@/config';
 import { useSmartWallet } from '@/hooks/useSmartWallet';
 import { useBatchTransaction, ContractCall } from '@/hooks/useBatchTransaction';
 import { useTransactions } from '@/contexts/TransactionContext';
@@ -42,7 +42,7 @@ type WrapSubMode = 'wrap' | 'unwrap' | 'swap';
 // Default estimate per NFT (used while loading accurate quote)
 const DEFAULT_ETH_PER_NFT = 0.0012; // ~0.0012 ETH per NFT as initial estimate
 
-// IPNS fallback URL for NFT images when imageUrl is empty
+// IPNS fallback URL for NFT images when imageUrl is empty - NFT bucket
 const IPNS_BASE_URL = 'https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp';
 
 // Helper to get NFT image URL with IPNS fallback
@@ -87,6 +87,10 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
   const [swappedPoolNFTs, setSwappedPoolNFTs] = useState<Set<number>>(new Set()); // Pool NFTs received by user
   const [pendingSwap, setPendingSwap] = useState<{ userNFT: number; poolNFT: number } | null>(null);
   const [swapSuccessMessage, setSwapSuccessMessage] = useState<string | null>(null);
+
+  // Pool NFT pagination - limit to 100 per page for performance
+  const POOL_PAGE_SIZE = 100;
+  const [poolPage, setPoolPage] = useState(0);
 
   // Smart wallet detection for batch transactions
   const { supportsAtomicBatch, isSmartWallet } = useSmartWallet();
@@ -207,6 +211,19 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
     }
     return true;
   });
+
+  // Paginate pool NFTs for performance (300 per page)
+  const poolTotalPages = Math.ceil(displayedPoolNFTsForSwap.length / POOL_PAGE_SIZE);
+  const paginatedPoolNFTs = displayedPoolNFTsForSwap.slice(
+    poolPage * POOL_PAGE_SIZE,
+    (poolPage + 1) * POOL_PAGE_SIZE
+  );
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPoolPage(0);
+  }, [filterType, searchQuery]);
+
   const selectedCount = selectedNFTs.size;
   const totalWrapFee = wrapFee * BigInt(selectedCount);
   const totalWrapFeeFormatted = parseFloat(formatEther(totalWrapFee)).toFixed(4);
@@ -730,30 +747,30 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
   // ===== EMBEDDED FULL-SCREEN MODE =====
   if (embedded) {
     return (
-      <div className="h-full flex flex-col bg-gray-950">
+      <div className="h-full flex flex-col bg-[#111918]">
         {/* Full-Screen Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar with Controls - hidden when swapOnly to maximize swap content */}
           {!swapOnly && (
-          <aside className="w-80 flex-shrink-0 border-r border-gray-800 bg-gray-900/50 overflow-y-auto p-6 hidden md:block">
+          <aside className="w-80 flex-shrink-0 border-r border-[rgba(255,255,255,0.06)] bg-[#171e1d]/50 overflow-y-auto p-6 hidden md:block">
             {/* Mode Selection (hidden when buyOnly) */}
             {!buyOnly && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Mode</h3>
+                <h3 className="text-sm font-medium text-[#8a9090] mb-3">Mode</h3>
                 <div className="space-y-2">
                   <button
                     onClick={() => setMode('buy')}
                     disabled={isBusy}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       mode === 'buy'
-                        ? 'bg-gradient-to-r from-purple-500/30 to-pink-500/30 border-2 border-purple-500/50 text-purple-300'
-                        : 'bg-gray-800 border-2 border-gray-700 text-gray-300 hover:bg-gray-750 hover:border-gray-600'
+                        ? 'bg-gradient-to-r from-[rgba(197,169,123,0.18)] to-[rgba(255,208,117,0.18)] border-2 border-[rgba(197,169,123,0.3)] text-[#c5a97b]'
+                        : 'bg-[#1a2221] border-2 border-[rgba(255,255,255,0.08)] text-[#cecece] hover:bg-[#1f2827] hover:border-[rgba(255,255,255,0.1)]'
                     }`}
                   >
                     <span className="text-xl">🛒</span>
                     <div className="text-left">
                       <div className="font-semibold">Buy NFT</div>
-                      <div className="text-xs text-gray-400">Purchase with ETH or tokens</div>
+                      <div className="text-xs text-[#8a9090]">Purchase with ETH or tokens</div>
                     </div>
                   </button>
                   <button
@@ -761,14 +778,14 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     disabled={isBusy}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       mode === 'wrap'
-                        ? 'bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border-2 border-blue-500/50 text-blue-300'
-                        : 'bg-gray-800 border-2 border-gray-700 text-gray-300 hover:bg-gray-750 hover:border-gray-600'
+                        ? 'bg-gradient-to-r from-[rgba(255,208,117,0.18)] to-[rgba(197,169,123,0.18)] border-2 border-[rgba(255,208,117,0.3)] text-[#ffd075]'
+                        : 'bg-[#1a2221] border-2 border-[rgba(255,255,255,0.08)] text-[#cecece] hover:bg-[#1f2827] hover:border-[rgba(255,255,255,0.1)]'
                     }`}
                   >
                     <span className="text-xl">🎁</span>
                     <div className="text-left">
                       <div className="font-semibold">Wrap / Unwrap</div>
-                      <div className="text-xs text-gray-400">Convert NFTs ↔ tokens</div>
+                      <div className="text-xs text-[#8a9090]">Convert NFTs ↔ tokens</div>
                     </div>
                   </button>
                 </div>
@@ -778,15 +795,15 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
             {/* Wrap Sub-Mode Selection (only in wrap mode, hidden when swapOnly or buyOnly) */}
             {mode === 'wrap' && !swapOnly && !buyOnly && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Action</h3>
+                <h3 className="text-sm font-medium text-[#8a9090] mb-3">Action</h3>
                 <div className="space-y-2">
                   <button
                     onClick={() => setWrapSubMode('wrap')}
                     disabled={isBusy}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       wrapSubMode === 'wrap'
-                        ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
-                        : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-750'
+                        ? 'bg-[rgba(255,208,117,0.12)] border border-[rgba(255,208,117,0.3)] text-[#ffd075]'
+                        : 'bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#cecece] hover:bg-[#1f2827]'
                     }`}
                   >
                     <span>🔄</span>
@@ -797,8 +814,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     disabled={isBusy}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
                       wrapSubMode === 'swap'
-                        ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400'
-                        : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-750'
+                        ? 'bg-[rgba(197,169,123,0.12)] border border-[rgba(197,169,123,0.3)] text-[#c5a97b]'
+                        : 'bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#cecece] hover:bg-[#1f2827]'
                     }`}
                   >
                     <span>↔️</span>
@@ -810,29 +827,29 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
 
             {/* Smart Wallet Badge */}
             {isSmartWallet && (
-              <div className="mb-6 p-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/30">
-                <div className="flex items-center gap-2 text-cyan-400">
+              <div className="mb-6 p-3 rounded-xl bg-gradient-to-r from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] border border-[rgba(255,208,117,0.2)]">
+                <div className="flex items-center gap-2 text-[#ffd075]">
                   <span>⚡</span>
                   <span className="text-sm font-medium">Smart Wallet Active</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">One-click transactions enabled</p>
+                <p className="text-xs text-[#8a9090] mt-1">One-click transactions enabled</p>
               </div>
             )}
 
             {/* Balance Info */}
             <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-400">Your Balances</h3>
-              <div className="p-4 rounded-xl bg-gray-800/50 border border-gray-700 space-y-3">
+              <h3 className="text-sm font-medium text-[#8a9090]">Your Balances</h3>
+              <div className="p-4 rounded-xl bg-[#1a2221]/50 border border-[rgba(255,255,255,0.08)] space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">ETH</span>
+                  <span className="text-[#8a9090] text-sm">ETH</span>
                   <span className="text-white font-medium">{parseFloat(ethBalance).toFixed(4)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">wASS Tokens</span>
+                  <span className="text-[#8a9090] text-sm">wASS Tokens</span>
                   <span className="text-white font-medium">{tokenBalance.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Your NFTs</span>
+                  <span className="text-[#8a9090] text-sm">Your NFTs</span>
                   <span className="text-white font-medium">{nfts.length}</span>
                 </div>
               </div>
@@ -844,14 +861,14 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
           <main className="flex-1 overflow-hidden flex flex-col">
             {/* Mobile Mode Tabs - hidden when swapOnly */}
             {!swapOnly && (
-            <div className="md:hidden flex gap-2 p-4 border-b border-gray-800 bg-gray-900/50">
+            <div className="md:hidden flex gap-2 p-4 border-b border-[rgba(255,255,255,0.06)] bg-[#171e1d]/50">
               <button
                 onClick={() => setMode('buy')}
                 disabled={isBusy}
                 className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
                   mode === 'buy'
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                    : 'bg-gray-800 text-gray-400'
+                    ? 'bg-gradient-to-r from-[#c5a97b] to-[#ffd075] text-white'
+                    : 'bg-[#1a2221] text-[#8a9090]'
                 }`}
               >
                 🛒 Buy
@@ -861,8 +878,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                 disabled={isBusy}
                 className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
                   mode === 'wrap'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
-                    : 'bg-gray-800 text-gray-400'
+                    ? 'bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-black'
+                    : 'bg-[#1a2221] text-[#8a9090]'
                 }`}
               >
                 🎁 Wrap
@@ -877,7 +894,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                 <h2 className="text-3xl font-bold text-green-400 mb-4">
                   {mode === 'buy' ? (nftCount > 1 ? 'NFTs Acquired!' : 'NFT Acquired!') : 'Success!'}
                 </h2>
-                <p className="text-gray-400 text-lg mb-8 text-center max-w-md">
+                <p className="text-[#8a9090] text-lg mb-8 text-center max-w-md">
                   {mode === 'buy'
                     ? `Your new human${nftCount > 1 ? 's are' : ' is'} waiting in your wallet`
                     : 'Your transaction completed successfully'}
@@ -904,22 +921,22 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
                     Get Your NFT
                   </h2>
-                  <p className="text-gray-400 text-lg">
+                  <p className="text-[#8a9090] text-lg">
                     Purchase AppleSnakes NFTs instantly with ETH or wASS tokens
                   </p>
                 </div>
 
                 {/* NFT Count Selector */}
                 <div className="max-w-xl mx-auto">
-                  <div className="p-6 rounded-2xl bg-gray-900 border border-gray-800">
-                    <label className="block text-sm font-medium text-gray-400 mb-4">
+                  <div className="p-6 rounded-2xl bg-[#171e1d] border border-[rgba(255,255,255,0.06)]">
+                    <label className="block text-sm font-medium text-[#8a9090] mb-4">
                       How many NFTs do you want?
                     </label>
                     <div className="flex items-center gap-4">
                       <button
                         onClick={() => setNftCount(Math.max(1, nftCount - 1))}
                         disabled={nftCount <= 1 || isBusy}
-                        className="w-14 h-14 rounded-xl bg-gray-800 border border-gray-700 text-2xl text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        className="w-14 h-14 rounded-xl bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-2xl text-white hover:bg-[#1f2827] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                       >
                         −
                       </button>
@@ -931,13 +948,13 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           value={nftCount}
                           onChange={(e) => setNftCount(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
                           disabled={isBusy}
-                          className="w-full h-14 text-center text-3xl font-bold bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-purple-500"
+                          className="w-full h-14 text-center text-3xl font-bold bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-xl text-white focus:outline-none focus:border-[#ffd075]"
                         />
                       </div>
                       <button
                         onClick={() => setNftCount(Math.min(100, nftCount + 1))}
                         disabled={nftCount >= 100 || isBusy}
-                        className="w-14 h-14 rounded-xl bg-gray-800 border border-gray-700 text-2xl text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                        className="w-14 h-14 rounded-xl bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-2xl text-white hover:bg-[#1f2827] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                       >
                         +
                       </button>
@@ -950,8 +967,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           disabled={isBusy}
                           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                             nftCount === num
-                              ? 'bg-purple-500/30 border border-purple-500/50 text-purple-300'
-                              : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white'
+                              ? 'bg-[rgba(197,169,123,0.18)] border border-[rgba(197,169,123,0.3)] text-[#c5a97b]'
+                              : 'bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#8a9090] hover:text-white'
                           }`}
                         >
                           {num}
@@ -963,8 +980,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
 
                 {/* Payment Method */}
                 <div className="max-w-xl mx-auto">
-                  <div className="p-6 rounded-2xl bg-gray-900 border border-gray-800">
-                    <label className="block text-sm font-medium text-gray-400 mb-4">
+                  <div className="p-6 rounded-2xl bg-[#171e1d] border border-[rgba(255,255,255,0.06)]">
+                    <label className="block text-sm font-medium text-[#8a9090] mb-4">
                       Payment Method
                     </label>
                     <div className="grid grid-cols-2 gap-4">
@@ -973,13 +990,13 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         disabled={isBusy}
                         className={`p-4 rounded-xl border-2 transition-all ${
                           paymentMethod === 'eth'
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            ? 'border-[#ffd075]bg-[rgba(255,208,117,0.08)]'
+                            : 'border-[rgba(255,255,255,0.08)] bg-[#1a2221] hover:border-[rgba(255,255,255,0.1)]'
                         }`}
                       >
                         <div className="text-2xl mb-2">⚡</div>
                         <div className="font-semibold text-white">ETH</div>
-                        <div className="text-sm text-gray-400">Direct purchase</div>
+                        <div className="text-sm text-[#8a9090]">Direct purchase</div>
                       </button>
                       <button
                         onClick={() => setPaymentMethod('wass')}
@@ -987,12 +1004,12 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         className={`p-4 rounded-xl border-2 transition-all ${
                           paymentMethod === 'wass'
                             ? 'border-orange-500 bg-orange-500/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            : 'border-[rgba(255,255,255,0.08)] bg-[#1a2221] hover:border-[rgba(255,255,255,0.1)]'
                         }`}
                       >
                         <div className="text-2xl mb-2">🎁</div>
                         <div className="font-semibold text-white">wASS Tokens</div>
-                        <div className="text-sm text-gray-400">Use your tokens</div>
+                        <div className="text-sm text-[#8a9090]">Use your tokens</div>
                       </button>
                     </div>
                   </div>
@@ -1000,29 +1017,29 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
 
                 {/* Cost Breakdown */}
                 <div className="max-w-xl mx-auto">
-                  <div className="p-6 rounded-2xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
+                  <div className="p-6 rounded-2xl bg-gradient-to-r from-[rgba(197,169,123,0.08)] to-[rgba(255,208,117,0.08)] border border-[rgba(197,169,123,0.2)]">
                     <h3 className="text-lg font-semibold text-white mb-4">Cost Summary</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400">NFTs</span>
+                        <span className="text-[#8a9090]">NFTs</span>
                         <span className="text-white font-medium">{nftCount} × 1 wASS</span>
                       </div>
                       {paymentMethod === 'eth' && (
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-400">ETH Cost</span>
+                          <span className="text-[#8a9090]">ETH Cost</span>
                           <span className="text-white font-medium">
                             ~{totalEthCost.toFixed(5)} ETH
-                            {isLoadingQuote && <span className="text-gray-500 ml-1">(updating...)</span>}
+                            {isLoadingQuote && <span className="text-[#6b7575] ml-1">(updating...)</span>}
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-400">Unwrap Fee</span>
+                        <span className="text-[#8a9090]">Unwrap Fee</span>
                         <span className="text-white font-medium">{formatEther(wrapFee * BigInt(nftCount))} ETH</span>
                       </div>
-                      <div className="border-t border-gray-700 pt-3 flex justify-between items-center">
+                      <div className="border-t border-[rgba(255,255,255,0.08)] pt-3 flex justify-between items-center">
                         <span className="text-lg font-semibold text-white">Total</span>
-                        <span className="text-lg font-bold text-purple-400">
+                        <span className="text-lg font-bold text-[#c5a97b]">
                           {paymentMethod === 'eth'
                             ? `${totalEthCost.toFixed(5)} ETH`
                             : `${nftCount} wASS + ${formatEther(wrapFee * BigInt(nftCount))} ETH`}
@@ -1039,8 +1056,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     disabled={isBusy || (paymentMethod === 'eth' && parseFloat(ethBalance) < totalEthCost) || (paymentMethod === 'wass' && !hasEnoughWass)}
                     className={`w-full py-5 rounded-2xl font-bold text-xl transition-all ${
                       isBusy
-                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400 hover:scale-[1.02]'
+                        ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#c5a97b] to-[#ffd075] text-white hover:from-[#d4bc8e] hover:to-[#ffe0a0] hover:scale-[1.02]'
                     }`}
                   >
                     {isBusy ? (
@@ -1071,7 +1088,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       href={`https://basescan.org/tx/${hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center text-purple-400 hover:bg-purple-500/20 transition-all"
+                      className="block p-4 rounded-xl bg-[rgba(197,169,123,0.08)] border border-[rgba(197,169,123,0.2)] text-center text-[#c5a97b] hover:bg-[rgba(197,169,123,0.12)] transition-all"
                     >
                       View Transaction on BaseScan →
                     </a>
@@ -1087,7 +1104,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   <button
                     onClick={() => setWrapSubMode('wrap')}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${
-                      wrapSubMode === 'wrap' || wrapSubMode === 'unwrap' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : 'bg-gray-800 text-gray-400'
+                      wrapSubMode === 'wrap' || wrapSubMode === 'unwrap' ? 'bg-[rgba(255,208,117,0.12)] text-[#ffd075] border border-[rgba(255,208,117,0.3)]' : 'bg-[#1a2221] text-[#8a9090]'
                     }`}
                   >
                     Wrap / Unwrap
@@ -1095,7 +1112,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   <button
                     onClick={() => setWrapSubMode('swap')}
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${
-                      wrapSubMode === 'swap' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50' : 'bg-gray-800 text-gray-400'
+                      wrapSubMode === 'swap' ? 'bg-[rgba(197,169,123,0.12)] text-[#c5a97b] border border-[rgba(197,169,123,0.3)]' : 'bg-[#1a2221] text-[#8a9090]'
                     }`}
                   >
                     Swap NFTs
@@ -1128,28 +1145,28 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     )}
 
                     {/* Action Bar at Top */}
-                    <div className={`${swapOnly ? 'flex-shrink-0' : 'sticky top-0'} z-10 bg-gray-950/95 backdrop-blur-sm -mx-4 px-4 md:-mx-6 md:px-6 pb-4 mb-4 border-b border-gray-800`}>
+                    <div className={`${swapOnly ? 'flex-shrink-0' : 'sticky top-0'} z-10 bg-[#111918]/95 backdrop-blur-sm -mx-4 px-4 md:-mx-6 md:px-6 pb-4 mb-4 border-b border-[rgba(255,255,255,0.06)]`}>
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h2 className="text-xl font-bold text-white">Swap NFT ↔ Pool</h2>
-                          <p className="text-sm text-gray-400 flex items-center gap-1 flex-wrap">Select one of yours, then one from pool • Fee: {swapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5 inline" /></p>
+                          <p className="text-sm text-[#8a9090] flex items-center gap-1 flex-wrap">Select one of yours, then one from pool • Fee: {swapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5 inline" /></p>
                         </div>
 
                         {/* Selection Preview & Action */}
                         <div className="flex items-center gap-3">
                           {selectedUserNFTForSwap !== null && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                              <span className="text-xs text-gray-400">Yours:</span>
-                              <span className="text-sm font-bold text-blue-400">#{selectedUserNFTForSwap}</span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(255,208,117,0.12)] border border-[rgba(255,208,117,0.2)]">
+                              <span className="text-xs text-[#8a9090]">Yours:</span>
+                              <span className="text-sm font-bold text-[#ffd075]">#{selectedUserNFTForSwap}</span>
                             </div>
                           )}
                           {selectedUserNFTForSwap !== null && selectedPoolNFT !== null && (
-                            <span className="text-purple-400 text-lg">↔</span>
+                            <span className="text-[#c5a97b] text-lg">↔</span>
                           )}
                           {selectedPoolNFT !== null && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-500/20 border border-purple-500/30">
-                              <span className="text-xs text-gray-400">Pool:</span>
-                              <span className="text-sm font-bold text-purple-400">#{selectedPoolNFT}</span>
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgba(197,169,123,0.12)] border border-[rgba(197,169,123,0.2)]">
+                              <span className="text-xs text-[#8a9090]">Pool:</span>
+                              <span className="text-sm font-bold text-[#c5a97b]">#{selectedPoolNFT}</span>
                             </div>
                           )}
                           {(selectedUserNFTForSwap !== null || selectedPoolNFT !== null) && (
@@ -1159,7 +1176,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                 setSelectedPoolNFT(null);
                               }}
                               disabled={isBusy}
-                              className="px-3 py-2.5 rounded-xl font-medium bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition-all"
+                              className="px-3 py-2.5 rounded-xl font-medium bg-[#1f2827] text-[#cecece] hover:bg-[#243130] hover:text-white transition-all"
                             >
                               Clear
                             </button>
@@ -1169,8 +1186,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             disabled={!canSwap || isBusy}
                             className={`px-6 py-2.5 rounded-xl font-bold transition-all ${
                               !canSwap || isBusy
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400'
+                                ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                : 'bg-gradient-to-r from-[#c5a97b] to-[#ffd075] text-white hover:from-[#d4bc8e] hover:to-[#ffe0a0]'
                             }`}
                           >
                             {isBusy ? 'Processing...' : !nftApproved && canSwap
@@ -1187,32 +1204,32 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     {/* Section Headers Row */}
                     <div className={`grid grid-cols-2 gap-4 mb-4 ${swapOnly ? 'flex-shrink-0' : ''}`}>
                       <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                        <span className="w-3 h-3 rounded-full bg-[#ffd075]"></span>
                         <h3 className="text-lg font-bold text-white">Your NFTs</h3>
-                        <span className="text-gray-500 text-sm">({nfts.length})</span>
+                        <span className="text-[#6b7575] text-sm">({nfts.length})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-purple-500"></span>
+                        <span className="w-3 h-3 rounded-full bg-[#c5a97b]"></span>
                         <h3 className="text-lg font-bold text-white">Pool NFTs</h3>
-                        <span className="text-gray-500 text-sm">({poolTotalHeld})</span>
+                        <span className="text-[#6b7575] text-sm">({poolTotalHeld})</span>
                       </div>
                     </div>
 
                     {/* Full-Width Side-by-Side Grids */}
                     <div className={`grid grid-cols-2 gap-4 ${swapOnly ? 'flex-1 min-h-0' : ''}`} style={swapOnly ? undefined : { height: 'calc(100vh - 280px)' }}>
                       {/* YOUR NFTs Grid */}
-                      <div className="overflow-y-auto rounded-xl border border-gray-800 bg-gray-900/30 p-3">
+                      <div className="overflow-y-auto rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#171e1d]/30 p-3">
                         {nftsLoading ? (
                           <div className="flex justify-center items-center h-full">
-                            <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                            <div className="w-10 h-10 border-4 border-[rgba(255,208,117,0.2)] border-t-[#ffd075] rounded-full animate-spin" />
                           </div>
                         ) : displayedUserNFTsForSwap.length === 0 ? (
                           <div className="flex flex-col justify-center items-center h-full text-center">
                             <div className="text-4xl mb-3">🤷</div>
-                            <p className="text-gray-400 mb-4">No NFTs to swap</p>
+                            <p className="text-[#8a9090] mb-4">No NFTs to swap</p>
                             <button
                               onClick={() => setMode('buy')}
-                              className="px-4 py-2 rounded-lg bg-purple-500/20 text-purple-400 text-sm font-medium hover:bg-purple-500/30"
+                              className="px-4 py-2 rounded-lg bg-[rgba(197,169,123,0.12)] text-[#c5a97b] text-sm font-medium hover:bg-[rgba(197,169,123,0.18)]"
                             >
                               Get NFTs
                             </button>
@@ -1226,22 +1243,22 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                 disabled={isBusy}
                                 className={`relative rounded-lg overflow-hidden border-2 transition-all hover:scale-[1.02] ${
                                   selectedUserNFTForSwap === nft.tokenId
-                                    ? 'border-blue-500 ring-2 ring-blue-500/30'
-                                    : 'border-gray-700 hover:border-gray-500'
+                                    ? 'border-[#ffd075] ring-2 ring-[rgba(255,208,117,0.2)]'
+                                    : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)]'
                                 }`}
                               >
-                                <div className="aspect-square relative bg-gray-800">
+                                <div className="aspect-square relative bg-[#1a2221]">
                                   <img src={getNFTImageUrl(nft.imageUrl, nft.tokenId)} alt={nft.name} className="w-full h-full object-cover" />
                                   {selectedUserNFTForSwap === nft.tokenId && (
-                                    <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
-                                      <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-[rgba(255,208,117,0.18)] flex items-center justify-center">
+                                      <div className="w-8 h-8 rounded-full bg-[#ffd075] flex items-center justify-center">
                                         <span className="text-white text-sm">✓</span>
                                       </div>
                                     </div>
                                   )}
                                 </div>
-                                <div className="p-1.5 bg-gray-800 text-center">
-                                  <div className="text-xs text-gray-300">#{nft.tokenId}</div>
+                                <div className="p-1.5 bg-[#1a2221] text-center">
+                                  <div className="text-xs text-[#cecece]">#{nft.tokenId}</div>
                                 </div>
                               </button>
                             ))}
@@ -1250,45 +1267,69 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       </div>
 
                       {/* POOL NFTs Grid */}
-                      <div className="overflow-y-auto rounded-xl border border-gray-800 bg-gray-900/30 p-3">
+                      <div className="overflow-y-auto rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#171e1d]/30 p-3">
                         {poolNFTsLoading ? (
                           <div className="flex justify-center items-center h-full">
-                            <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                            <div className="w-10 h-10 border-4 border-[rgba(197,169,123,0.2)] border-t-[#c5a97b] rounded-full animate-spin" />
                           </div>
                         ) : displayedPoolNFTsForSwap.length === 0 ? (
                           <div className="flex flex-col justify-center items-center h-full text-center">
                             <div className="text-4xl mb-3">📭</div>
-                            <p className="text-gray-400">No NFTs in pool</p>
+                            <p className="text-[#8a9090]">No NFTs in pool</p>
                           </div>
                         ) : (
-                          <div className={`grid ${gridSizeClasses[gridSize]} gap-2`}>
-                            {displayedPoolNFTsForSwap.map((nft) => (
-                              <button
-                                key={nft.tokenId}
-                                onClick={() => setSelectedPoolNFT(nft.tokenId)}
-                                disabled={isBusy}
-                                className={`relative rounded-lg overflow-hidden border-2 transition-all hover:scale-[1.02] ${
-                                  selectedPoolNFT === nft.tokenId
-                                    ? 'border-purple-500 ring-2 ring-purple-500/30'
-                                    : 'border-gray-700 hover:border-gray-500'
-                                }`}
-                              >
-                                <div className="aspect-square relative bg-gray-800">
-                                  <img src={getNFTImageUrl(nft.imageUrl, nft.tokenId)} alt={nft.name} className="w-full h-full object-cover" />
-                                  {selectedPoolNFT === nft.tokenId && (
-                                    <div className="absolute inset-0 bg-purple-500/30 flex items-center justify-center">
-                                      <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
-                                        <span className="text-white text-sm">✓</span>
+                          <>
+                            <div className={`grid ${gridSizeClasses[gridSize]} gap-2`}>
+                              {paginatedPoolNFTs.map((nft) => (
+                                <button
+                                  key={nft.tokenId}
+                                  onClick={() => setSelectedPoolNFT(nft.tokenId)}
+                                  disabled={isBusy}
+                                  className={`relative rounded-lg overflow-hidden border-2 transition-all hover:scale-[1.02] ${
+                                    selectedPoolNFT === nft.tokenId
+                                      ? 'border-[#c5a97b]ring-2 ring-[rgba(197,169,123,0.2)]'
+                                      : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)]'
+                                  }`}
+                                >
+                                  <div className="aspect-square relative bg-[#1a2221]">
+                                    <img src={getNFTImageUrl(nft.imageUrl, nft.tokenId)} alt={nft.name} className="w-full h-full object-cover" />
+                                    {selectedPoolNFT === nft.tokenId && (
+                                      <div className="absolute inset-0 bg-[rgba(197,169,123,0.18)] flex items-center justify-center">
+                                        <div className="w-8 h-8 rounded-full bg-[#c5a97b] flex items-center justify-center">
+                                          <span className="text-white text-sm">✓</span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="p-1.5 bg-gray-800 text-center">
-                                  <div className="text-xs text-gray-300">#{nft.tokenId}</div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
+                                    )}
+                                  </div>
+                                  <div className="p-1.5 bg-[#1a2221] text-center">
+                                    <div className="text-xs text-[#cecece]">#{nft.tokenId}</div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                            {/* Pagination Controls */}
+                            {poolTotalPages > 1 && (
+                              <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-[rgba(255,255,255,0.06)]">
+                                <button
+                                  onClick={() => setPoolPage(p => Math.max(0, p - 1))}
+                                  disabled={poolPage === 0}
+                                  className="px-3 py-1 rounded-lg bg-[#1a2221] text-white text-sm hover:bg-[#1f2827] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  ← Prev
+                                </button>
+                                <span className="text-sm text-[#8a9090]">
+                                  Page {poolPage + 1} of {poolTotalPages}
+                                </span>
+                                <button
+                                  onClick={() => setPoolPage(p => Math.min(poolTotalPages - 1, p + 1))}
+                                  disabled={poolPage >= poolTotalPages - 1}
+                                  className="px-3 py-1 rounded-lg bg-[#1a2221] text-white text-sm hover:bg-[#1f2827] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Next →
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -1297,11 +1338,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   /* ===== WRAP/UNWRAP MODE - FULL SCREEN UNIFIED EXPERIENCE ===== */
                   <>
                     {/* Sticky Action Bar at Top */}
-                    <div className="sticky top-0 z-10 bg-gray-950/95 backdrop-blur-sm -mx-6 px-6 md:-mx-8 md:px-8 pb-4 mb-4 border-b border-gray-800">
+                    <div className="sticky top-0 z-10 bg-[#111918]/95 backdrop-blur-sm -mx-6 px-6 md:-mx-8 md:px-8 pb-4 mb-4 border-b border-[rgba(255,255,255,0.06)]">
                       <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h2 className="text-xl font-bold text-white">Wrap & Unwrap</h2>
-                          <p className="text-sm text-gray-400">
+                          <p className="text-sm text-[#8a9090]">
                             Balance: <span className="text-white font-medium">{tokenBalance.toFixed(2)} wASS</span> •
                             ETH: <span className="text-white font-medium">{parseFloat(ethBalance).toFixed(4)}</span>
                           </p>
@@ -1314,7 +1355,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             <button
                               onClick={() => setUnwrapCount(Math.max(1, unwrapCount - 1))}
                               disabled={unwrapCount <= 1 || isBusy}
-                              className="w-8 h-8 rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
+                              className="w-8 h-8 rounded-lg bg-[#1a2221] text-white hover:bg-[#1f2827] disabled:opacity-50"
                             >
                               −
                             </button>
@@ -1328,23 +1369,23 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                 setUnwrapCount(Math.max(1, Math.min(Math.floor(tokenBalance), val)));
                               }}
                               disabled={isBusy}
-                              className="w-16 h-8 text-center text-lg font-bold bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none"
+                              className="w-16 h-8 text-center text-lg font-bold bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-white focus:outline-none"
                             />
                             <button
                               onClick={() => setUnwrapCount(Math.min(Math.floor(tokenBalance), unwrapCount + 1))}
                               disabled={unwrapCount >= Math.floor(tokenBalance) || isBusy}
-                              className="w-8 h-8 rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
+                              className="w-8 h-8 rounded-lg bg-[#1a2221] text-white hover:bg-[#1f2827] disabled:opacity-50"
                             >
                               +
                             </button>
                           </div>
-                          <span className="text-xs text-gray-400 flex items-center gap-1">({unwrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3 inline" /> fee)</span>
+                          <span className="text-xs text-[#8a9090] flex items-center gap-1">({unwrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3 inline" /> fee)</span>
                           <button
                             onClick={handleUnwrapNFTs}
                             disabled={isBusy || !hasEnoughTokensForUnwrap || !hasEnoughEthForUnwrap}
                             className={`px-4 py-2 rounded-lg font-bold transition-all ${
                               isBusy || !hasEnoughTokensForUnwrap || !hasEnoughEthForUnwrap
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
                                 : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400'
                             }`}
                           >
@@ -1355,12 +1396,12 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     </div>
 
                     {/* Selection Controls Bar */}
-                    <div className="flex items-center justify-between mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/30">
+                    <div className="flex items-center justify-between mb-4 p-3 rounded-xl bg-[rgba(255,208,117,0.08)] border border-[rgba(255,208,117,0.2)]">
                       <div className="flex items-center gap-3">
                         <span className="text-lg">📦</span>
                         <div>
                           <span className="text-white font-bold">Wrap NFTs → Tokens</span>
-                          <span className="text-gray-400 ml-3 inline-flex items-center gap-1">
+                          <span className="text-[#8a9090] ml-3 inline-flex items-center gap-1">
                             {selectedCount} selected = {selectedCount} wASS • Fee: {totalWrapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                           </span>
                         </div>
@@ -1369,14 +1410,14 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         <button
                           onClick={handleSelectAll}
                           disabled={selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0 || isBusy}
-                          className="px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-400 text-sm font-medium disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-lg bg-[rgba(255,208,117,0.12)] text-[#ffd075] text-sm font-medium disabled:opacity-50"
                         >
                           All
                         </button>
                         <button
                           onClick={handleUnselectAll}
                           disabled={selectedNFTs.size === 0 || isBusy}
-                          className="px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 text-sm font-medium disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-lg bg-[#1a2221] text-[#8a9090] text-sm font-medium disabled:opacity-50"
                         >
                           Clear
                         </button>
@@ -1386,8 +1427,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             disabled={isBusy || !hasEnoughEthForWrapFee}
                             className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
                               isBusy || !hasEnoughEthForWrapFee
-                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-400 hover:to-cyan-400'
+                                ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                : 'bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-black hover:from-[#ffe0a0] hover:to-[#d4bc8e]'
                             }`}
                           >
                             {isBusy ? '...' : !nftApproved ? (supportsAtomicBatch ? 'Approve & Wrap' : 'Approve') : `Wrap ${selectedCount}`}
@@ -1397,19 +1438,19 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     </div>
 
                     {/* Full-Screen NFT Grid */}
-                    <div className="overflow-y-auto rounded-xl border border-gray-800 bg-gray-900/30 p-4" style={{ height: 'calc(100vh - 320px)' }}>
+                    <div className="overflow-y-auto rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#171e1d]/30 p-4" style={{ height: 'calc(100vh - 320px)' }}>
                       {nftsLoading ? (
                         <div className="flex justify-center items-center h-full">
-                          <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                          <div className="w-12 h-12 border-4 border-[rgba(255,208,117,0.2)] border-t-[#ffd075] rounded-full animate-spin" />
                         </div>
                       ) : displayedNFTs.length === 0 ? (
                         <div className="flex flex-col justify-center items-center h-full text-center">
                           <div className="text-6xl mb-4">🤷</div>
                           <h3 className="text-xl font-semibold text-white mb-2">No NFTs Found</h3>
-                          <p className="text-gray-400 mb-6">You don&apos;t own any NFTs to wrap</p>
+                          <p className="text-[#8a9090] mb-6">You don&apos;t own any NFTs to wrap</p>
                           <button
                             onClick={() => setMode('buy')}
-                            className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:from-purple-400 hover:to-pink-400"
+                            className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#c5a97b] to-[#ffd075] text-white font-semibold hover:from-[#d4bc8e] hover:to-[#ffe0a0]"
                           >
                             Get Your First NFT
                           </button>
@@ -1425,21 +1466,21 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                 disabled={isBusy}
                                 className={`relative rounded-xl overflow-hidden border-2 transition-all hover:scale-[1.02] ${
                                   isSelected
-                                    ? 'border-blue-500 ring-2 ring-blue-500/30'
-                                    : 'border-gray-700 hover:border-gray-500'
+                                    ? 'border-[#ffd075] ring-2 ring-[rgba(255,208,117,0.2)]'
+                                    : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.15)]'
                                 }`}
                               >
-                                <div className="aspect-square relative bg-gray-800">
+                                <div className="aspect-square relative bg-[#1a2221]">
                                   <img src={getNFTImageUrl(nft.imageUrl, nft.tokenId)} alt={nft.name} className="w-full h-full object-cover" />
                                   <div className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    isSelected ? 'bg-blue-500 border-blue-400' : 'bg-gray-900/80 border-gray-500'
+                                    isSelected ? 'bg-[#ffd075] border-[#ffd075]' : 'bg-[#171e1d]/80 border-[#6b7575]'
                                   }`}>
                                     {isSelected && <span className="text-white text-xs">✓</span>}
                                   </div>
                                 </div>
-                                <div className="p-2 bg-gray-800">
+                                <div className="p-2 bg-[#1a2221]">
                                   <div className="font-medium text-white text-sm truncate">{nft.name}</div>
-                                  <div className="text-xs text-gray-500">#{nft.tokenId}</div>
+                                  <div className="text-xs text-[#6b7575]">#{nft.tokenId}</div>
                                 </div>
                               </button>
                             );
@@ -1481,12 +1522,12 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
         maxHeight: '85vh',
         overflowY: 'auto',
         overflowX: 'hidden',
-        background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.05), rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.05))',
-        backgroundColor: 'rgba(17, 24, 39, 0.98)',
-        border: '2px solid rgba(168, 85, 247, 0.3)',
+        background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(197, 169, 123, 0.08), rgba(197, 169, 123, 0.05))',
+        backgroundColor: 'rgba(10, 13, 12, 0.98)',
+        border: '2px solid rgba(255, 208, 117, 0.3)',
         borderRadius: '16px',
         backdropFilter: 'blur(20px)',
-        boxShadow: '0 0 50px rgba(168, 85, 247, 0.3), 0 0 100px rgba(236, 72, 153, 0.2)',
+        boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(197, 169, 123, 0.2)',
         padding: 'clamp(16px, 4vw, 24px)',
       }}
       onClick={(e) => e.stopPropagation()}
@@ -1499,7 +1540,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   style={{
                     fontSize: 18,
                     fontWeight: 700,
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 1), rgba(236, 72, 153, 1))',
+                    background: 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(197, 169, 123, 1))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -1535,11 +1576,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                 flex: 1,
                 padding: '12px 16px',
                 background: mode === 'buy'
-                  ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))'
-                  : 'rgba(75, 85, 99, 0.3)',
+                  ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(197, 169, 123, 0.9))'
+                  : 'rgba(255, 255, 255, 0.3)',
                 border: mode === 'buy'
-                  ? '2px solid rgba(168, 85, 247, 0.8)'
-                  : '2px solid rgba(75, 85, 99, 0.4)',
+                  ? '2px solid rgba(255, 208, 117, 0.8)'
+                  : '2px solid rgba(255, 255, 255, 0.4)',
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
@@ -1557,11 +1598,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                 flex: 1,
                 padding: '12px 16px',
                 background: mode === 'wrap'
-                  ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9))'
-                  : 'rgba(75, 85, 99, 0.3)',
+                  ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.9), rgba(139, 114, 69, 0.9))'
+                  : 'rgba(255, 255, 255, 0.3)',
                 border: mode === 'wrap'
-                  ? '2px solid rgba(59, 130, 246, 0.8)'
-                  : '2px solid rgba(75, 85, 99, 0.4)',
+                  ? '2px solid rgba(197, 169, 123, 0.8)'
+                  : '2px solid rgba(255, 255, 255, 0.4)',
                 borderRadius: 10,
                 fontSize: 14,
                 fontWeight: 600,
@@ -1580,12 +1621,12 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
               <div
                 style={{
                   padding: '6px 14px',
-                  background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2))',
-                  border: '1px solid rgba(6, 182, 212, 0.5)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.2), rgba(197, 169, 123, 0.2))',
+                  border: '1px solid rgba(255, 208, 117, 0.5)',
                   borderRadius: 8,
                   fontSize: 12,
                   fontWeight: 600,
-                  color: 'rgba(6, 182, 212, 1)',
+                  color: 'rgba(255, 208, 117, 1)',
                 }}
               >
                 Smart Wallet Detected
@@ -1642,11 +1683,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     flex: 1,
                     padding: '8px 12px',
                     background: wrapSubMode === 'wrap'
-                      ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9))'
-                      : 'rgba(75, 85, 99, 0.3)',
+                      ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.9), rgba(139, 114, 69, 0.9))'
+                      : 'rgba(255, 255, 255, 0.3)',
                     border: wrapSubMode === 'wrap'
-                      ? '2px solid rgba(59, 130, 246, 0.8)'
-                      : '2px solid rgba(75, 85, 99, 0.4)',
+                      ? '2px solid rgba(197, 169, 123, 0.8)'
+                      : '2px solid rgba(255, 255, 255, 0.4)',
                     borderRadius: 8,
                     fontSize: 12,
                     fontWeight: 600,
@@ -1664,10 +1705,10 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     padding: '8px 12px',
                     background: wrapSubMode === 'unwrap'
                       ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.9))'
-                      : 'rgba(75, 85, 99, 0.3)',
+                      : 'rgba(255, 255, 255, 0.3)',
                     border: wrapSubMode === 'unwrap'
                       ? '2px solid rgba(34, 197, 94, 0.8)'
-                      : '2px solid rgba(75, 85, 99, 0.4)',
+                      : '2px solid rgba(255, 255, 255, 0.4)',
                     borderRadius: 8,
                     fontSize: 12,
                     fontWeight: 600,
@@ -1684,11 +1725,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     flex: 1,
                     padding: '8px 12px',
                     background: wrapSubMode === 'swap'
-                      ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))'
-                      : 'rgba(75, 85, 99, 0.3)',
+                      ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(197, 169, 123, 0.9))'
+                      : 'rgba(255, 255, 255, 0.3)',
                     border: wrapSubMode === 'swap'
-                      ? '2px solid rgba(168, 85, 247, 0.8)'
-                      : '2px solid rgba(75, 85, 99, 0.4)',
+                      ? '2px solid rgba(255, 208, 117, 0.8)'
+                      : '2px solid rgba(255, 255, 255, 0.4)',
                     borderRadius: 8,
                     fontSize: 12,
                     fontWeight: 600,
@@ -1718,7 +1759,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                 alignItems: 'center',
                 marginBottom: 12,
                 paddingBottom: 12,
-                borderBottom: '1px solid rgba(75, 85, 99, 0.4)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.4)',
               }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
@@ -1734,8 +1775,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     disabled={selectedNFTs.size === displayedNFTs.length || displayedNFTs.length === 0 || isBusy}
                     style={{
                       padding: '6px 12px',
-                      background: 'rgba(59, 130, 246, 0.3)',
-                      border: '1px solid rgba(59, 130, 246, 0.5)',
+                      background: 'rgba(197, 169, 123, 0.3)',
+                      border: '1px solid rgba(197, 169, 123, 0.5)',
                       borderRadius: 6,
                       fontSize: 12,
                       color: '#fff',
@@ -1750,8 +1791,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     disabled={selectedNFTs.size === 0 || isBusy}
                     style={{
                       padding: '6px 12px',
-                      background: 'rgba(75, 85, 99, 0.3)',
-                      border: '1px solid rgba(75, 85, 99, 0.5)',
+                      background: 'rgba(255, 255, 255, 0.3)',
+                      border: '1px solid rgba(255, 255, 255, 0.5)',
                       borderRadius: 6,
                       fontSize: 12,
                       color: '#fff',
@@ -1770,8 +1811,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   <div style={{
                     width: 40,
                     height: 40,
-                    border: '3px solid rgba(59, 130, 246, 0.3)',
-                    borderTopColor: 'rgba(59, 130, 246, 1)',
+                    border: '3px solid rgba(197, 169, 123, 0.3)',
+                    borderTopColor: 'rgba(197, 169, 123, 1)',
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite',
                   }} />
@@ -1790,8 +1831,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     style={{
                       marginTop: 16,
                       padding: '10px 20px',
-                      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))',
-                      border: '2px solid rgba(168, 85, 247, 0.8)',
+                      background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(197, 169, 123, 0.9))',
+                      border: '2px solid rgba(255, 208, 117, 0.8)',
                       borderRadius: 10,
                       fontSize: 14,
                       fontWeight: 600,
@@ -1823,13 +1864,13 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           borderRadius: 10,
                           overflow: 'hidden',
                           border: isSelected
-                            ? '2px solid rgba(59, 130, 246, 0.8)'
-                            : '2px solid rgba(75, 85, 99, 0.4)',
-                          background: 'rgba(17, 24, 39, 0.8)',
+                            ? '2px solid rgba(197, 169, 123, 0.8)'
+                            : '2px solid rgba(255, 255, 255, 0.4)',
+                          background: 'rgba(10, 13, 12, 0.8)',
                           cursor: isBusy ? 'not-allowed' : 'pointer',
                           transition: 'all 0.2s',
                           transform: isSelected ? 'scale(0.95)' : 'scale(1)',
-                          boxShadow: isSelected ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none',
+                          boxShadow: isSelected ? '0 0 15px rgba(197, 169, 123, 0.4)' : 'none',
                         }}
                       >
                         {/* Selection Indicator */}
@@ -1841,8 +1882,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           height: 20,
                           borderRadius: '50%',
                           border: '2px solid',
-                          borderColor: isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(75, 85, 99, 0.6)',
-                          background: isSelected ? 'rgba(59, 130, 246, 1)' : 'rgba(17, 24, 39, 0.8)',
+                          borderColor: isSelected ? 'rgba(197, 169, 123, 1)' : 'rgba(255, 255, 255, 0.6)',
+                          background: isSelected ? 'rgba(197, 169, 123, 1)' : 'rgba(10, 13, 12, 0.8)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -1861,7 +1902,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         </div>
 
                         {/* NFT Info */}
-                        <div style={{ padding: 6, background: 'rgba(17, 24, 39, 0.9)' }}>
+                        <div style={{ padding: 6, background: 'rgba(10, 13, 12, 0.9)' }}>
                           <div style={{ fontSize: 10, fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {nft.name}
                           </div>
@@ -1902,7 +1943,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         width: '100%',
                         padding: 14,
                         background: isBusy
-                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
                           : 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
                         border: '2px solid rgba(251, 191, 36, 0.5)',
                         borderRadius: 12,
@@ -1927,9 +1968,9 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         width: '100%',
                         padding: 14,
                         background: isBusy
-                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
-                          : 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95))',
-                        border: '2px solid rgba(59, 130, 246, 0.5)',
+                          ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
+                          : 'linear-gradient(135deg, rgba(197, 169, 123, 0.95), rgba(139, 114, 69, 0.95))',
+                        border: '2px solid rgba(197, 169, 123, 0.5)',
                         borderRadius: 12,
                         fontSize: 16,
                         fontWeight: 700,
@@ -1964,7 +2005,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
 
                   {/* Unwrap Form */}
                   <div style={{
-                    backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                    backgroundColor: 'rgba(10, 13, 12, 0.8)',
                     borderRadius: 12,
                     padding: 16,
                     marginBottom: 16,
@@ -2005,8 +2046,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           }}
                           style={{
                             width: '100%',
-                            backgroundColor: 'rgba(17, 24, 39, 0.8)',
-                            border: `1px solid ${unwrapError ? 'rgba(239, 68, 68, 0.6)' : 'rgba(75, 85, 99, 0.4)'}`,
+                            backgroundColor: 'rgba(10, 13, 12, 0.8)',
+                            border: `1px solid ${unwrapError ? 'rgba(239, 68, 68, 0.6)' : 'rgba(255, 255, 255, 0.4)'}`,
                             borderRadius: 8,
                             padding: 10,
                             color: '#fff',
@@ -2089,7 +2130,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       width: '100%',
                       padding: 14,
                       background: isBusy
-                        ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                        ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
                         : 'linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95))',
                       border: '2px solid rgba(34, 197, 94, 0.5)',
                       borderRadius: 12,
@@ -2119,11 +2160,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     textAlign: 'center',
                     marginBottom: 12,
                     padding: 8,
-                    background: 'rgba(168, 85, 247, 0.1)',
+                    background: 'rgba(255, 208, 117, 0.1)',
                     borderRadius: 8,
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                   }}>
-                    <span style={{ fontSize: 12, color: 'rgba(168, 85, 247, 1)' }}>
+                    <span style={{ fontSize: 12, color: 'rgba(255, 208, 117, 1)' }}>
                       {selectedPoolNFT === null
                         ? 'Step 1: Select an NFT you want from the pool'
                         : selectedUserNFTForSwap === null
@@ -2149,8 +2190,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           disabled={poolNFTsLoading}
                           style={{
                             padding: '4px 8px',
-                            background: 'rgba(168, 85, 247, 0.3)',
-                            border: '1px solid rgba(168, 85, 247, 0.5)',
+                            background: 'rgba(255, 208, 117, 0.3)',
+                            border: '1px solid rgba(255, 208, 117, 0.5)',
                             borderRadius: 6,
                             fontSize: 11,
                             color: '#fff',
@@ -2166,8 +2207,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           <div style={{
                             width: 40,
                             height: 40,
-                            border: '3px solid rgba(168, 85, 247, 0.3)',
-                            borderTopColor: 'rgba(168, 85, 247, 1)',
+                            border: '3px solid rgba(255, 208, 117, 0.3)',
+                            borderTopColor: 'rgba(255, 208, 117, 1)',
                             borderRadius: '50%',
                             animation: 'spin 1s linear infinite',
                           }} />
@@ -2180,43 +2221,93 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           </div>
                         </div>
                       ) : (
-                        <div style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(4, 1fr)',
-                          gap: 6,
-                          maxHeight: 220,
-                          overflowY: 'auto',
-                          paddingRight: 4,
-                        }}>
-                          {displayedPoolNFTsForSwap.map((nft) => (
-                            <button
-                              key={nft.tokenId}
-                              onClick={() => setSelectedPoolNFT(nft.tokenId)}
-                              style={{
-                                position: 'relative',
-                                borderRadius: 8,
-                                overflow: 'hidden',
-                                border: '1px solid rgba(75, 85, 99, 0.4)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                background: 'rgba(17, 24, 39, 0.8)',
-                              }}
-                            >
-                              <div style={{ aspectRatio: '1', position: 'relative' }}>
-                                <img
-                                  src={getNFTImageUrl(nft.imageUrl, nft.tokenId)}
-                                  alt={nft.name}
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                />
-                              </div>
-                              <div style={{ padding: 4, background: 'rgba(17, 24, 39, 0.9)' }}>
-                                <div style={{ fontSize: 9, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  #{nft.tokenId}
+                        <>
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            gap: 6,
+                            maxHeight: 220,
+                            overflowY: 'auto',
+                            paddingRight: 4,
+                          }}>
+                            {paginatedPoolNFTs.map((nft) => (
+                              <button
+                                key={nft.tokenId}
+                                onClick={() => setSelectedPoolNFT(nft.tokenId)}
+                                style={{
+                                  position: 'relative',
+                                  borderRadius: 8,
+                                  overflow: 'hidden',
+                                  border: '1px solid rgba(255, 255, 255, 0.4)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  background: 'rgba(10, 13, 12, 0.8)',
+                                }}
+                              >
+                                <div style={{ aspectRatio: '1', position: 'relative' }}>
+                                  <img
+                                    src={getNFTImageUrl(nft.imageUrl, nft.tokenId)}
+                                    alt={nft.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
                                 </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                                <div style={{ padding: 4, background: 'rgba(10, 13, 12, 0.9)' }}>
+                                  <div style={{ fontSize: 9, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    #{nft.tokenId}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          {/* Pagination Controls */}
+                          {poolTotalPages > 1 && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 12,
+                              marginTop: 8,
+                              paddingTop: 8,
+                              borderTop: '1px solid rgba(255, 255, 255, 0.3)',
+                            }}>
+                              <button
+                                onClick={() => setPoolPage(p => Math.max(0, p - 1))}
+                                disabled={poolPage === 0}
+                                style={{
+                                  padding: '4px 10px',
+                                  borderRadius: 6,
+                                  background: 'rgba(255, 255, 255, 0.5)',
+                                  color: '#fff',
+                                  fontSize: 11,
+                                  border: 'none',
+                                  cursor: poolPage === 0 ? 'not-allowed' : 'pointer',
+                                  opacity: poolPage === 0 ? 0.5 : 1,
+                                }}
+                              >
+                                ← Prev
+                              </button>
+                              <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)' }}>
+                                Page {poolPage + 1} of {poolTotalPages}
+                              </span>
+                              <button
+                                onClick={() => setPoolPage(p => Math.min(poolTotalPages - 1, p + 1))}
+                                disabled={poolPage >= poolTotalPages - 1}
+                                style={{
+                                  padding: '4px 10px',
+                                  borderRadius: 6,
+                                  background: 'rgba(255, 255, 255, 0.5)',
+                                  color: '#fff',
+                                  fontSize: 11,
+                                  border: 'none',
+                                  cursor: poolPage >= poolTotalPages - 1 ? 'not-allowed' : 'pointer',
+                                  opacity: poolPage >= poolTotalPages - 1 ? 0.5 : 1,
+                                }}
+                              >
+                                Next →
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   ) : selectedUserNFTForSwap === null ? (
@@ -2224,8 +2315,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     <>
                       {/* Show selected pool NFT */}
                       <div style={{
-                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                        backgroundColor: 'rgba(255, 208, 117, 0.1)',
+                        border: '1px solid rgba(255, 208, 117, 0.5)',
                         borderRadius: 10,
                         padding: 12,
                         marginBottom: 12,
@@ -2261,8 +2352,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           <div style={{
                             width: 40,
                             height: 40,
-                            border: '3px solid rgba(59, 130, 246, 0.3)',
-                            borderTopColor: 'rgba(59, 130, 246, 1)',
+                            border: '3px solid rgba(197, 169, 123, 0.3)',
+                            borderTopColor: 'rgba(197, 169, 123, 1)',
                             borderRadius: '50%',
                             animation: 'spin 1s linear infinite',
                           }} />
@@ -2291,10 +2382,10 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                 position: 'relative',
                                 borderRadius: 8,
                                 overflow: 'hidden',
-                                border: '1px solid rgba(75, 85, 99, 0.4)',
+                                border: '1px solid rgba(255, 255, 255, 0.4)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
-                                background: 'rgba(17, 24, 39, 0.8)',
+                                background: 'rgba(10, 13, 12, 0.8)',
                               }}
                             >
                               <div style={{ aspectRatio: '1', position: 'relative' }}>
@@ -2304,7 +2395,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               </div>
-                              <div style={{ padding: 4, background: 'rgba(17, 24, 39, 0.9)' }}>
+                              <div style={{ padding: 4, background: 'rgba(10, 13, 12, 0.9)' }}>
                                 <div style={{ fontSize: 9, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   #{nft.tokenId}
                                 </div>
@@ -2318,11 +2409,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     /* Step 3: Confirm swap */
                     <>
                       <div style={{
-                        backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                        backgroundColor: 'rgba(10, 13, 12, 0.8)',
                         borderRadius: 12,
                         padding: 16,
                         marginBottom: 16,
-                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                        border: '1px solid rgba(255, 208, 117, 0.5)',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', marginBottom: 16 }}>
                           <div style={{ textAlign: 'center' }}>
@@ -2335,7 +2426,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             <div style={{ fontSize: 20, fontWeight: 700, color: 'rgba(34, 197, 94, 1)' }}>#{selectedPoolNFT}</div>
                           </div>
                         </div>
-                        <div style={{ textAlign: 'center', paddingTop: 12, borderTop: '1px solid rgba(75, 85, 99, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                        <div style={{ textAlign: 'center', paddingTop: 12, borderTop: '1px solid rgba(255, 255, 255, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                           <span style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.6)' }}>Swap fee: </span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}>{swapFeeFormatted} <img src="/Images/Ether.png" alt="ETH" style={{ width: 12, height: 12 }} /></span>
                         </div>
@@ -2350,8 +2441,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           style={{
                             flex: 1,
                             padding: 10,
-                            background: 'rgba(75, 85, 99, 0.3)',
-                            border: '1px solid rgba(75, 85, 99, 0.5)',
+                            background: 'rgba(255, 255, 255, 0.3)',
+                            border: '1px solid rgba(255, 255, 255, 0.5)',
                             borderRadius: 8,
                             fontSize: 12,
                             color: '#fff',
@@ -2365,8 +2456,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                           style={{
                             flex: 1,
                             padding: 10,
-                            background: 'rgba(59, 130, 246, 0.3)',
-                            border: '1px solid rgba(59, 130, 246, 0.5)',
+                            background: 'rgba(197, 169, 123, 0.3)',
+                            border: '1px solid rgba(197, 169, 123, 0.5)',
                             borderRadius: 8,
                             fontSize: 12,
                             color: '#fff',
@@ -2401,7 +2492,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             width: '100%',
                             padding: 14,
                             background: isBusy
-                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
                               : 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))',
                             border: '2px solid rgba(251, 191, 36, 0.5)',
                             borderRadius: 12,
@@ -2426,9 +2517,9 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                             width: '100%',
                             padding: 14,
                             background: isBusy
-                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
-                              : 'linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(139, 92, 246, 0.95))',
-                            border: '2px solid rgba(168, 85, 247, 0.5)',
+                              ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
+                              : 'linear-gradient(135deg, rgba(255, 208, 117, 0.95), rgba(197, 169, 123, 0.95))',
+                            border: '2px solid rgba(255, 208, 117, 0.5)',
                             borderRadius: 12,
                             fontSize: 16,
                             fontWeight: 700,
@@ -2458,11 +2549,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
               {/* NFT Count Selector */}
               <div
                 style={{
-                  backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                  backgroundColor: 'rgba(10, 13, 12, 0.8)',
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 16,
-                  border: '1px solid rgba(75, 85, 99, 0.4)',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 12 }}>
@@ -2479,11 +2570,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                         minWidth: 50,
                         padding: '10px 16px',
                         background: nftCount === count
-                          ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.9), rgba(139, 92, 246, 0.9))'
-                          : 'rgba(75, 85, 99, 0.3)',
+                          ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(197, 169, 123, 0.9))'
+                          : 'rgba(255, 255, 255, 0.3)',
                         border: nftCount === count
-                          ? '2px solid rgba(168, 85, 247, 0.8)'
-                          : '2px solid rgba(75, 85, 99, 0.4)',
+                          ? '2px solid rgba(255, 208, 117, 0.8)'
+                          : '2px solid rgba(255, 255, 255, 0.4)',
                         borderRadius: 10,
                         fontSize: 16,
                         fontWeight: 600,
@@ -2501,11 +2592,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
               {/* Payment Method Toggle */}
               <div
                 style={{
-                  backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                  backgroundColor: 'rgba(10, 13, 12, 0.8)',
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 16,
-                  border: '1px solid rgba(75, 85, 99, 0.4)',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 12 }}>
@@ -2519,11 +2610,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       flex: 1,
                       padding: '12px 16px',
                       background: paymentMethod === 'eth'
-                        ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9))'
-                        : 'rgba(75, 85, 99, 0.3)',
+                        ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.9), rgba(139, 114, 69, 0.9))'
+                        : 'rgba(255, 255, 255, 0.3)',
                       border: paymentMethod === 'eth'
-                        ? '2px solid rgba(59, 130, 246, 0.8)'
-                        : '2px solid rgba(75, 85, 99, 0.4)',
+                        ? '2px solid rgba(197, 169, 123, 0.8)'
+                        : '2px solid rgba(255, 255, 255, 0.4)',
                       borderRadius: 10,
                       fontSize: 14,
                       fontWeight: 600,
@@ -2543,10 +2634,10 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       padding: '12px 16px',
                       background: paymentMethod === 'wass'
                         ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(22, 163, 74, 0.9))'
-                        : 'rgba(75, 85, 99, 0.3)',
+                        : 'rgba(255, 255, 255, 0.3)',
                       border: paymentMethod === 'wass'
                         ? '2px solid rgba(34, 197, 94, 0.8)'
-                        : '2px solid rgba(75, 85, 99, 0.4)',
+                        : '2px solid rgba(255, 255, 255, 0.4)',
                       borderRadius: 10,
                       fontSize: 14,
                       fontWeight: 600,
@@ -2567,11 +2658,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
               {/* Cost Breakdown */}
               <div
                 style={{
-                  backgroundColor: 'rgba(17, 24, 39, 0.8)',
+                  backgroundColor: 'rgba(10, 13, 12, 0.8)',
                   borderRadius: 12,
                   padding: 16,
                   marginBottom: 16,
-                  border: '1px solid rgba(75, 85, 99, 0.4)',
+                  border: '1px solid rgba(255, 255, 255, 0.4)',
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 12 }}>
@@ -2592,8 +2683,8 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                               display: 'inline-block',
                               width: 12,
                               height: 12,
-                              border: '2px solid rgba(168, 85, 247, 0.3)',
-                              borderTopColor: 'rgba(168, 85, 247, 1)',
+                              border: '2px solid rgba(255, 208, 117, 0.3)',
+                              borderTopColor: 'rgba(255, 208, 117, 1)',
                               borderRadius: '50%',
                               animation: 'spin 1s linear infinite',
                             }}
@@ -2603,7 +2694,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     </div>
                     <div
                       style={{
-                        borderTop: '1px solid rgba(75, 85, 99, 0.4)',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.4)',
                         paddingTop: 8,
                         marginTop: 8,
                         display: 'flex',
@@ -2611,7 +2702,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                       }}
                     >
                       <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Total</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(168, 85, 247, 1)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 208, 117, 1)', display: 'flex', alignItems: 'center', gap: 6 }}>
                         {totalEthCost.toFixed(6)} ETH
                         {isLoadingQuote && !quoteReady && (
                           <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.5)' }}>(est)</span>
@@ -2642,7 +2733,7 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     </div>
                     <div
                       style={{
-                        borderTop: '1px solid rgba(75, 85, 99, 0.4)',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.4)',
                         paddingTop: 8,
                         marginTop: 8,
                       }}
@@ -2735,16 +2826,16 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   width: '100%',
                   padding: 16,
                   background: isBusy
-                    ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(255, 255, 255, 0.95))'
                     : txStep === 'cancelled'
                     ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(245, 158, 11, 0.95))'
                     : paymentMethod === 'eth'
-                    ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95))'
+                    ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.95), rgba(139, 114, 69, 0.95))'
                     : 'linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(22, 163, 74, 0.95))',
                   border: txStep === 'cancelled'
                     ? '2px solid rgba(251, 191, 36, 0.5)'
                     : paymentMethod === 'eth'
-                    ? '2px solid rgba(59, 130, 246, 0.5)'
+                    ? '2px solid rgba(197, 169, 123, 0.5)'
                     : '2px solid rgba(34, 197, 94, 0.5)',
                   borderRadius: 12,
                   fontSize: 16,
@@ -2782,11 +2873,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                     display: 'block',
                     marginTop: 12,
                     padding: 10,
-                    backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                    backgroundColor: 'rgba(255, 208, 117, 0.1)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                     borderRadius: 8,
                     fontSize: 11,
-                    color: 'rgba(168, 85, 247, 0.9)',
+                    color: 'rgba(255, 208, 117, 0.9)',
                     textAlign: 'center',
                     textDecoration: 'none',
                   }}
@@ -2804,11 +2895,11 @@ export function SwapWrapModal({ isOpen, onClose, initialMode = 'buy', embedded =
                   display: 'block',
                   marginTop: 12,
                   padding: 10,
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  backgroundColor: 'rgba(197, 169, 123, 0.1)',
+                  border: '1px solid rgba(197, 169, 123, 0.3)',
                   borderRadius: 8,
                   fontSize: 12,
-                  color: 'rgba(59, 130, 246, 0.9)',
+                  color: 'rgba(197, 169, 123, 0.9)',
                   textAlign: 'center',
                   textDecoration: 'none',
                   fontWeight: 600,

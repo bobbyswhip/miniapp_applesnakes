@@ -143,19 +143,6 @@ export const farcasterPageMetadata = {
     })
   },
 
-  docs: () => {
-    const baseUrl = getBaseUrl()
-    return generateFarcasterMetadata({
-      title: 'Documentation',
-      description: 'Learn how to play AppleSnakes! Game mechanics, breeding strategies, location guides, and token vesting details.',
-      imageUrl: `${baseUrl}/Images/TownStoreLarge.png`,
-      buttonTitle: 'Read Docs',
-      appUrl: `${baseUrl}/docs`,
-      ogTitle: 'How to Play',
-      ogDescription: 'Learn the game mechanics and strategies for AppleSnakes',
-    })
-  },
-
   location: (locationName: string, locationImage: string) => {
     const baseUrl = getBaseUrl()
     return generateFarcasterMetadata({

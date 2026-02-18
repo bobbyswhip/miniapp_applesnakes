@@ -131,11 +131,11 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
           maxHeight: 'clamp(30rem, 85vh, 40rem)',
           overflowY: 'hidden',
           overflowX: 'hidden',
-          background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05))',
-          backgroundColor: 'rgba(17, 24, 39, 0.98)',
-          border: '2px solid rgba(6, 182, 212, 0.3)',
+          background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.05), rgba(197, 169, 123, 0.08), rgba(255, 208, 117, 0.05))',
+          backgroundColor: 'rgba(10, 13, 12, 0.98)',
+          border: '2px solid rgba(255, 208, 117, 0.3)',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 50px rgba(6, 182, 212, 0.3), 0 0 100px rgba(168, 85, 247, 0.2), inset 0 0 30px rgba(168, 85, 247, 0.05)',
+          boxShadow: '0 0 50px rgba(255, 208, 117, 0.3), 0 0 100px rgba(197, 169, 123, 0.2), inset 0 0 30px rgba(197, 169, 123, 0.05)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -144,7 +144,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.1), transparent)',
+            background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.1), transparent)',
             animation: 'shimmer 3s infinite',
             pointerEvents: 'none',
             zIndex: 1,
@@ -159,8 +159,8 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
           className="rounded-t-2xl relative overflow-hidden"
           style={{
             padding: 'clamp(0.75rem, 2.5vh, 1rem)',
-            background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(168, 85, 247, 0.3), rgba(236, 72, 153, 0.3))',
-            borderBottom: '1px solid rgba(6, 182, 212, 0.3)',
+            background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3), rgba(255, 208, 117, 0.3))',
+            borderBottom: '1px solid rgba(255, 208, 117, 0.3)',
           }}
         >
           {/* Gradient shimmer overlay */}
@@ -168,7 +168,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
             style={{
               position: 'absolute',
               inset: 0,
-              background: 'linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.2), transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(255, 208, 117, 0.2), transparent)',
               animation: 'shimmer 4s infinite',
               pointerEvents: 'none',
             }}
@@ -191,7 +191,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   className="font-bold"
                   style={{
                     fontSize: 'clamp(1rem, 2.5vh, 1.25rem)',
-                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 1), rgba(168, 85, 247, 1))',
+                    background: 'linear-gradient(135deg, rgba(255, 208, 117, 1), rgba(197, 169, 123, 1))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -199,7 +199,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   {typeConfig.title}
                 </h2>
                 <p
-                  className="text-cyan-200"
+                  className="text-[#e0e0e0]"
                   style={{
                     fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)'
                   }}
@@ -210,7 +210,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
             </div>
             <button
               onClick={onClose}
-              className="text-cyan-300/80 hover:text-cyan-200 transition-colors"
+              className="text-[#c5a97b]/80 hover:text-[#ffd075] transition-colors"
               style={{
                 fontSize: 'clamp(1.25rem, 3vh, 1.5rem)'
               }}
@@ -222,7 +222,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
 
         {/* NFT Info */}
         <div
-          className="border-b border-cyan-500/20"
+          className="border-b border-[rgba(255,208,117,0.2)]"
           style={{
             padding: 'clamp(0.75rem, 2.5vh, 1rem)'
           }}
@@ -246,7 +246,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
               <p className="text-white" style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}>Token ID: <span className="font-mono">#{nft.tokenId}</span></p>
               <p className="text-white" style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}>Type: <span className="capitalize">{nft.nftType}</span></p>
               {nft.isJailed && (
-                <p className="text-red-400 flex items-center gap-1 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}>
+                <p className="text-[#FF3B5C] flex items-center gap-1 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.8vh, 0.875rem)' }}>
                   ⛓️ Jailed
                 </p>
               )}
@@ -275,23 +275,23 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
               style={{
                 padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                 gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                border: '2px solid rgba(168, 85, 247, 0.5)',
-                boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
+                background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))',
+                border: '2px solid rgba(197, 169, 123, 0.5)',
+                boxShadow: '0 0 15px rgba(197, 169, 123, 0.2)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.5), rgba(139, 92, 246, 0.5))';
-                e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.4)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.5), rgba(197, 169, 123, 0.5))';
+                e.currentTarget.style.boxShadow = '0 0 25px rgba(197, 169, 123, 0.4)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))';
-                e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.2)';
+                e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))';
+                e.currentTarget.style.boxShadow = '0 0 15px rgba(197, 169, 123, 0.2)';
               }}
             >
               <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>✨</span>
               <div>
                 <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Hatch Egg</span>
-                <p className="text-purple-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Open the hatching interface</p>
+                <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Open the hatching interface</p>
               </div>
             </button>
           )}
@@ -310,27 +310,27 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
                   background: nft.isJailed
-                    ? 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))'
-                    : 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))',
+                    ? 'linear-gradient(135deg, rgba(42, 53, 51, 0.3), rgba(31, 40, 39, 0.3))'
+                    : 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
                   border: nft.isJailed
-                    ? '2px solid rgba(75, 85, 99, 0.5)'
-                    : '2px solid rgba(34, 197, 94, 0.5)',
+                    ? '2px solid rgba(42, 53, 51, 0.5)'
+                    : '2px solid rgba(255, 208, 117, 0.5)',
                   boxShadow: nft.isJailed
-                    ? '0 0 10px rgba(75, 85, 99, 0.1)'
-                    : '0 0 15px rgba(34, 197, 94, 0.2)',
+                    ? '0 0 10px rgba(42, 53, 51, 0.1)'
+                    : '0 0 15px rgba(255, 208, 117, 0.2)',
                   cursor: nft.isJailed ? 'not-allowed' : 'pointer',
                   opacity: nft.isJailed ? 0.6 : 1,
                 }}
                 onMouseEnter={(e) => {
                   if (!nft.isJailed) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(22, 163, 74, 0.5))';
-                    e.currentTarget.style.boxShadow = '0 0 25px rgba(34, 197, 94, 0.4)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.5), rgba(197, 169, 123, 0.5))';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.4)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!nft.isJailed) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))';
-                    e.currentTarget.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.2)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.2)';
                   }
                 }}
               >
@@ -339,7 +339,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
                     List on Market
                   </span>
-                  <p className="text-green-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     {nft.isJailed
                       ? 'Cannot list while jailed'
                       : 'Sell for wASS on our marketplace'
@@ -357,17 +357,17 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3))',
-                  border: '2px solid rgba(59, 130, 246, 0.5)',
-                  boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))',
+                  border: '2px solid rgba(197, 169, 123, 0.5)',
+                  boxShadow: '0 0 15px rgba(197, 169, 123, 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(147, 51, 234, 0.5))';
-                  e.currentTarget.style.boxShadow = '0 0 25px rgba(59, 130, 246, 0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.5), rgba(197, 169, 123, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(197, 169, 123, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(147, 51, 234, 0.3))';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.2)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(197, 169, 123, 0.2)';
                 }}
               >
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>✨</span>
@@ -375,7 +375,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
                     Edit Traits
                   </span>
-                  <p className="text-blue-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     Customize appearance with inventory items ($0.05)
                   </p>
                 </div>
@@ -396,27 +396,27 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
                   background: nft.canUnwrap
-                    ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                    : 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
+                    ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                    : 'linear-gradient(135deg, rgba(42, 53, 51, 0.3), rgba(31, 40, 39, 0.3))',
                   border: nft.canUnwrap
-                    ? '2px solid rgba(6, 182, 212, 0.5)'
-                    : '2px solid rgba(75, 85, 99, 0.5)',
+                    ? '2px solid rgba(255, 208, 117, 0.5)'
+                    : '2px solid rgba(42, 53, 51, 0.5)',
                   boxShadow: nft.canUnwrap
-                    ? '0 0 15px rgba(6, 182, 212, 0.2)'
-                    : '0 0 10px rgba(75, 85, 99, 0.1)',
+                    ? '0 0 15px rgba(255, 208, 117, 0.2)'
+                    : '0 0 10px rgba(42, 53, 51, 0.1)',
                   cursor: nft.canUnwrap ? 'pointer' : 'not-allowed',
                   opacity: nft.canUnwrap ? 1 : 0.6,
                 }}
                 onMouseEnter={(e) => {
                   if (nft.canUnwrap) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(6, 182, 212, 0.5), rgba(59, 130, 246, 0.5))';
-                    e.currentTarget.style.boxShadow = '0 0 25px rgba(6, 182, 212, 0.4)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.5), rgba(197, 169, 123, 0.5))';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.4)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (nft.canUnwrap) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))';
-                    e.currentTarget.style.boxShadow = '0 0 15px rgba(6, 182, 212, 0.2)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.2)';
                   }
                 }}
               >
@@ -424,7 +424,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
                     Wrap NFT
                   </span>
-                  <p className="text-cyan-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     {nft.canUnwrap
                       ? 'Convert to fungible wNFT'
                       : `Cooldown: ${timeRemaining}`
@@ -444,23 +444,23 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                  border: '2px solid rgba(168, 85, 247, 0.5)',
-                  boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))',
+                  border: '2px solid rgba(197, 169, 123, 0.5)',
+                  boxShadow: '0 0 15px rgba(197, 169, 123, 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.5), rgba(139, 92, 246, 0.5))';
-                  e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.5), rgba(197, 169, 123, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(197, 169, 123, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.2)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(197, 169, 123, 0.2)';
                 }}
               >
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>🔮</span>
                 <div>
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Sacrifice</span>
-                  <p className="text-purple-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Sacrifice 3 humans to get an applesnake egg</p>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Sacrifice 3 humans to get an applesnake egg</p>
                 </div>
               </button>
 
@@ -475,23 +475,23 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(219, 39, 119, 0.3))',
-                  border: '2px solid rgba(236, 72, 153, 0.5)',
-                  boxShadow: '0 0 15px rgba(236, 72, 153, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+                  border: '2px solid rgba(255, 208, 117, 0.5)',
+                  boxShadow: '0 0 15px rgba(255, 208, 117, 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.5), rgba(219, 39, 119, 0.5))';
-                  e.currentTarget.style.boxShadow = '0 0 25px rgba(236, 72, 153, 0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.5), rgba(197, 169, 123, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(236, 72, 153, 0.3), rgba(219, 39, 119, 0.3))';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(236, 72, 153, 0.2)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.2)';
                 }}
               >
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>⛓️</span>
                 <div>
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Jail</span>
-                  <p className="text-pink-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     {nft.ownerIsWarden
                       ? "You're a warden so you can jail other humans at no charge!"
                       : nft.isJailed
@@ -516,17 +516,17 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))',
-                  border: '2px solid rgba(34, 197, 94, 0.5)',
-                  boxShadow: '0 0 15px rgba(34, 197, 94, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+                  border: '2px solid rgba(255, 208, 117, 0.5)',
+                  boxShadow: '0 0 15px rgba(255, 208, 117, 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(22, 163, 74, 0.5))';
-                  e.currentTarget.style.boxShadow = '0 0 25px rgba(34, 197, 94, 0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.5), rgba(197, 169, 123, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.3))';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.2)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.2)';
                 }}
               >
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>🏪</span>
@@ -534,7 +534,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
                     List on Market
                   </span>
-                  <p className="text-green-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     Sell for wASS on our marketplace
                   </p>
                 </div>
@@ -555,27 +555,27 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
                   background: nft.canUnwrap
-                    ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-                    : 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
+                    ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+                    : 'linear-gradient(135deg, rgba(42, 53, 51, 0.3), rgba(31, 40, 39, 0.3))',
                   border: nft.canUnwrap
-                    ? '2px solid rgba(6, 182, 212, 0.5)'
-                    : '2px solid rgba(75, 85, 99, 0.5)',
+                    ? '2px solid rgba(255, 208, 117, 0.5)'
+                    : '2px solid rgba(42, 53, 51, 0.5)',
                   boxShadow: nft.canUnwrap
-                    ? '0 0 15px rgba(6, 182, 212, 0.2)'
-                    : '0 0 10px rgba(75, 85, 99, 0.1)',
+                    ? '0 0 15px rgba(255, 208, 117, 0.2)'
+                    : '0 0 10px rgba(42, 53, 51, 0.1)',
                   cursor: nft.canUnwrap ? 'pointer' : 'not-allowed',
                   opacity: nft.canUnwrap ? 1 : 0.6,
                 }}
                 onMouseEnter={(e) => {
                   if (nft.canUnwrap) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(6, 182, 212, 0.5), rgba(59, 130, 246, 0.5))';
-                    e.currentTarget.style.boxShadow = '0 0 25px rgba(6, 182, 212, 0.4)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.5), rgba(197, 169, 123, 0.5))';
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(255, 208, 117, 0.4)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (nft.canUnwrap) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))';
-                    e.currentTarget.style.boxShadow = '0 0 15px rgba(6, 182, 212, 0.2)';
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
+                    e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 208, 117, 0.2)';
                   }
                 }}
               >
@@ -583,7 +583,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>
                     Wrap NFT
                   </span>
-                  <p className="text-cyan-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     {nft.canUnwrap
                       ? 'Convert to fungible wNFT'
                       : `Cooldown: ${timeRemaining}`
@@ -603,23 +603,23 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-                  border: '2px solid rgba(168, 85, 247, 0.5)',
-                  boxShadow: '0 0 15px rgba(168, 85, 247, 0.2)',
+                  background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))',
+                  border: '2px solid rgba(197, 169, 123, 0.5)',
+                  boxShadow: '0 0 15px rgba(197, 169, 123, 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.5), rgba(139, 92, 246, 0.5))';
-                  e.currentTarget.style.boxShadow = '0 0 25px rgba(168, 85, 247, 0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.5), rgba(197, 169, 123, 0.5))';
+                  e.currentTarget.style.boxShadow = '0 0 25px rgba(197, 169, 123, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(168, 85, 247, 0.2)';
+                  e.currentTarget.style.background = 'linear-gradient(135deg, rgba(197, 169, 123, 0.3), rgba(197, 169, 123, 0.3))';
+                  e.currentTarget.style.boxShadow = '0 0 15px rgba(197, 169, 123, 0.2)';
                 }}
               >
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>💎</span>
                 <div>
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Stake Snake</span>
-                  <p className="text-purple-100 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Stake your snake to earn token rewards</p>
+                  <p className="text-[#e0e0e0] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>Stake your snake to earn token rewards</p>
                 </div>
               </button>
 
@@ -629,9 +629,9 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 style={{
                   padding: 'clamp(0.625rem, 2vh, 0.75rem) clamp(0.75rem, 2.5vw, 1rem)',
                   gap: 'clamp(0.5rem, 2vw, 0.75rem)',
-                  background: 'linear-gradient(135deg, rgba(75, 85, 99, 0.3), rgba(55, 65, 81, 0.3))',
-                  border: '2px solid rgba(75, 85, 99, 0.5)',
-                  boxShadow: '0 0 10px rgba(75, 85, 99, 0.1)',
+                  background: 'linear-gradient(135deg, rgba(42, 53, 51, 0.3), rgba(31, 40, 39, 0.3))',
+                  border: '2px solid rgba(42, 53, 51, 0.5)',
+                  boxShadow: '0 0 10px rgba(42, 53, 51, 0.1)',
                   cursor: 'not-allowed',
                   opacity: 0.5,
                 }}
@@ -639,7 +639,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
                 <span style={{ fontSize: 'clamp(1.25rem, 3vh, 1.5rem)' }}>⛓️</span>
                 <div>
                   <span className="font-semibold block" style={{ fontSize: 'clamp(0.875rem, 2vh, 1rem)' }}>Jail</span>
-                  <p className="text-gray-300 mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
+                  <p className="text-[#cecece] mt-1" style={{ fontSize: 'clamp(0.75rem, 1.6vh, 0.875rem)' }}>
                     You cant fit a 120 foot snake in this jail cell...
                   </p>
                 </div>
@@ -650,7 +650,7 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
 
         {/* Footer */}
         <div
-          className="border-t border-cyan-500/20"
+          className="border-t border-[rgba(255,208,117,0.2)]"
           style={{
             padding: 'clamp(0.75rem, 2.5vh, 1rem)'
           }}
@@ -661,14 +661,14 @@ export function NFTOptionsModal({ nft, isOpen, onClose, onListingSuccess }: NFTO
             style={{
               padding: 'clamp(0.5rem, 1.5vh, 0.625rem) clamp(0.75rem, 2.5vw, 1rem)',
               fontSize: 'clamp(0.875rem, 2vh, 1rem)',
-              background: 'linear-gradient(135deg, rgba(75, 85, 99, 0.8), rgba(55, 65, 81, 0.8))',
-              border: '1px solid rgba(6, 182, 212, 0.3)',
+              background: 'linear-gradient(135deg, rgba(26, 34, 33, 0.8), rgba(31, 40, 39, 0.8))',
+              border: '1px solid rgba(255, 208, 117, 0.3)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(168, 85, 247, 0.3))';
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(75, 85, 99, 0.8), rgba(55, 65, 81, 0.8))';
+              e.currentTarget.style.background = 'linear-gradient(135deg, rgba(26, 34, 33, 0.8), rgba(31, 40, 39, 0.8))';
             }}
           >
             Close

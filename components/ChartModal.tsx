@@ -174,6 +174,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   const getTokenImage = useCallback((address: `0x${string}`): string | null => {
     if (address === ETH_ADDRESS) return '/Images/Ether.png';
     if (address.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase()) return '/Images/Token.png';
+    // MANTIS - our primary token
+    if (address.toLowerCase() === '0x92c4cc88e010d772cee651fbfcebc4f0e12d500') return '/Images/Mantis.png';
     // Check Token Wars tokens
     const twImage = tokenWarsImageMap.get(address.toLowerCase());
     if (twImage) return twImage;
@@ -353,6 +355,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     tickSpacing: number;
     hooks: `0x${string}`;
   } | null>(null);
+
+  // Pool ID for sell operations with deeper liquidity
+  const SELL_POOL_ID = '0x6a634d3c93c0b9402392bff565c8315f621558a49e2a00973922322ce19d4abb' as const;
 
   // Smart wallet batching support (EIP-5792)
   const [isSmartWallet, setIsSmartWallet] = useState(false);
@@ -1089,6 +1094,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     // Use 'base' network for all pools (GeckoTerminal uses same network ID for all Base DEXes)
     const url = `https://api.geckoterminal.com/api/v2/networks/base/pools/${poolAddr}/ohlcv/${timeframe}?aggregate=${aggregate}&limit=300&currency=usd`;
+    console.log("[Chart] Fetching from URL:", url);
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -1097,6 +1103,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
     const data = await response.json();
     const ohlcvList = data?.data?.attributes?.ohlcv_list || [];
+    console.log('[Chart] API response:', { hasData: !!data, ohlcvCount: ohlcvList.length, poolId: data?.data?.id });
 
     return ohlcvList.map((item: number[]) => ({
       time: item[0],
@@ -1149,30 +1156,30 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(16, 185, 129, 0.08)' },
-        horzLines: { color: 'rgba(16, 185, 129, 0.08)' },
+        vertLines: { color: 'rgba(255, 208, 117, 0.08)' },
+        horzLines: { color: 'rgba(255, 208, 117, 0.08)' },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: 'rgba(16, 185, 129, 0.5)',
+          color: 'rgba(255, 208, 117, 0.5)',
           width: 1,
           style: 2,
-          labelBackgroundColor: 'rgba(16, 185, 129, 0.9)',
+          labelBackgroundColor: 'rgba(255, 208, 117, 0.9)',
         },
         horzLine: {
-          color: 'rgba(16, 185, 129, 0.5)',
+          color: 'rgba(255, 208, 117, 0.5)',
           width: 1,
           style: 2,
-          labelBackgroundColor: 'rgba(16, 185, 129, 0.9)',
+          labelBackgroundColor: 'rgba(255, 208, 117, 0.9)',
         },
       },
       rightPriceScale: {
-        borderColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: 'rgba(255, 208, 117, 0.15)',
         scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
-        borderColor: 'rgba(16, 185, 129, 0.15)',
+        borderColor: 'rgba(255, 208, 117, 0.15)',
         timeVisible: true,
         secondsVisible: false,
       },
@@ -1181,12 +1188,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     });
 
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
+      upColor: '#22c55e',
+      downColor: '#FF3B5C',
+      borderUpColor: '#22c55e',
+      borderDownColor: '#FF3B5C',
+      wickUpColor: '#22c55e',
+      wickDownColor: '#FF3B5C',
     });
 
     chartRef.current = chart;
@@ -1217,6 +1224,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
   // Compute effective pool address for chart (use discovered address as fallback for Aerodrome)
   const effectiveChartPoolAddress = useMemo(() => {
     const geckoAddr = selectedPair.geckoPoolAddress;
+    // Debug: Log chart pool address resolution
+    console.log('[Chart] Pool address resolution:', { pairId: selectedPair.id, geckoPoolAddress: geckoAddr, isTokenWars: selectedPair.isTokenWars, isAerodromePair });
     // If geckoPoolAddress is valid, use it
     if (geckoAddr && geckoAddr !== '0x' && geckoAddr.length > 10) {
       return geckoAddr;
@@ -1391,6 +1400,30 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
     const fetchQuote = async () => {
       setIsQuoting(true);
       setSwapError(null);
+
+      // Debug logging for Token Wars quote flow
+      console.log('=== QUOTE FLOW DEBUG START ===');
+      console.log('Selected pair:', {
+        id: selectedPair.id,
+        token0: selectedPair.token0,
+        token1: selectedPair.token1,
+        fee: selectedPair.fee,
+        tickSpacing: selectedPair.tickSpacing,
+        hook: selectedPair.hook,
+        isTokenWars: selectedPair.isTokenWars,
+        tokenWarsData: selectedPair.tokenWarsData,
+        geckoPoolAddress: selectedPair.geckoPoolAddress,
+      });
+      console.log('Quote path flags:', {
+        isTokenPair,
+        isTokenWarsEthPair,
+        isAerodromePair,
+        isHydrexPair,
+        swapTab,
+        buyInputCurrency,
+        sellOutputCurrency,
+        outputTokenAddress,
+      });
 
       try {
         // Helper to get quote using simulateContract (works for ETH/wASS pool)
@@ -2067,20 +2100,34 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
         if (isTokenPair && outputTokenAddress) {
           // Token pair quote using actual quoter
-          // Build pool key from config values directly (geckoPoolAddress is NOT the pool ID)
+          // Build pool key from config values - V4 pools require SORTED tokens!
+          // Sort tokens: smaller address = currency0, larger = currency1
+          const [sortedCurrency0, sortedCurrency1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+            ? [selectedPair.token0, selectedPair.token1]
+            : [selectedPair.token1, selectedPair.token0];
+
           const tokenPairPoolKey = {
-            currency0: selectedPair.token0,
-            currency1: selectedPair.token1,
+            currency0: sortedCurrency0,
+            currency1: sortedCurrency1,
             fee: selectedPair.fee,
             tickSpacing: selectedPair.tickSpacing,
             hooks: selectedPair.hook,
           };
-          console.log('Token pair pool key:', tokenPairPoolKey);
 
-          // Determine direction based on wASS position in pool
-          // wASS (0x4450...) < TOKEN (0x9B26...) → wASS is currency0, TOKEN is currency1
-          const wassIsToken0 = tokenPairPoolKey.currency0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
-          console.log('wASS is token0:', wassIsToken0);
+          console.log('[V4 Quote] Pool key (sorted):', {
+            currency0: sortedCurrency0,
+            currency1: sortedCurrency1,
+            fee: selectedPair.fee,
+            tickSpacing: selectedPair.tickSpacing,
+            hooks: selectedPair.hook,
+            isTokenWars: selectedPair.isTokenWars,
+          });
+
+          // Determine direction based on wASS position in SORTED pool
+          // After sorting: check if wASS is currency0
+          const wassIsToken0 = sortedCurrency0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+          const ethIsToken0 = sortedCurrency0 === ETH_ADDRESS;
+          console.log('[V4 Quote] wASS is token0:', wassIsToken0, ', ETH is token0:', ethIsToken0);
 
           if (swapTab === 'buy') {
             // Check if buying with wASS input (direct wASS → Token swap)
@@ -2147,12 +2194,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               console.log('Input:', inputAmount, 'ETH');
               console.log('Direct V4 pool key:', tokenPairPoolKey);
 
-              // Determine direction: ETH → TOKEN
+              // Determine direction: ETH → TOKEN (using sorted ethIsToken0 computed above)
               // If ETH (0x0) is token0: zeroForOne = true (buying token1 for token0)
               // If ETH is token1: zeroForOne = false (buying token0 for token1)
-              const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
               const zeroForOne = ethIsToken0; // true = ETH→TOKEN when ETH is token0
-              console.log('ETH is token0:', ethIsToken0, ', zeroForOne:', zeroForOne);
+              console.log('[V4 Quote] ETH pair buy, ethIsToken0:', ethIsToken0, ', zeroForOne:', zeroForOne);
 
               try {
                 const tokenOut = await getSimulateQuote(tokenPairPoolKey, zeroForOne, ethIn);
@@ -2311,10 +2357,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             console.log('Input:', inputAmount, 'TOKEN');
             console.log('Direct V4 pool key:', tokenPairPoolKey);
 
-            // Determine direction: Token → ETH
-            const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+            // Determine direction: Token → ETH (using sorted ethIsToken0 computed above)
+            // If ETH is token0: selling token1 for token0, zeroForOne = false
+            // If ETH is token1: selling token0 for token1, zeroForOne = true
             const zeroForOne = !ethIsToken0; // Token → ETH
-            console.log('ETH is token0:', ethIsToken0, ', zeroForOne:', zeroForOne);
+            console.log('[V4 Quote] ETH pair sell, ethIsToken0:', ethIsToken0, ', zeroForOne:', zeroForOne);
 
             try {
               const ethOut = await getSimulateQuote(tokenPairPoolKey, zeroForOne, tokenIn);
@@ -2350,21 +2397,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 console.log('=== MULTI-HOP SELL QUOTE: Token → wASS → ETH ===');
 
                 if (wassOut > 0n) {
-                  // Step 2: Get wASS → ETH quote using the default wASS/ETH pool
-                  const [poolIdRaw, hookAddress] = await Promise.all([
-                    publicClient.readContract({
-                      address: contracts.nft.address as `0x${string}`,
-                      abi: contracts.nft.abi,
-                      functionName: 'poolIdRaw',
-                      args: [],
-                    }) as Promise<`0x${string}`>,
-                    publicClient.readContract({
-                      address: contracts.nft.address as `0x${string}`,
-                      abi: contracts.nft.abi,
-                      functionName: 'hook',
-                      args: [],
-                    }) as Promise<`0x${string}`>,
-                  ]);
+                  // Step 2: Get wASS → ETH quote using the deeper liquidity pool for sells
+                  const hookAddress = await publicClient.readContract({
+                    address: contracts.nft.address as `0x${string}`,
+                    abi: contracts.nft.abi,
+                    functionName: 'hook',
+                    args: [],
+                  }) as `0x${string}`;
+
+                  console.log('[ChartModal] Multi-hop sell: Using deeper liquidity pool for wASS→ETH:', SELL_POOL_ID);
 
                   const wassEthPoolKey = await publicClient.readContract({
                     address: hookAddress,
@@ -2387,7 +2428,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       type: 'function',
                     }],
                     functionName: 'getPoolKey',
-                    args: [poolIdRaw],
+                    args: [SELL_POOL_ID],
                   }) as unknown as {
                     currency0: `0x${string}`;
                     currency1: `0x${string}`;
@@ -2429,21 +2470,25 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           }
         } else {
           // Default pair: wASS/ETH - use original working quoter with simulateContract
-          // Get pool key from hook
-          const [poolIdRaw, hookAddress] = await Promise.all([
-            publicClient.readContract({
-              address: contracts.nft.address as `0x${string}`,
-              abi: contracts.nft.abi,
-              functionName: 'poolIdRaw',
-              args: [],
-            }) as Promise<`0x${string}`>,
-            publicClient.readContract({
-              address: contracts.nft.address as `0x${string}`,
-              abi: contracts.nft.abi,
-              functionName: 'hook',
-              args: [],
-            }) as Promise<`0x${string}`>,
-          ]);
+          // Get pool key from hook - use different pool for sells (deeper liquidity)
+          const hookAddress = await publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'hook',
+            args: [],
+          }) as `0x${string}`;
+
+          // For sells, use the deeper liquidity pool; for buys, use the default pool
+          const poolIdToUse = swapTab === 'sell' ? SELL_POOL_ID : await publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'poolIdRaw',
+            args: [],
+          }) as `0x${string}`;
+
+          if (swapTab === 'sell') {
+            console.log('[ChartModal] Using sell pool for quote:', SELL_POOL_ID);
+          }
 
           const poolKeyData = await publicClient.readContract({
             address: hookAddress,
@@ -2466,7 +2511,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               type: 'function',
             }],
             functionName: 'getPoolKey',
-            args: [poolIdRaw],
+            args: [poolIdToUse],
           }) as unknown as {
             currency0: `0x${string}`;
             currency1: `0x${string}`;
@@ -2813,22 +2858,26 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       const minTokensOut = outputAmount ? parseUnits((parseFloat(outputAmount) * 0.95).toString(), 18) : 0n; // 5% slippage
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
 
-      // Build pool key for ETH/Token pair
+      // Build pool key for ETH/Token pair - V4 pools require SORTED tokens!
+      const [sortedCurrency0, sortedCurrency1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+        ? [selectedPair.token0, selectedPair.token1]
+        : [selectedPair.token1, selectedPair.token0];
+
       const ethPoolKey = {
-        currency0: selectedPair.token0,
-        currency1: selectedPair.token1,
+        currency0: sortedCurrency0,
+        currency1: sortedCurrency1,
         fee: selectedPair.fee,
         tickSpacing: selectedPair.tickSpacing,
         hooks: selectedPair.hook,
       };
 
-      // Determine direction: ETH → TOKEN
-      const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+      // Determine direction: ETH → TOKEN (using sorted pool key)
+      const ethIsToken0 = sortedCurrency0 === ETH_ADDRESS;
       const zeroForOne = ethIsToken0;
 
       console.log('=== TOKEN WARS ETH PAIR BUY (Direct V4) ===');
       console.log('ETH value:', formatEther(ethValue));
-      console.log('Pool key:', JSON.stringify(ethPoolKey, null, 2));
+      console.log('Pool key (sorted):', JSON.stringify(ethPoolKey, null, 2));
       console.log('ETH is token0:', ethIsToken0);
       console.log('zeroForOne:', zeroForOne);
       console.log('minTokensOut:', formatUnits(minTokensOut, 18));
@@ -3360,10 +3409,49 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           to: UNIVERSAL_ROUTER_ADDRESS,
           data: swapData,
         });
-      } else if (poolKey) {
-        // Single-hop sell: wASS -> ETH
+      } else if (publicClient) {
+        // Single-hop sell: wASS -> ETH (using deeper liquidity pool)
+        // Fetch sell pool key inline for batched transaction
+        const hookAddress = await publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'hook',
+          args: [],
+        }) as `0x${string}`;
+
+        const sellPoolKeyData = await publicClient.readContract({
+          address: hookAddress,
+          abi: [{
+            inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+            name: 'getPoolKey',
+            outputs: [{
+              components: [
+                { internalType: 'address', name: 'currency0', type: 'address' },
+                { internalType: 'address', name: 'currency1', type: 'address' },
+                { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                { internalType: 'address', name: 'hooks', type: 'address' },
+              ],
+              internalType: 'tuple',
+              name: '',
+              type: 'tuple',
+            }],
+            stateMutability: 'view',
+            type: 'function',
+          }],
+          functionName: 'getPoolKey',
+          args: [SELL_POOL_ID],
+        }) as unknown as {
+          currency0: `0x${string}`;
+          currency1: `0x${string}`;
+          fee: number;
+          tickSpacing: number;
+          hooks: `0x${string}`;
+        };
+
         const minEthOut = outputAmount ? parseEther((parseFloat(outputAmount) * 0.95).toString()) : 0n;
-        const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, poolKey);
+        console.log('[ChartModal] Batched sell using deeper liquidity pool:', SELL_POOL_ID);
+        const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, sellPoolKeyData);
 
         const swapData = encodeFunctionData({
           abi: UNIVERSAL_ROUTER_ABI,
@@ -4233,22 +4321,27 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
       if (isTokenWarsEthPair && outputTokenAddress) {
         // Token Wars ETH pair: DIRECT Token → ETH V4 swap (single hop)
+        // V4 pools require SORTED tokens!
+        const [sortedCurrency0, sortedCurrency1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+          ? [selectedPair.token0, selectedPair.token1]
+          : [selectedPair.token1, selectedPair.token0];
+
         const ethPoolKey = {
-          currency0: selectedPair.token0,
-          currency1: selectedPair.token1,
+          currency0: sortedCurrency0,
+          currency1: sortedCurrency1,
           fee: selectedPair.fee,
           tickSpacing: selectedPair.tickSpacing,
           hooks: selectedPair.hook,
         };
 
-        // Determine direction: Token → ETH
+        // Determine direction: Token → ETH (using sorted pool key)
         // If ETH is token0: selling token1 for token0, zeroForOne = false
         // If ETH is token1: selling token0 for token1, zeroForOne = true
-        const ethIsToken0 = selectedPair.token0 === ETH_ADDRESS;
+        const ethIsToken0 = sortedCurrency0 === ETH_ADDRESS;
         const zeroForOne = !ethIsToken0; // Token → ETH
 
         console.log('=== TOKEN WARS ETH PAIR SELL (Direct V4) ===');
-        console.log('Pool key:', JSON.stringify(ethPoolKey, null, 2));
+        console.log('Pool key (sorted):', JSON.stringify(ethPoolKey, null, 2));
         console.log('ETH is token0:', ethIsToken0);
         console.log('zeroForOne:', zeroForOne);
         console.log('Sell amount:', formatUnits(sellAmount, 18), 'TOKEN');
@@ -4454,12 +4547,53 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         }
       } else {
         // Single-hop sell: wASS -> ETH
-        if (!poolKey) {
-          setSwapError('Pool not loaded');
+        // Fetch sell pool key inline (deeper liquidity pool)
+        if (!publicClient) {
+          setSwapError('Client not ready');
           return;
         }
 
-        const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, poolKey);
+        console.log('[ChartModal] Fetching sell pool for deeper liquidity:', SELL_POOL_ID);
+
+        const hookAddress = await publicClient.readContract({
+          address: contracts.nft.address as `0x${string}`,
+          abi: contracts.nft.abi,
+          functionName: 'hook',
+          args: [],
+        }) as `0x${string}`;
+
+        const sellPoolKeyData = await publicClient.readContract({
+          address: hookAddress,
+          abi: [{
+            inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
+            name: 'getPoolKey',
+            outputs: [{
+              components: [
+                { internalType: 'address', name: 'currency0', type: 'address' },
+                { internalType: 'address', name: 'currency1', type: 'address' },
+                { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                { internalType: 'int24', name: 'tickSpacing', type: 'int24' },
+                { internalType: 'address', name: 'hooks', type: 'address' },
+              ],
+              internalType: 'tuple',
+              name: '',
+              type: 'tuple',
+            }],
+            stateMutability: 'view',
+            type: 'function',
+          }],
+          functionName: 'getPoolKey',
+          args: [SELL_POOL_ID],
+        }) as unknown as {
+          currency0: `0x${string}`;
+          currency1: `0x${string}`;
+          fee: number;
+          tickSpacing: number;
+          hooks: `0x${string}`;
+        };
+
+        console.log('[ChartModal] Sell pool loaded:', sellPoolKeyData);
+        const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, sellPoolKeyData);
 
         writeContract({
           address: UNIVERSAL_ROUTER_ADDRESS,
@@ -4474,7 +4608,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       }
     } catch (err) {
       console.error('Sell error:', err);
-      setSwapError('Failed to execute swap');
+      if (err instanceof Error) {
+        console.error('Error details:', err.message);
+        console.error('Error stack:', err.stack);
+        setSwapError(`Failed to execute swap: ${err.message.substring(0, 150)}`);
+      } else {
+        setSwapError('Failed to execute swap - unknown error');
+      }
     }
   };
 
@@ -4537,59 +4677,48 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       className={embedded ? "h-full w-full flex" : "pointer-events-auto w-full flex flex-col"}
       style={{
         ...(embedded ? {} : { maxWidth: '500px', maxHeight: '90vh' }),
-        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.03), rgba(17, 24, 39, 0.98), rgba(16, 185, 129, 0.03))',
-        backgroundColor: 'rgba(10, 15, 20, 0.98)',
+        background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.03), rgba(10, 13, 12, 0.98), rgba(255, 208, 117, 0.03))',
+        backgroundColor: '#0a0d0c',
         ...(embedded ? {} : {
-          border: '1px solid rgba(16, 185, 129, 0.25)',
+          border: '1px solid rgba(255, 208, 117, 0.25)',
           borderRadius: '12px',
           backdropFilter: 'blur(20px)',
-          boxShadow: '0 0 40px rgba(16, 185, 129, 0.15)',
+          boxShadow: '0 0 40px rgba(255, 208, 117, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         }),
         overflow: 'hidden',
         flexDirection: isHorizontal ? 'row' : 'column',
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Horizontal Layout: Swap Panel (LEFT) */}
+      {/* Horizontal Layout: Swap Panel (LEFT) - responsive: scales down on mobile */}
       {isHorizontal && (
         <div
-          className="flex-shrink-0 flex flex-col border-r border-emerald-900/30 overflow-y-auto overflow-x-hidden"
-          style={{ width: '340px', maxWidth: '40%' }}
+          className="flex-shrink flex flex-col border-r border-glass-border overflow-y-auto overflow-x-hidden w-[140px] xs:w-[160px] sm:w-[200px] md:w-[260px] lg:w-[300px] xl:w-[340px]"
         >
           {/* Swap Header */}
           <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderBottom: '1px solid rgba(16, 185, 129, 0.15)',
-            }}
+            className="flex justify-between items-center p-1.5 sm:p-2 md:p-3 border-b border-[rgba(255,208,117,0.15)]"
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="flex items-center gap-1 sm:gap-2">
               {/* Token Pair Dropdown */}
               <div ref={pairDropdownRef} style={{ position: 'relative' }}>
                 <button
                   onClick={() => setIsPairDropdownOpen(!isPairDropdownOpen)}
+                  className="flex items-center gap-1 px-1.5 py-1 sm:px-2 sm:py-1.5 md:px-3 md:py-1.5 rounded text-[10px] sm:text-xs md:text-sm"
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    background: isPairDropdownOpen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    borderRadius: 6,
+                    background: isPairDropdownOpen ? 'rgba(255, 208, 117, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{getPairDisplayName(selectedPair)}</span>
+                  <span className="font-bold text-[#f0ece4]">{getPairDisplayName(selectedPair)}</span>
                   <svg
                     width="12"
                     height="12"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="rgba(16, 185, 129, 0.8)"
+                    stroke="rgba(255, 208, 117, 0.8)"
                     strokeWidth="2"
                     style={{
                       transform: isPairDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -4609,12 +4738,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       left: 0,
                       marginTop: 4,
                       minWidth: 160,
-                      background: 'rgba(15, 20, 25, 0.98)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      background: 'rgba(10, 13, 12, 0.98)',
+                      border: '1px solid rgba(255, 208, 117, 0.3)',
                       borderRadius: 8,
-                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(255, 208, 117, 0.1)',
                       zIndex: 100,
                       overflow: 'hidden',
+                      backdropFilter: 'blur(12px)',
                     }}
                   >
                     {[...allPairs]
@@ -4637,17 +4767,17 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               padding: '10px 12px',
-                              background: selectedPair.id === pair.id ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                              background: selectedPair.id === pair.id ? 'rgba(255, 208, 117, 0.15)' : 'transparent',
                               border: 'none',
                               cursor: 'pointer',
                               transition: 'background 0.15s ease',
                             }}
                           >
-                            <span style={{ fontSize: 13, fontWeight: 600, color: selectedPair.id === pair.id ? '#10b981' : '#fff' }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: selectedPair.id === pair.id ? '#ffd075' : '#f0ece4' }}>
                               {getPairDisplayName(pair)}
                             </span>
                             {pairChange !== undefined && (
-                              <span style={{ fontSize: 11, fontWeight: 500, color: pairChange >= 0 ? '#10b981' : '#ef4444' }}>
+                              <span style={{ fontSize: 11, fontWeight: 500, color: pairChange >= 0 ? '#22c55e' : '#FF3B5C' }}>
                                 {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
                               </span>
                             )}
@@ -4658,13 +4788,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 )}
               </div>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#10b981' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#ffd075' }}>
               {isTradeableInApp ? 'Swap' : `Trade on ${selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'DEX'}`}
             </span>
           </div>
 
           {/* Swap Section - in horizontal left panel */}
-          <div style={{ padding: '16px', flex: 1, overflow: 'hidden' }}>
+          <div className="p-1.5 sm:p-2 md:p-3 lg:p-4 flex-1 overflow-hidden">
             {/* External DEX Link - shown for non-V4 tokens (Aerodrome, Hydrex) */}
             {!isTradeableInApp && externalDexUrl && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', justifyContent: 'center', height: '100%', padding: 20 }}>
@@ -4672,23 +4802,23 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   width: 64,
                   height: 64,
                   borderRadius: '50%',
-                  background: selectedPairDex === 'aerodrome' ? 'rgba(0, 148, 255, 0.15)' : 'rgba(255, 107, 0, 0.15)',
+                  background: selectedPairDex === 'aerodrome' ? 'rgba(197, 169, 123, 0.15)' : 'rgba(255, 107, 0, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 8
                 }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#0094FF' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#c5a97b' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
                     <line x1="10" y1="14" x2="21" y2="3"></line>
                   </svg>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: '#fff', marginBottom: 8 }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#f0ece4', marginBottom: 8 }}>
                     This token trades on {selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'an external DEX'}
                   </div>
-                  <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.5)', marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, color: 'rgba(240, 236, 228, 0.5)', marginBottom: 16 }}>
                     Click below to swap on the native DEX
                   </div>
                 </div>
@@ -4702,28 +4832,28 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     gap: 8,
                     padding: '14px 32px',
                     background: selectedPairDex === 'aerodrome'
-                      ? 'linear-gradient(135deg, rgba(0, 148, 255, 0.9), rgba(0, 100, 200, 0.9))'
+                      ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.9), rgba(160, 130, 80, 0.9))'
                       : 'linear-gradient(135deg, rgba(255, 107, 0, 0.9), rgba(200, 80, 0, 0.9))',
                     borderRadius: 12,
                     textDecoration: 'none',
                     fontWeight: 600,
                     fontSize: 15,
-                    color: '#fff',
+                    color: '#f0ece4',
                     boxShadow: selectedPairDex === 'aerodrome'
-                      ? '0 4px 16px rgba(0, 148, 255, 0.3)'
+                      ? '0 4px 16px rgba(197, 169, 123, 0.3)'
                       : '0 4px 16px rgba(255, 107, 0, 0.3)',
                     transition: 'transform 0.2s, box-shadow 0.2s',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                     e.currentTarget.style.boxShadow = selectedPairDex === 'aerodrome'
-                      ? '0 6px 20px rgba(0, 148, 255, 0.4)'
+                      ? '0 6px 20px rgba(197, 169, 123, 0.4)'
                       : '0 6px 20px rgba(255, 107, 0, 0.4)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'translateY(0)';
                     e.currentTarget.style.boxShadow = selectedPairDex === 'aerodrome'
-                      ? '0 4px 16px rgba(0, 148, 255, 0.3)'
+                      ? '0 4px 16px rgba(197, 169, 123, 0.3)'
                       : '0 4px 16px rgba(255, 107, 0, 0.3)';
                   }}
                 >
@@ -4747,7 +4877,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                         style={{
                           marginTop: 8,
                           fontSize: 12,
-                          color: 'rgba(255, 255, 255, 0.5)',
+                          color: 'rgba(240, 236, 228, 0.5)',
                           textDecoration: 'none',
                           display: 'flex',
                           alignItems: 'center',
@@ -4772,35 +4902,27 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             {isTradeableInApp && (
               <>
             {/* Buy/Sell Tabs */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+            <div className="flex gap-1 mb-2 sm:mb-3 md:mb-4">
               <button
                 onClick={() => { setSwapTab('buy'); setInputAmount(''); setOutputAmount(''); }}
+                className="flex-1 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm font-semibold rounded-lg cursor-pointer"
                 style={{
-                  flex: 1,
-                  padding: '10px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: swapTab === 'buy' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  color: swapTab === 'buy' ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                  border: swapTab === 'buy' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: swapTab === 'buy' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  boxShadow: swapTab === 'buy' ? '0 0 15px rgba(34, 197, 94, 0.2)' : 'none',
+                  color: swapTab === 'buy' ? '#22c55e' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 Buy
               </button>
               <button
                 onClick={() => { setSwapTab('sell'); setInputAmount(''); setOutputAmount(''); }}
+                className="flex-1 py-1.5 sm:py-2 md:py-2.5 text-[10px] sm:text-xs md:text-sm font-semibold rounded-lg cursor-pointer"
                 style={{
-                  flex: 1,
-                  padding: '10px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: swapTab === 'sell' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  color: swapTab === 'sell' ? '#ef4444' : 'rgba(255, 255, 255, 0.5)',
+                  border: swapTab === 'sell' ? '1px solid rgba(255, 59, 92, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
+                  background: swapTab === 'sell' ? 'rgba(255, 59, 92, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  boxShadow: swapTab === 'sell' ? '0 0 15px rgba(255, 59, 92, 0.2)' : 'none',
+                  color: swapTab === 'sell' ? '#FF3B5C' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 Sell
@@ -4808,46 +4930,33 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             </div>
 
             {/* Input */}
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+            <div className="mb-1.5 sm:mb-2 md:mb-2.5">
+              <div className="flex justify-between items-center mb-1 text-[8px] sm:text-[10px] md:text-xs text-[rgba(232,244,255,0.5)]">
                 <span>You Pay</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Balance: {swapTab === 'buy'
+                <span className="flex items-center gap-1">
+                  <span className="hidden sm:inline">Bal:</span> {swapTab === 'buy'
                     ? (buyInputCurrency === 'eth' ? parseFloat(ethBalance).toFixed(4) : parseFloat(tokenBalance).toFixed(2))
                     : parseFloat(sellBalance).toFixed(2)}
                   <img
                     src={swapTab === 'buy'
                       ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                      : '/Images/Token.png'}
-                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'wASS'}
-                    style={{ width: 14, height: 14 }}
+                      : (isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || '/Images/Token.png') : '/Images/Token.png')}
+                    className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5"
                   />
                 </span>
               </div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 14px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 10,
-              }}>
+              <div className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 md:p-3 rounded-lg"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                }}
+              >
                 <input
                   type="number"
                   value={inputAmount}
                   onChange={(e) => setInputAmount(e.target.value)}
                   placeholder="0.0"
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: '#fff',
-                    fontSize: 18,
-                    fontWeight: 500,
-                  }}
+                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-[#f0ece4] text-sm sm:text-base md:text-lg font-medium"
                 />
                 {/* Currency toggle for buy mode on token pairs (hide for wASS-paired Aerodrome - wASS only) */}
                 {swapTab === 'buy' && isTokenPair && !isWassPairedAerodrome && (
@@ -4857,33 +4966,21 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       setInputAmount('');
                       setOutputAmount('');
                     }}
-                    style={{
-                      padding: '4px 6px',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      background: 'rgba(168, 85, 247, 0.2)',
-                      border: 'none',
-                      borderRadius: 4,
-                      color: '#a855f7',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexShrink: 0,
-                    }}
+                    className="px-1 py-0.5 text-[8px] sm:text-[10px] font-semibold bg-[rgba(255,208,117,0.2)] border-none rounded text-[#ffd075] cursor-pointer flex items-center flex-shrink-0"
                     title="Switch input currency"
                   >
                     <span>⇄</span>
                   </button>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <img
                     src={swapTab === 'buy'
                       ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                      : (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')}
+                      : (isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || '/Images/Token.png') : '/Images/Token.png')}
                     alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'Token'}
-                    style={{ width: 18, height: 18 }}
+                    className="w-3 h-3 sm:w-4 sm:h-4"
                   />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)', whiteSpace: 'nowrap' }}>
+                  <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-white/70 whitespace-nowrap">
                     {swapTab === 'buy'
                       ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS')
                       : (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')}
@@ -4891,21 +4988,16 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 </div>
               </div>
               {/* Percentage buttons */}
-              <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+              <div className="flex gap-0.5 sm:gap-1 mt-1 sm:mt-1.5 md:mt-2">
                 {percentageButtons.map((btn) => (
                   <button
                     key={btn.value}
                     onClick={() => handlePercentageInput(btn.value)}
+                    className="flex-1 py-1 sm:py-1.5 text-[8px] sm:text-[10px] md:text-xs font-semibold rounded cursor-pointer"
                     style={{
-                      flex: 1,
-                      padding: '6px 4px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: 'rgba(16, 185, 129, 0.15)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      borderRadius: 6,
-                      color: '#10b981',
-                      cursor: 'pointer',
+                      background: 'rgba(255, 208, 117, 0.15)',
+                      border: '1px solid rgba(255, 208, 117, 0.3)',
+                      color: '#ffd075',
                     }}
                   >
                     {btn.label}
@@ -4915,35 +5007,29 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             </div>
 
             {/* Arrow */}
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0' }}>
-              <div style={{ padding: 6, background: 'rgba(255, 255, 255, 0.05)', borderRadius: '50%' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+            <div className="flex justify-center my-1 sm:my-1.5">
+              <div className="p-1 sm:p-1.5 bg-white/5 rounded-full">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
                   <path d="M12 5v14M19 12l-7 7-7-7" />
                 </svg>
               </div>
             </div>
 
             {/* Output */}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 12, color: 'rgba(255, 255, 255, 0.5)' }}>
+            <div className="mb-2 sm:mb-3 md:mb-4">
+              <div className="flex justify-between mb-1 text-[8px] sm:text-[10px] md:text-xs text-[rgba(232,244,255,0.5)]">
                 <span>You Receive</span>
               </div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '12px 14px',
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 10,
-              }}>
-                <span style={{
-                  flex: 1,
-                  color: isQuoting ? 'rgba(255, 255, 255, 0.4)' : '#fff',
-                  fontSize: 18,
-                  fontWeight: 500,
-                }}>
-                  {isQuoting ? 'Loading...' : outputAmount || '0.0'}
+              <div className="flex items-center gap-1 sm:gap-2 p-1.5 sm:p-2 md:p-3 rounded-lg"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                <span className="flex-1 text-sm sm:text-base md:text-lg font-medium"
+                  style={{ color: isQuoting ? 'rgba(255, 255, 255, 0.4)' : '#fff' }}
+                >
+                  {isQuoting ? '...' : outputAmount || '0.0'}
                 </span>
                 {/* Sell output currency toggle for wASS/TOKEN pairs only (not Token Wars ETH pairs) */}
                 {/* Token Wars ETH pairs can ONLY sell to ETH since there's no wASS in the pool */}
@@ -4953,25 +5039,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       setSellOutputCurrency(sellOutputCurrency === 'wass' ? 'eth' : 'wass');
                       setOutputAmount('');
                     }}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      background: 'rgba(168, 85, 247, 0.2)',
-                      border: 'none',
-                      borderRadius: 4,
-                      color: '#a855f7',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
+                    className="px-1 py-0.5 text-[8px] sm:text-[10px] font-semibold bg-[rgba(255,208,117,0.2)] border-none rounded text-[#ffd075] cursor-pointer flex items-center gap-1"
                     title="Switch output currency"
                   >
                     <span>⇄</span>
                   </button>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div className="flex items-center gap-1">
                   <img
                     src={swapTab === 'buy'
                       ? (isTokenPair && outputTokenAddress
@@ -4983,9 +5057,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                           ? (sellOutputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
                           : '/Images/Ether.png'))}
                     alt={swapTab === 'buy' ? (outputTokenSymbol || 'Token') : (isTokenWarsEthPair ? 'ETH' : (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS'))}
-                    style={{ width: 18, height: 18 }}
+                    className="w-3 h-3 sm:w-4 sm:h-4"
                   />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255, 255, 255, 0.7)' }}>
+                  <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-white/70">
                     {swapTab === 'buy'
                       ? (isTokenPair ? outputTokenSymbol || 'Token' : 'wASS')
                       : (isTokenWarsEthPair ? 'ETH' : (isTokenPair ? (sellOutputCurrency === 'eth' ? 'ETH' : 'wASS') : 'ETH'))}
@@ -4996,71 +5070,54 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
             {/* Error */}
             {(swapError || writeError) && (
-              <div style={{
-                marginBottom: 12,
-                padding: 10,
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: 8,
-                fontSize: 12,
-                color: '#ef4444',
-                textAlign: 'center',
-              }}>
-                {swapError || (writeError?.message?.includes('User rejected') ? 'Transaction cancelled' : 'Transaction failed')}
+              <div className="mb-2 p-1.5 sm:p-2 rounded-lg text-[8px] sm:text-[10px] md:text-xs text-center"
+                style={{
+                  background: 'rgba(255, 59, 92, 0.1)',
+                  border: '1px solid rgba(255, 59, 92, 0.3)',
+                  color: '#FF3B5C',
+                }}
+              >
+                {swapError || (writeError?.message?.includes('User rejected') ? 'Cancelled' : 'Failed')}
               </div>
             )}
 
             {/* Action Button */}
             {swapTab === 'buy' ? (
               !address ? (
-                <div style={{
-                  padding: 14,
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 10,
-                  fontSize: 14,
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  textAlign: 'center',
-                }}>
-                  Connect wallet to buy
+                <div className="py-2 sm:py-2.5 md:py-3 rounded-lg text-[10px] sm:text-xs md:text-sm text-center"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: 'rgba(240, 236, 228, 0.5)',
+                  }}
+                >
+                  Connect wallet
                 </div>
               ) : isWassPairedAerodrome && wassAerodromeApprovalNeeded ? (
                 // wASS-paired Aerodrome: Need direct wASS approval to router
                 <button
                   onClick={handleApproveWassAerodrome}
                   disabled={isBusy || !inputAmount || parseFloat(inputAmount) <= 0}
+                  className="w-full py-2 sm:py-2.5 md:py-3 border-none rounded-lg text-[10px] sm:text-xs md:text-sm font-semibold text-[#f0ece4]"
                   style={{
-                    width: '100%',
-                    padding: 14,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
-                    border: 'none',
-                    borderRadius: 10,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: '#fff',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                     cursor: isBusy ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {isBusy ? 'Approving...' : 'Approve wASS for Aerodrome'}
+                  {isBusy ? 'Approving...' : 'Approve wASS'}
                 </button>
               ) : isWassPairedAerodrome ? (
                 // wASS-paired Aerodrome: Approved, show buy button
                 <button
                   onClick={handleBuy}
                   disabled={isBusy || isQuoting || !canBuy}
+                  className="w-full py-2 sm:py-2.5 md:py-3 border-none rounded-lg text-[10px] sm:text-xs md:text-sm font-semibold text-[#f0ece4]"
                   style={{
-                    width: '100%',
-                    padding: 14,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
-                    border: 'none',
-                    borderRadius: 10,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: '#fff',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                     cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                     opacity: !canBuy ? 0.5 : 1,
                   }}
                 >
-                  {isBusy ? 'Buying...' : isQuoting ? 'Getting quote...' : `Buy ${outputTokenSymbol || 'Token'} with wASS`}
+                  {isBusy ? 'Buying...' : isQuoting ? 'Quote...' : 'Buy'}
                 </button>
               ) : buyInputCurrency === 'wass' && isTokenPair ? (
                 // Token Wars V4: Buying with wASS - show Permit2 approval flow
@@ -5075,7 +5132,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       borderRadius: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: 'not-allowed',
                     }}
                   >
@@ -5088,12 +5145,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 14,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                       border: 'none',
                       borderRadius: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -5106,12 +5163,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 14,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                       border: 'none',
                       borderRadius: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -5124,12 +5181,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 14,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                       border: 'none',
                       borderRadius: 10,
                       fontSize: 15,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                       opacity: !canBuy ? 0.5 : 1,
                     }}
@@ -5144,12 +5201,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: '100%',
                     padding: 14,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                     border: 'none',
                     borderRadius: 10,
                     fontSize: 15,
                     fontWeight: 600,
-                    color: '#fff',
+                    color: '#f0ece4',
                     cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                     opacity: !canBuy ? 0.5 : 1,
                   }}
@@ -5163,7 +5220,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 10,
                 fontSize: 14,
-                color: 'rgba(255, 255, 255, 0.5)',
+                color: 'rgba(240, 236, 228, 0.5)',
                 textAlign: 'center',
               }}>
                 Connect wallet to sell
@@ -5179,7 +5236,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: 'not-allowed',
                 }}
               >
@@ -5192,12 +5249,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'linear-gradient(135deg, rgba(251, 191, 36, 0.9), rgba(239, 68, 68, 0.9))',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(255, 59, 92, 0.9))',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy || !canSell ? 'not-allowed' : 'pointer',
                   opacity: !canSell ? 0.5 : 1,
                 }}
@@ -5212,12 +5269,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(0, 148, 255, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(197, 169, 123, 0.8)',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -5231,12 +5288,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(138, 43, 226, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -5249,12 +5306,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -5267,12 +5324,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -5285,12 +5342,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 14,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(239, 68, 68, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 59, 92, 0.8)',
                   border: 'none',
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy || isQuoting || !canSell ? 'not-allowed' : 'pointer',
                   opacity: !canSell ? 0.5 : 1,
                 }}
@@ -5309,22 +5366,22 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '10px 16px',
-              borderTop: '1px solid rgba(16, 185, 129, 0.1)',
+              borderTop: '1px solid rgba(255, 208, 117, 0.1)',
               fontSize: 11,
               color: 'rgba(255, 255, 255, 0.4)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span>Base</span>
-              <span style={{ color: 'rgba(16, 185, 129, 0.4)' }}>•</span>
+              <span style={{ color: 'rgba(255, 208, 117, 0.4)' }}>•</span>
               <code
                 style={{
                   padding: '2px 5px',
-                  background: 'rgba(16, 185, 129, 0.1)',
+                  background: 'rgba(255, 208, 117, 0.1)',
                   borderRadius: 3,
                   fontFamily: 'monospace',
                   fontSize: 10,
-                  color: 'rgba(16, 185, 129, 0.6)',
+                  color: 'rgba(255, 208, 117, 0.6)',
                   cursor: 'pointer',
                 }}
                 onClick={() => navigator.clipboard.writeText(contracts.token.address)}
@@ -5337,7 +5394,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               href={`https://basescan.org/token/${contracts.token.address}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'rgba(16, 185, 129, 0.6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
+              style={{ color: 'rgba(255, 208, 117, 0.6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
             >
               BaseScan
               <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5352,7 +5409,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       {isHorizontal && (
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Timeframe selector */}
-          <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid rgba(16, 185, 129, 0.1)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 4, padding: '10px 16px', borderBottom: '1px solid rgba(255, 208, 117, 0.1)', flexShrink: 0 }}>
             {timeFrameButtons.map((tf) => (
               <button
                 key={tf.value}
@@ -5364,8 +5421,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   borderRadius: 6,
                   border: 'none',
                   cursor: 'pointer',
-                  background: timeFrame === tf.value ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.03)',
-                  color: timeFrame === tf.value ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                  background: timeFrame === tf.value ? 'rgba(255, 208, 117, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                  color: timeFrame === tf.value ? '#22c55e' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 {tf.label}
@@ -5377,13 +5434,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 <span style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: priceChange.percent >= 0 ? '#10b981' : '#ef4444'
+                  color: priceChange.percent >= 0 ? '#22c55e' : '#FF3B5C'
                 }}>
                   {priceChange.percent >= 0 ? '+' : ''}{priceChange.percent.toFixed(2)}%
                 </span>
               )}
               {tokenPrice && parseFloat(tokenPrice) > 0 && (
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f0ece4' }}>
                   ${parseFloat(tokenPrice).toFixed(6)}
                 </span>
               )}
@@ -5409,7 +5466,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  background: 'rgba(10, 15, 20, 0.9)',
+                  background: 'rgba(10, 13, 12, 0.9)',
                   zIndex: 10,
                 }}
               >
@@ -5418,12 +5475,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: 32,
                     height: 32,
-                    border: '3px solid rgba(16, 185, 129, 0.2)',
-                    borderTopColor: '#10b981',
+                    border: '3px solid rgba(255, 208, 117, 0.2)',
+                    borderTopColor: '#22c55e',
                     borderRadius: '50%',
                   }}
                 />
-                <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 13 }}>Loading chart...</span>
+                <span style={{ color: 'rgba(240, 236, 228, 0.5)', fontSize: 13 }}>Loading chart...</span>
               </div>
             )}
             {error && !isLoading && (
@@ -5436,19 +5493,19 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  background: 'rgba(10, 15, 20, 0.9)',
+                  background: 'rgba(10, 13, 12, 0.9)',
                 }}
               >
-                <span style={{ color: '#ef4444', fontSize: 14 }}>{error}</span>
+                <span style={{ color: '#FF3B5C', fontSize: 14 }}>{error}</span>
                 <button
                   onClick={() => setTimeFrame(timeFrame)}
                   style={{
                     padding: '8px 16px',
                     fontSize: 13,
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    background: 'rgba(255, 208, 117, 0.2)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                     borderRadius: 6,
-                    color: '#10b981',
+                    color: '#ffd075',
                     cursor: 'pointer',
                   }}
                 >
@@ -5461,12 +5518,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           {/* Transaction History Section - takes 1/3 of remaining vertical space */}
           <div
             style={{
-              borderTop: '1px solid rgba(16, 185, 129, 0.2)',
+              borderTop: '1px solid rgba(255, 208, 117, 0.2)',
               flex: 1,
               minHeight: 0,
               display: 'flex',
               flexDirection: 'column',
-              background: 'linear-gradient(180deg, rgba(10, 15, 20, 0.95) 0%, rgba(5, 10, 15, 0.98) 100%)',
+              background: 'linear-gradient(180deg, rgba(10, 13, 12, 0.95) 0%, rgba(10, 13, 12, 0.98) 100%)',
               overflow: 'hidden',
             }}
           >
@@ -5477,8 +5534,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'rgba(16, 185, 129, 0.05)',
-                borderBottom: '1px solid rgba(16, 185, 129, 0.1)',
+                background: 'rgba(255, 208, 117, 0.05)',
+                borderBottom: '1px solid rgba(255, 208, 117, 0.1)',
                 flexShrink: 0,
               }}
             >
@@ -5487,15 +5544,15 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   width: 6,
                   height: 6,
                   borderRadius: '50%',
-                  background: '#10b981',
-                  boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)',
+                  background: '#22c55e',
+                  boxShadow: '0 0 6px rgba(255, 208, 117, 0.6)',
                   animation: 'pulse 2s infinite',
                 }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>Live Trades</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#f0ece4' }}>Live Trades</span>
               </div>
               <span style={{
                 fontSize: 9,
-                color: 'rgba(255, 255, 255, 0.5)',
+                color: 'rgba(240, 236, 228, 0.5)',
               }}>
                 {trades.length}
               </span>
@@ -5511,8 +5568,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       width: 24,
                       height: 24,
                       margin: '0 auto 12px',
-                      border: '2px solid rgba(16, 185, 129, 0.2)',
-                      borderTopColor: '#10b981',
+                      border: '2px solid rgba(255, 208, 117, 0.2)',
+                      borderTopColor: '#22c55e',
                       borderRadius: '50%',
                     }}
                   />
@@ -5540,18 +5597,18 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                         textDecoration: 'none',
                         transition: 'all 0.1s ease',
                         background: trade.type === 'buy'
-                          ? 'rgba(16, 185, 129, 0.03)'
-                          : 'rgba(239, 68, 68, 0.03)',
+                          ? 'rgba(255, 208, 117, 0.03)'
+                          : 'rgba(255, 59, 92, 0.03)',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.background = trade.type === 'buy'
-                          ? 'rgba(16, 185, 129, 0.1)'
-                          : 'rgba(239, 68, 68, 0.1)';
+                          ? 'rgba(255, 208, 117, 0.1)'
+                          : 'rgba(255, 59, 92, 0.1)';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = trade.type === 'buy'
-                          ? 'rgba(16, 185, 129, 0.03)'
-                          : 'rgba(239, 68, 68, 0.03)';
+                          ? 'rgba(255, 208, 117, 0.03)'
+                          : 'rgba(255, 59, 92, 0.03)';
                       }}
                     >
                       {/* Type badge - compact */}
@@ -5563,9 +5620,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                         fontSize: 9,
                         fontWeight: 700,
                         background: trade.type === 'buy'
-                          ? 'rgba(16, 185, 129, 0.2)'
-                          : 'rgba(239, 68, 68, 0.2)',
-                        color: trade.type === 'buy' ? '#34d399' : '#f87171',
+                          ? 'rgba(255, 208, 117, 0.2)'
+                          : 'rgba(255, 59, 92, 0.2)',
+                        color: trade.type === 'buy' ? '#22c55e' : '#FF3B5C',
                         marginRight: 8,
                         flexShrink: 0,
                       }}>
@@ -5575,18 +5632,18 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       {/* Amount + USD - single line */}
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <img
-                          src="/Images/Token.png"
-                          alt="wASS"
+                          src={isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || "/Images/Token.png") : "/Images/Token.png"}
+                          alt={outputTokenSymbol || "Token"}
                           style={{ width: 12, height: 12, flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff' }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#f0ece4' }}>
                           {parseFloat(trade.type === 'buy' ? trade.amountOut : trade.amountIn).toLocaleString(undefined, {
                             maximumFractionDigits: 2,
                             minimumFractionDigits: 0
                           })}
                         </span>
                         {trade.volumeUsd && parseFloat(trade.volumeUsd) > 0 && (
-                          <span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(16, 185, 129, 0.7)' }}>
+                          <span style={{ fontSize: 9, fontWeight: 500, color: 'rgba(255, 208, 117, 0.7)' }}>
                             ${parseFloat(trade.volumeUsd).toFixed(2)}
                           </span>
                         )}
@@ -5623,7 +5680,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '10px 14px',
-              borderBottom: '1px solid rgba(16, 185, 129, 0.15)',
+              borderBottom: '1px solid rgba(255, 208, 117, 0.15)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -5636,20 +5693,20 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     alignItems: 'center',
                     gap: 6,
                     padding: '4px 10px',
-                    background: isPairDropdownOpen ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    background: isPairDropdownOpen ? 'rgba(255, 208, 117, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                     borderRadius: 6,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{getPairDisplayName(selectedPair)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: '#f0ece4' }}>{getPairDisplayName(selectedPair)}</span>
                   <svg
                     width="12"
                     height="12"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="rgba(16, 185, 129, 0.8)"
+                    stroke="rgba(255, 208, 117, 0.8)"
                     strokeWidth="2"
                     style={{
                       transform: isPairDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -5669,8 +5726,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       left: 0,
                       marginTop: 4,
                       minWidth: 160,
-                      background: 'rgba(15, 20, 25, 0.98)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      background: 'rgba(23, 30, 29, 0.98)',
+                      border: '1px solid rgba(255, 208, 117, 0.3)',
                       borderRadius: 8,
                       boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
                       zIndex: 100,
@@ -5700,7 +5757,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                               justifyContent: 'space-between',
                               width: '100%',
                               padding: '10px 12px',
-                              background: selectedPair.id === pair.id ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                              background: selectedPair.id === pair.id ? 'rgba(255, 208, 117, 0.15)' : 'transparent',
                               border: 'none',
                               cursor: 'pointer',
                               textAlign: 'left',
@@ -5718,9 +5775,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                             }}
                           >
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{getPairDisplayName(pair)}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#f0ece4' }}>{getPairDisplayName(pair)}</span>
                               {!pair.geckoPoolAddress && (
-                                <span style={{ fontSize: 10, color: 'rgba(251, 191, 36, 0.8)' }}>Chart pending</span>
+                                <span style={{ fontSize: 10, color: 'rgba(255, 208, 117, 0.85)' }}>Chart pending</span>
                               )}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -5729,9 +5786,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                                 <span style={{
                                   fontSize: 11,
                                   fontWeight: 600,
-                                  color: pairChange >= 0 ? '#10b981' : '#ef4444',
+                                  color: pairChange >= 0 ? '#22c55e' : '#FF3B5C',
                                   padding: '2px 5px',
-                                  background: pairChange >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  background: pairChange >= 0 ? 'rgba(255, 208, 117, 0.15)' : 'rgba(255, 59, 92, 0.15)',
                                   borderRadius: 4,
                                 }}>
                                   {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(1)}%
@@ -5741,9 +5798,9 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                                 <span style={{
                                   fontSize: 9,
                                   fontWeight: 600,
-                                  color: 'rgba(16, 185, 129, 0.8)',
+                                  color: 'rgba(255, 208, 117, 0.8)',
                                   padding: '2px 5px',
-                                  background: 'rgba(16, 185, 129, 0.15)',
+                                  background: 'rgba(255, 208, 117, 0.15)',
                                   borderRadius: 4,
                                 }}>
                                   ETH
@@ -5759,7 +5816,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
               {/* Price and Change */}
               {tokenPrice && parseFloat(tokenPrice) > 0 && selectedPair.isDefault && (
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(16, 185, 129, 1)' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255, 208, 117, 1)' }}>
                   ${tokenPrice}
                 </span>
               )}
@@ -5768,10 +5825,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     fontSize: 11,
                     fontWeight: 500,
-                    color: priceChange.percent >= 0 ? '#10b981' : '#ef4444',
+                    color: priceChange.percent >= 0 ? '#22c55e' : '#FF3B5C',
                     padding: '2px 5px',
                     borderRadius: 4,
-                    background: priceChange.percent >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    background: priceChange.percent >= 0 ? 'rgba(255, 208, 117, 0.15)' : 'rgba(255, 59, 92, 0.15)',
                   }}
                 >
                   {priceChange.percent >= 0 ? '+' : ''}{priceChange.percent.toFixed(2)}%
@@ -5795,7 +5852,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           </div>
 
           {/* Timeframe selector */}
-          <div style={{ display: 'flex', gap: 3, padding: '6px 14px', borderBottom: '1px solid rgba(16, 185, 129, 0.1)' }}>
+          <div style={{ display: 'flex', gap: 3, padding: '6px 14px', borderBottom: '1px solid rgba(255, 208, 117, 0.1)' }}>
             {timeFrameButtons.map((tf) => (
               <button
                 key={tf.value}
@@ -5807,8 +5864,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   borderRadius: 5,
                   border: 'none',
                   cursor: 'pointer',
-                  background: timeFrame === tf.value ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.03)',
-                  color: timeFrame === tf.value ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                  background: timeFrame === tf.value ? 'rgba(255, 208, 117, 0.25)' : 'rgba(255, 255, 255, 0.03)',
+                  color: timeFrame === tf.value ? '#22c55e' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 {tf.label}
@@ -5835,7 +5892,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  background: 'rgba(10, 15, 20, 0.9)',
+                  background: 'rgba(10, 13, 12, 0.9)',
                   zIndex: 10,
                 }}
               >
@@ -5844,12 +5901,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: 24,
                     height: 24,
-                    border: '2px solid rgba(16, 185, 129, 0.2)',
-                    borderTopColor: '#10b981',
+                    border: '2px solid rgba(255, 208, 117, 0.2)',
+                    borderTopColor: '#22c55e',
                     borderRadius: '50%',
                   }}
                 />
-                <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 11 }}>Loading...</span>
+                <span style={{ color: 'rgba(240, 236, 228, 0.5)', fontSize: 11 }}>Loading...</span>
               </div>
             )}
             {error && !isLoading && (
@@ -5862,19 +5919,19 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 6,
-                  background: 'rgba(10, 15, 20, 0.9)',
+                  background: 'rgba(10, 13, 12, 0.9)',
                 }}
               >
-                <span style={{ color: '#ef4444', fontSize: 12 }}>{error}</span>
+                <span style={{ color: '#FF3B5C', fontSize: 12 }}>{error}</span>
                 <button
                   onClick={() => setTimeFrame(timeFrame)}
                   style={{
                     padding: '5px 12px',
                     fontSize: 11,
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    background: 'rgba(255, 208, 117, 0.2)',
+                    border: '1px solid rgba(255, 208, 117, 0.3)',
                     borderRadius: 5,
-                    color: '#10b981',
+                    color: '#ffd075',
                     cursor: 'pointer',
                   }}
                 >
@@ -5885,7 +5942,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           </div>
 
           {/* Swap Section */}
-          <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(16, 185, 129, 0.15)' }}>
+          <div style={{ padding: '12px 14px', borderTop: '1px solid rgba(255, 208, 117, 0.15)' }}>
             {/* External DEX Link - shown for non-V4 tokens (Aerodrome, Hydrex) */}
             {!isTradeableInApp && externalDexUrl && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: 16 }}>
@@ -5893,22 +5950,22 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   width: 48,
                   height: 48,
                   borderRadius: '50%',
-                  background: selectedPairDex === 'aerodrome' ? 'rgba(0, 148, 255, 0.15)' : 'rgba(255, 107, 0, 0.15)',
+                  background: selectedPairDex === 'aerodrome' ? 'rgba(197, 169, 123, 0.15)' : 'rgba(255, 107, 0, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#0094FF' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={selectedPairDex === 'aerodrome' ? '#c5a97b' : '#FF6B00'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
                     <line x1="10" y1="14" x2="21" y2="3"></line>
                   </svg>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f0ece4', marginBottom: 4 }}>
                     Trade on {selectedPairDex === 'aerodrome' ? 'Aerodrome' : selectedPairDex === 'hydrex' ? 'Hydrex' : 'DEX'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
+                  <div style={{ fontSize: 11, color: 'rgba(240, 236, 228, 0.5)' }}>
                     This token trades on an external DEX
                   </div>
                 </div>
@@ -5922,13 +5979,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     gap: 6,
                     padding: '10px 24px',
                     background: selectedPairDex === 'aerodrome'
-                      ? 'linear-gradient(135deg, rgba(0, 148, 255, 0.9), rgba(0, 100, 200, 0.9))'
+                      ? 'linear-gradient(135deg, rgba(197, 169, 123, 0.9), rgba(160, 130, 80, 0.9))'
                       : 'linear-gradient(135deg, rgba(255, 107, 0, 0.9), rgba(200, 80, 0, 0.9))',
                     borderRadius: 10,
                     textDecoration: 'none',
                     fontWeight: 600,
                     fontSize: 13,
-                    color: '#fff',
+                    color: '#f0ece4',
                   }}
                 >
                   Swap
@@ -5954,10 +6011,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   fontSize: 13,
                   fontWeight: 600,
                   borderRadius: 6,
-                  border: 'none',
+                  border: swapTab === 'buy' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
                   cursor: 'pointer',
-                  background: swapTab === 'buy' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  color: swapTab === 'buy' ? '#10b981' : 'rgba(255, 255, 255, 0.5)',
+                  background: swapTab === 'buy' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  boxShadow: swapTab === 'buy' ? '0 0 15px rgba(34, 197, 94, 0.2)' : 'none',
+                  color: swapTab === 'buy' ? '#22c55e' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 Buy
@@ -5970,10 +6028,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   fontSize: 13,
                   fontWeight: 600,
                   borderRadius: 6,
-                  border: 'none',
+                  border: swapTab === 'sell' ? '1px solid rgba(255, 59, 92, 0.3)' : '1px solid rgba(255, 255, 255, 0.1)',
                   cursor: 'pointer',
-                  background: swapTab === 'sell' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                  color: swapTab === 'sell' ? '#ef4444' : 'rgba(255, 255, 255, 0.5)',
+                  background: swapTab === 'sell' ? 'rgba(255, 59, 92, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  boxShadow: swapTab === 'sell' ? '0 0 15px rgba(255, 59, 92, 0.2)' : 'none',
+                  color: swapTab === 'sell' ? '#FF3B5C' : 'rgba(240, 236, 228, 0.5)',
                 }}
               >
                 Sell
@@ -5982,7 +6041,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
             {/* Input */}
             <div style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, fontSize: 11, color: 'rgba(240, 236, 228, 0.5)' }}>
                 <span>You Pay</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   Balance: {swapTab === 'buy'
@@ -5991,8 +6050,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   <img
                     src={swapTab === 'buy'
                       ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                      : '/Images/Token.png'}
-                    alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'wASS'}
+                      : (isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || '/Images/Token.png') : '/Images/Token.png')}
                     style={{ width: 12, height: 12 }}
                   />
                 </span>
@@ -6017,7 +6075,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
-                    color: '#fff',
+                    color: '#f0ece4',
                     fontSize: 16,
                     fontWeight: 500,
                   }}
@@ -6034,10 +6092,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       padding: '3px 6px',
                       fontSize: 9,
                       fontWeight: 600,
-                      background: 'rgba(168, 85, 247, 0.2)',
+                      background: 'rgba(255, 208, 117, 0.2)',
                       border: 'none',
                       borderRadius: 4,
-                      color: '#a855f7',
+                      color: '#ffd075',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -6052,7 +6110,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   <img
                     src={swapTab === 'buy'
                       ? (buyInputCurrency === 'eth' ? '/Images/Ether.png' : '/Images/Token.png')
-                      : (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')}
+                      : (isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || '/Images/Token.png') : '/Images/Token.png')}
                     alt={swapTab === 'buy' ? (buyInputCurrency === 'eth' ? 'ETH' : 'wASS') : 'Token'}
                     style={{ width: 16, height: 16 }}
                   />
@@ -6074,10 +6132,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       padding: '5px 3px',
                       fontSize: 10,
                       fontWeight: 600,
-                      background: 'rgba(16, 185, 129, 0.15)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      background: 'rgba(255, 208, 117, 0.15)',
+                      border: '1px solid rgba(255, 208, 117, 0.3)',
                       borderRadius: 5,
-                      color: '#10b981',
+                      color: '#ffd075',
                       cursor: 'pointer',
                     }}
                   >
@@ -6098,7 +6156,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
 
             {/* Output */}
             <div style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11, color: 'rgba(255, 255, 255, 0.5)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11, color: 'rgba(240, 236, 228, 0.5)' }}>
                 <span>You Receive</span>
               </div>
               <div style={{
@@ -6130,10 +6188,10 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       padding: '3px 6px',
                       fontSize: 9,
                       fontWeight: 600,
-                      background: 'rgba(168, 85, 247, 0.2)',
+                      background: 'rgba(255, 208, 117, 0.2)',
                       border: 'none',
                       borderRadius: 4,
-                      color: '#a855f7',
+                      color: '#ffd075',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -6147,7 +6205,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <img
                     src={swapTab === 'buy'
-                      ? (isTokenPair ? '/Images/Token.png' : '/Images/Token.png')
+                      ? (isTokenPair && outputTokenAddress ? (getTokenImage(outputTokenAddress) || '/Images/Token.png') : '/Images/Token.png')
                       : (isTokenWarsEthPair
                         ? '/Images/Ether.png' // Token Wars ETH pairs always sell to ETH
                         : (isTokenPair
@@ -6170,11 +6228,11 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               <div style={{
                 marginBottom: 10,
                 padding: 8,
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(255, 59, 92, 0.1)',
+                border: '1px solid rgba(255, 59, 92, 0.3)',
                 borderRadius: 6,
                 fontSize: 11,
-                color: '#ef4444',
+                color: '#FF3B5C',
                 textAlign: 'center',
               }}>
                 {swapError || (writeError?.message?.includes('User rejected') ? 'Transaction cancelled' : 'Transaction failed')}
@@ -6189,7 +6247,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   background: 'rgba(255, 255, 255, 0.05)',
                   borderRadius: 8,
                   fontSize: 13,
-                  color: 'rgba(255, 255, 255, 0.5)',
+                  color: 'rgba(240, 236, 228, 0.5)',
                   textAlign: 'center',
                 }}>
                   Connect wallet to buy
@@ -6202,12 +6260,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: '100%',
                     padding: 12,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                     border: 'none',
                     borderRadius: 8,
                     fontSize: 14,
                     fontWeight: 600,
-                    color: '#fff',
+                    color: '#f0ece4',
                     cursor: isBusy ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -6221,12 +6279,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: '100%',
                     padding: 12,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                     border: 'none',
                     borderRadius: 8,
                     fontSize: 14,
                     fontWeight: 600,
-                    color: '#fff',
+                    color: '#f0ece4',
                     cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                     opacity: !canBuy ? 0.5 : 1,
                   }}
@@ -6246,7 +6304,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       borderRadius: 8,
                       fontSize: 14,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: 'not-allowed',
                     }}
                   >
@@ -6259,12 +6317,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 12,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                       border: 'none',
                       borderRadius: 8,
                       fontSize: 14,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -6277,12 +6335,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 12,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                       border: 'none',
                       borderRadius: 8,
                       fontSize: 14,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -6295,12 +6353,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     style={{
                       width: '100%',
                       padding: 12,
-                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                      background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                       border: 'none',
                       borderRadius: 8,
                       fontSize: 14,
                       fontWeight: 600,
-                      color: '#fff',
+                      color: '#f0ece4',
                       cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                       opacity: !canBuy ? 0.5 : 1,
                     }}
@@ -6315,12 +6373,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   style={{
                     width: '100%',
                     padding: 12,
-                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(16, 185, 129, 0.8)',
+                    background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                     border: 'none',
                     borderRadius: 8,
                     fontSize: 14,
                     fontWeight: 600,
-                    color: '#fff',
+                    color: '#f0ece4',
                     cursor: isBusy || isQuoting || !canBuy ? 'not-allowed' : 'pointer',
                     opacity: !canBuy ? 0.5 : 1,
                   }}
@@ -6334,7 +6392,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 8,
                 fontSize: 13,
-                color: 'rgba(255, 255, 255, 0.5)',
+                color: 'rgba(240, 236, 228, 0.5)',
                 textAlign: 'center',
               }}>
                 Connect wallet to sell
@@ -6350,7 +6408,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: 'not-allowed',
                 }}
               >
@@ -6364,12 +6422,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'linear-gradient(135deg, rgba(251, 191, 36, 0.9), rgba(239, 68, 68, 0.9))',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'linear-gradient(135deg, rgba(255, 208, 117, 0.9), rgba(255, 59, 92, 0.9))',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy || !canSell ? 'not-allowed' : 'pointer',
                   opacity: !canSell ? 0.5 : 1,
                 }}
@@ -6384,12 +6442,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(0, 148, 255, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(197, 169, 123, 0.8)',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -6403,12 +6461,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(138, 43, 226, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.8)',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -6422,12 +6480,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -6441,12 +6499,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(251, 191, 36, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 208, 117, 0.85)',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -6460,12 +6518,12 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 style={{
                   width: '100%',
                   padding: 12,
-                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(239, 68, 68, 0.8)',
+                  background: isBusy ? 'rgba(107, 114, 128, 0.5)' : 'rgba(255, 59, 92, 0.8)',
                   border: 'none',
                   borderRadius: 8,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#fff',
+                  color: '#f0ece4',
                   cursor: isBusy || isQuoting || !canSell ? 'not-allowed' : 'pointer',
                   opacity: !canSell ? 0.5 : 1,
                 }}
@@ -6484,22 +6542,22 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '8px 14px',
-              borderTop: '1px solid rgba(16, 185, 129, 0.1)',
+              borderTop: '1px solid rgba(255, 208, 117, 0.1)',
               fontSize: 10,
               color: 'rgba(255, 255, 255, 0.4)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span>Base</span>
-              <span style={{ color: 'rgba(16, 185, 129, 0.4)' }}>•</span>
+              <span style={{ color: 'rgba(255, 208, 117, 0.4)' }}>•</span>
               <code
                 style={{
                   padding: '1px 4px',
-                  background: 'rgba(16, 185, 129, 0.1)',
+                  background: 'rgba(255, 208, 117, 0.1)',
                   borderRadius: 3,
                   fontFamily: 'monospace',
                   fontSize: 9,
-                  color: 'rgba(16, 185, 129, 0.6)',
+                  color: 'rgba(255, 208, 117, 0.6)',
                   cursor: 'pointer',
                 }}
                 onClick={() => navigator.clipboard.writeText(contracts.token.address)}
@@ -6512,7 +6570,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               href={`https://basescan.org/token/${contracts.token.address}`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'rgba(16, 185, 129, 0.6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
+              style={{ color: 'rgba(255, 208, 117, 0.6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}
             >
               BaseScan
               <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

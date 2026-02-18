@@ -16,17 +16,17 @@ const DEX_OPTIONS: Array<{
   {
     value: 'v4',
     label: 'V4 Uniswap',
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10',
-    borderColor: 'border-purple-500',
+    color: 'text-[#c5a97b]',
+    bgColor: 'bg-[#c5a97b]/10',
+    borderColor: 'border-[#c5a97b]',
     description: 'Deploy on Uniswap V4',
   },
   {
     value: 'aerodrome',
     label: 'Aerodrome',
-    color: 'text-blue-500',
-    bgColor: 'bg-blue-500/10',
-    borderColor: 'border-blue-500',
+    color: 'text-[#c5a97b]',
+    bgColor: 'bg-[#c5a97b]/10',
+    borderColor: 'border-[#c5a97b]',
     description: 'Deploy on Aerodrome CL',
   },
   {
@@ -52,9 +52,9 @@ const PAIR_OPTIONS: Array<{
   {
     value: 'eth',
     label: 'ETH',
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10',
-    borderColor: 'border-indigo-500',
+    color: 'text-[#ffd075]',
+    bgColor: 'bg-[#c5a97b]/10',
+    borderColor: 'border-[#c5a97b]',
     description: 'Pair with Ethereum',
     icon: '/Images/Ether.png',
   },
@@ -92,7 +92,7 @@ export function VoteSelector({
     <div className="space-y-4">
       {/* DEX Vote - 3-way selection */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-300">
+        <label className="block text-sm font-medium text-[#cecece]">
           Vote for DEX
         </label>
         <div className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-1 sm:grid-cols-3'} gap-2`}>
@@ -111,7 +111,7 @@ export function VoteSelector({
                   relative p-3 rounded-lg border-2 transition-all text-left
                   ${isSelected
                     ? `${option.bgColor} ${option.borderColor}`
-                    : 'border-gray-600 hover:border-gray-500'
+                    : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.15)]'
                   }
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
@@ -121,7 +121,7 @@ export function VoteSelector({
                   absolute top-2 right-2 w-4 h-4 rounded-full border-2
                   ${isSelected
                     ? `${option.bgColor} ${option.borderColor} flex items-center justify-center`
-                    : 'border-gray-500'
+                    : 'border-[rgba(255,255,255,0.15)]'
                   }
                 `}>
                   {isSelected && (
@@ -135,15 +135,15 @@ export function VoteSelector({
                     {option.label}
                   </h4>
                   {!compact && (
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-xs text-[#8a9090] mt-0.5">
                       {option.description}
                     </p>
                   )}
 
                   {/* Current votes */}
                   <div className="mt-1.5 flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Votes:</span>
-                    <span className={isSelected ? option.color : 'text-gray-400'}>
+                    <span className="text-[#6b7575]">Votes:</span>
+                    <span className={isSelected ? option.color : 'text-[#8a9090]'}>
                       ${currentVotes.toFixed(0)} ({currentPercent.toFixed(0)}%)
                     </span>
                   </div>
@@ -156,7 +156,7 @@ export function VoteSelector({
 
       {/* Pair Vote - 2-way selection */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-300">
+        <label className="block text-sm font-medium text-[#cecece]">
           Vote for Pair
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -175,7 +175,7 @@ export function VoteSelector({
                   relative p-3 rounded-lg border-2 transition-all text-left
                   ${isSelected
                     ? `${option.bgColor} ${option.borderColor}`
-                    : 'border-gray-600 hover:border-gray-500'
+                    : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.15)]'
                   }
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
@@ -185,7 +185,7 @@ export function VoteSelector({
                   absolute top-2 right-2 w-4 h-4 rounded-full border-2
                   ${isSelected
                     ? `${option.bgColor} ${option.borderColor} flex items-center justify-center`
-                    : 'border-gray-500'
+                    : 'border-[rgba(255,255,255,0.15)]'
                   }
                 `}>
                   {isSelected && (
@@ -203,7 +203,7 @@ export function VoteSelector({
                       {option.label}
                     </h4>
                     {!compact && (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-[#8a9090] mt-0.5">
                         {option.description}
                       </p>
                     )}
@@ -212,8 +212,8 @@ export function VoteSelector({
 
                 {/* Current votes */}
                 <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Votes:</span>
-                  <span className={isSelected ? option.color : 'text-gray-400'}>
+                  <span className="text-[#6b7575]">Votes:</span>
+                  <span className={isSelected ? option.color : 'text-[#8a9090]'}>
                     ${currentVotes.toFixed(0)} ({currentPercent.toFixed(0)}%)
                   </span>
                 </div>
@@ -223,7 +223,7 @@ export function VoteSelector({
         </div>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-[#6b7575]">
         Every $1 = 1 vote for both DEX and pair. Whole dollars only.
       </p>
     </div>
@@ -280,7 +280,7 @@ export function ProtocolVoteSelector({
 
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-medium text-gray-300">
+      <label className="block text-sm font-medium text-[#cecece]">
         Vote for DEX
       </label>
       <div className="grid grid-cols-3 gap-2">
@@ -303,7 +303,7 @@ export function ProtocolVoteSelector({
                 relative p-3 rounded-lg border-2 transition-all text-left
                 ${isSelected
                   ? `${option.bgColor} ${option.borderColor}`
-                  : 'border-gray-600 hover:border-gray-500'
+                  : 'border-[rgba(255,255,255,0.1)] hover:border-[rgba(255,255,255,0.15)]'
                 }
                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
@@ -312,7 +312,7 @@ export function ProtocolVoteSelector({
                 absolute top-2 right-2 w-4 h-4 rounded-full border-2
                 ${isSelected
                   ? `${option.bgColor} ${option.borderColor} flex items-center justify-center`
-                  : 'border-gray-500'
+                  : 'border-[rgba(255,255,255,0.15)]'
                 }
               `}>
                 {isSelected && (
@@ -324,12 +324,12 @@ export function ProtocolVoteSelector({
                 <h4 className={`font-bold ${isSelected ? option.color : 'text-white'}`}>
                   {option.value === 'v4' ? 'Uniswap' : option.label}
                 </h4>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-[#8a9090] mt-0.5">
                   {option.description}
                 </p>
                 <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Votes:</span>
-                  <span className={isSelected ? option.color : 'text-gray-400'}>
+                  <span className="text-[#6b7575]">Votes:</span>
+                  <span className={isSelected ? option.color : 'text-[#8a9090]'}>
                     ${typeof currentVotes === 'number' ? currentVotes.toFixed(0) : 0} ({typeof currentPercent === 'number' ? currentPercent.toFixed(1) : 50}%)
                   </span>
                 </div>
@@ -338,7 +338,7 @@ export function ProtocolVoteSelector({
           );
         })}
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-[#6b7575]">
         Your USDC contribution = your vote weight for the liquidity protocol.
       </p>
     </div>

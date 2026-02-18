@@ -29,7 +29,6 @@ import { parseEther } from 'viem';
 import { SwapWrapModal } from './SwapWrapModal';
 import { ChartModal } from './ChartModal';
 import Link from 'next/link';
-import { TokenWars } from './TokenWars';
 import { ListingModal } from './ListingModal';
 import { TraitSwapper } from './TraitSwapper';
 import { useBuyWithWass, useBuyWithEth, useQuoteEthForListing, useWassBalance, useWassAllowance, useApproveWass } from '@/hooks/useMarketplace';
@@ -111,7 +110,6 @@ const getLocalNFTType = (tokenId: number, name: string): 'snake' | 'egg' | 'huma
 
 type SortOption = 'newest' | 'oldest' | 'id-asc' | 'id-desc' | 'price-asc' | 'price-desc';
 type FilterType = 'all' | 'human' | 'snake' | 'egg';
-type TradingView = 'swap' | 'launch';
 type ExchangeSubTab = 'pool' | 'wass';
 
 // Unified listing type for combining OpenSea (ETH) and wASS marketplace listings
@@ -655,11 +653,8 @@ export function InventorySack() {
   // Selected pair ID for sidebar (controls ChartModal's selected pair)
   const [selectedPairId, setSelectedPairId] = useState<string>(getDefaultPair().id);
 
-  // Clicked token from TradingTerminal - used as fallback when pair not in combinedPairs yet
+  // Clicked token from sidebar - used as fallback when pair not in combinedPairs yet
   const [clickedToken, setClickedToken] = useState<LaunchedToken | null>(null);
-
-  // Trading tab view mode - 'swap' for trading interface, 'launch' for token launcher
-  const [tradingView, setTradingView] = useState<TradingView>('swap');
 
   // Fetch launched tokens from Token Wars for trading pairs
   const { tokens: launchedTokens, loading: launchedTokensLoading } = useLaunchedTokens({
@@ -1054,34 +1049,6 @@ export function InventorySack() {
     }
   }, []);
 
-  // Handle Trade button click from TradingTerminal (launched tokens list)
-  // Switches to swap view and selects the token's trading pair
-  const handleTradeToken = useCallback((token: LaunchedToken) => {
-    // Switch to swap view from launch view
-    setTradingView('swap');
-
-    // Select the pair for this token (Token Wars pairs have ID format: tw-{warId})
-    const pairId = `tw-${token.warId}`;
-    setSelectedPairId(pairId);
-
-    // Store the clicked token for fallback if it's not in combinedPairs yet
-    setClickedToken(token);
-
-    // Update pool address for trade history
-    if (token.poolAddress) {
-      setCurrentPoolAddress(token.poolAddress);
-    }
-
-    // Debug logging for token wars routing
-    console.log(`[TradeToken] Token clicked:`, {
-      symbol: token.symbol,
-      warId: token.warId,
-      pairId,
-      dex: token.dex,
-      poolAddress: token.poolAddress,
-      tokenAddress: token.tokenAddress,
-    });
-  }, []);
 
   // Pool trades for transaction history in Trading tab
   const { trades: poolTrades, isLoading: tradesLoading, refetch: refetchTrades } = usePoolTrades(currentPoolAddress);
@@ -2135,24 +2102,24 @@ export function InventorySack() {
     <>
       {/* Full-Screen OpenSea-Style Modal - always scales to fit viewport */}
       <div
-        className="fixed inset-0 z-50 bg-gray-950 flex flex-col animate-fade-in origin-top-left"
+        className="fixed inset-0 z-50 bg-[#0a0d0c] flex flex-col animate-fade-in origin-top-left"
         style={{
           transform: `scale(${scaleFactor})`,
           width: `${100 / scaleFactor}%`,
           height: `${100 / scaleFactor}%`,
         }}>
         {/* Header */}
-        <header className="flex-shrink-0 border-b border-gray-800 bg-gray-900/95 backdrop-blur-xl">
+        <header className="flex-shrink-0 border-b border-[rgba(255,255,255,0.06)] bg-[#171e1d]/95 backdrop-blur-xl">
           <div className="flex items-center justify-between px-6 py-3">
             {/* Logo & Title */}
             <div className="flex items-center gap-4 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-purple-500 to-pink-500 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffd075] via-[#c5a97b] to-[#a68b5b] flex items-center justify-center">
                   <span className="text-xl">🐍</span>
                 </div>
                 <div>
                   <h1 className="text-lg font-bold text-white">Applesnakes</h1>
-                  <p className="text-xs text-gray-400">Marketplace Hub</p>
+                  <p className="text-xs text-[#8a9090]">Marketplace Hub</p>
                 </div>
               </div>
             </div>
@@ -2160,7 +2127,7 @@ export function InventorySack() {
             {/* Search Bar */}
             <div className="flex flex-1 max-w-xl mx-8">
               <div className="relative w-full">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8a9090]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
                 <input
@@ -2168,7 +2135,7 @@ export function InventorySack() {
                   placeholder="Search by name or ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-xl text-white placeholder-[#8a9090] focus:outline-none focus:border-[rgba(255,208,117,0.4)] focus:ring-1 focus:ring-[rgba(255,208,117,0.3)] transition-all"
                 />
               </div>
             </div>
@@ -2178,12 +2145,12 @@ export function InventorySack() {
               {/* Balance Pills */}
               {isWalletConnected && (
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)]">
                     <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
                     <span className="text-white text-sm font-medium">{wTokenBalanceFormatted.toFixed(2)}</span>
-                    <span className="text-gray-400 text-xs">$wASS</span>
+                    <span className="text-[#8a9090] text-xs">$wASS</span>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)]">
                     <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
                     <span className="text-white text-sm font-medium">{ethBalanceFormatted.toFixed(4)}</span>
                   </div>
@@ -2193,7 +2160,7 @@ export function InventorySack() {
               {/* Close Button */}
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-400 hover:text-white transition-all"
+                className="p-2 rounded-lg bg-[#1a2221] hover:bg-[#1f2827] border border-[rgba(255,255,255,0.08)] text-[#8a9090] hover:text-white transition-all"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2203,19 +2170,19 @@ export function InventorySack() {
           </div>
 
           {/* Tab Bar */}
-          <div className="flex items-center gap-6 px-6 border-t border-gray-800 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-6 px-6 border-t border-[rgba(255,255,255,0.06)] overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => handleTabChange('collection')}
                 className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'collection'
-                    ? 'border-cyan-500 text-cyan-400'
-                    : 'border-transparent text-gray-400 hover:text-white'
+                    ? 'border-[rgba(255,208,117,0.4)] text-[#ffd075]'
+                    : 'border-transparent text-[#8a9090] hover:text-white'
                 }`}
               >
                 <span className="font-medium text-sm sm:text-base">My NFTs</span>
-                <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{collectionNFTs.length}</span>
+                <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-[#1a2221]">{collectionNFTs.length}</span>
                 {stakedCount > 0 && (
-                  <span className="inline ml-1 px-1.5 py-0.5 text-[10px] rounded bg-purple-500/20 text-purple-400">
+                  <span className="inline ml-1 px-1.5 py-0.5 text-[10px] rounded bg-[rgba(255,208,117,0.12)] text-[#ffd075]">
                     +{stakedCount} staked
                   </span>
                 )}
@@ -2224,57 +2191,35 @@ export function InventorySack() {
                 onClick={() => handleTabChange('listings')}
                 className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'listings'
-                    ? 'border-green-500 text-green-400'
-                    : 'border-transparent text-gray-400 hover:text-white'
+                    ? 'border-[#22c55e] text-[#22c55e]'
+                    : 'border-transparent text-[#8a9090] hover:text-white'
                 }`}
               >
                 <span className="font-medium text-sm sm:text-base">Market</span>
                 {totalListingsCount > 0 && (
-                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{totalListingsCount}</span>
+                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-[#1a2221]">{totalListingsCount}</span>
                 )}
                 {effectiveFloorPrice && (
-                  <span className={`inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>
+                  <span className={`inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 text-[10px] rounded ${isPoolFloor ? 'bg-[rgba(249,105,14,0.15)] text-[#f9690e]' : 'bg-[rgba(34,197,94,0.12)] text-[#22c55e]'}`}>
                     {effectiveFloorPrice}
                     <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                   </span>
                 )}
               </button>
-              <button
-                onClick={() => handleTabChange('items')}
-                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'items'
-                    ? 'border-purple-500 text-purple-400'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                }`}
-              >
-                <span className="font-medium text-sm sm:text-base">📦 Items</span>
-              </button>
-              <button
-                onClick={() => handleTabChange('exchange')}
-                className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
-                  activeTab === 'exchange'
-                    ? 'border-orange-500 text-orange-400'
-                    : 'border-transparent text-gray-400 hover:text-white'
-                }`}
-              >
-                <span className="font-medium text-sm sm:text-base">Exchange</span>
-                {poolNFTs.length > 0 && (
-                  <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs rounded-full bg-gray-800">{poolNFTs.length}</span>
-                )}
-              </button>
+              {/* Items and Exchange tabs hidden */}
               <button
                 onClick={() => handleTabChange('trading')}
                 className={`py-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                   activeTab === 'trading'
                     ? 'border-yellow-500 text-yellow-400'
-                    : 'border-transparent text-gray-400 hover:text-white'
+                    : 'border-transparent text-[#8a9090] hover:text-white'
                 }`}
               >
                 <span className="font-medium text-sm sm:text-base">Trading</span>
                 <span className={`ml-1 px-1.5 py-0.5 text-[10px] rounded inline-flex items-center gap-1 ${
                   (allPairChanges.get('wass-eth') || 0) >= 0
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-red-500/20 text-red-400'
+                    ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e]'
+                    : 'bg-[rgba(255,59,92,0.12)] text-[#FF3B5C]'
                 }`}>
                   <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
                   {(allPairChanges.get('wass-eth') || 0) >= 0 ? '+' : ''}{(allPairChanges.get('wass-eth') || 0).toFixed(2)}%
@@ -2285,20 +2230,20 @@ export function InventorySack() {
               <div className="ml-auto flex items-center gap-2 text-sm flex-shrink-0">
                 {stakedCount > 0 && hasPendingRewards ? (
                   <>
-                    <div className="flex items-center gap-1.5 text-green-400">
+                    <div className="flex items-center gap-1.5 text-[#22c55e]">
                       <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
                       <span>{pendingRewardsFormatted}</span>
                     </div>
                     <button
                       onClick={handleClaimRewards}
                       disabled={isProcessing}
-                      className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30 transition-all disabled:opacity-50"
+                      className="px-2 py-1 rounded-lg bg-[rgba(34,197,94,0.12)] text-[#22c55e] hover:bg-[rgba(34,197,94,0.18)] border border-[rgba(34,197,94,0.2)] transition-all disabled:opacity-50"
                     >
                       Claim
                     </button>
                   </>
                 ) : stakedCount > 0 ? (
-                  <div className="flex items-center gap-1.5 text-gray-400">
+                  <div className="flex items-center gap-1.5 text-[#8a9090]">
                     <img src="/Images/Token.png" alt="wASS" className="w-4 h-4 opacity-50" />
                     <span>0.00</span>
                   </div>
@@ -2309,47 +2254,15 @@ export function InventorySack() {
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Sidebar - shows filters for NFT tabs, token pairs for trading tab */}
-          <aside className={`flex-shrink-0 border-r border-gray-800 bg-gray-900/50 transition-all overflow-y-auto ${showFilters ? 'block w-64' : 'w-0'}`}>
-            {showFilters && (
+          {/* Sidebar - shows filters for NFT tabs, token pairs for trading tab (Items tab has its own sidebar) */}
+          <aside className={`flex-shrink-0 border-r border-[rgba(255,255,255,0.06)] bg-[#171e1d]/50 transition-all overflow-y-auto ${showFilters && activeTab !== 'items' ? 'block w-64' : 'w-0'}`}>
+            {showFilters && activeTab !== 'items' && (
               <div className="p-4 space-y-6">
                 {activeTab === 'trading' ? (
                   /* ===== TRADING TAB SIDEBAR ===== */
                   <>
-                    {/* View Toggle - Swap vs Launch */}
-                    <div className="flex gap-2 p-1 bg-gray-800 rounded-lg">
-                      <button
-                        onClick={() => setTradingView('swap')}
-                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                          tradingView === 'swap'
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                        }`}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                        </svg>
-                        <span>Swap</span>
-                      </button>
-                      <button
-                        onClick={() => setTradingView('launch')}
-                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                          tradingView === 'launch'
-                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                        }`}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span>Launch</span>
-                      </button>
-                    </div>
-
-                    {/* Conditional Sidebar Content based on view */}
-                    {tradingView === 'swap' ? (
-                      /* ===== SWAP VIEW SIDEBAR ===== */
-                      <>
+                    {/* ===== SWAP VIEW SIDEBAR ===== */}
+                    <>
                         {/* Trading Header */}
                         <div className="flex items-center justify-between">
                           <h3 className="font-semibold text-white">Token Pairs</h3>
@@ -2357,9 +2270,9 @@ export function InventorySack() {
 
                         {/* Token Pairs List - Combines static pairs with Token Wars launches */}
                         <div>
-                          <h4 className="text-sm font-medium text-gray-400 mb-3">Available Pairs</h4>
+                          <h4 className="text-sm font-medium text-[#8a9090] mb-3">Available Pairs</h4>
                           {launchedTokensLoading && combinedPairs.length === TOKEN_PAIRS.length && (
-                            <div className="text-xs text-gray-500 mb-2">Loading Token Wars pairs...</div>
+                            <div className="text-xs text-[#6b7575] mb-2">Loading Token Wars pairs...</div>
                           )}
                           <div className="space-y-2">
                             {combinedPairs
@@ -2392,15 +2305,15 @@ export function InventorySack() {
                                     className={`w-full block p-3 rounded-lg border transition-all text-left ${
                                       isSelected
                                         ? pair.isTokenWars
-                                          ? 'bg-purple-500/20 border-purple-500/50'
-                                          : 'bg-emerald-500/20 border-emerald-500/50'
+                                          ? 'bg-[rgba(255,208,117,0.12)] border-[rgba(255,208,117,0.3)]'
+                                          : 'bg-[rgba(255,208,117,0.12)] border-[rgba(255,208,117,0.3)]'
                                         : pair.isTokenWars
-                                          ? 'bg-purple-900/20 border-purple-700/50 hover:bg-purple-800/30 hover:border-purple-600/50'
-                                          : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
+                                          ? 'bg-[rgba(255,208,117,0.06)] border-[rgba(255,208,117,0.2)] hover:bg-[rgba(255,208,117,0.1)] hover:border-[rgba(255,208,117,0.3)]'
+                                          : 'bg-[#1a2221] border-[rgba(255,255,255,0.08)] hover:bg-[#1f2827] hover:border-[rgba(255,208,117,0.15)]'
                                     }`}
                                   >
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className={`font-medium flex items-center gap-1 ${isSelected ? (pair.isTokenWars ? 'text-purple-400' : 'text-emerald-400') : 'text-white'}`}>
+                                      <span className={`font-medium flex items-center gap-1 ${isSelected ? (pair.isTokenWars ? 'text-[#ffd075]' : 'text-[#ffd075]') : 'text-white'}`}>
                                         {(() => {
                                           const img0 = getTokenImage(pair.token0);
                                           const img1 = getTokenImage(pair.token1);
@@ -2413,7 +2326,7 @@ export function InventorySack() {
                                               ) : (
                                                 <span className="text-xs">{symbol0}</span>
                                               )}
-                                              <span className="text-gray-500">/</span>
+                                              <span className="text-[#6b7575]">/</span>
                                               {img1 ? (
                                                 <img src={img1} alt={symbol1} className="w-4 h-4 rounded-full" />
                                               ) : (
@@ -2427,18 +2340,18 @@ export function InventorySack() {
                                       {pair.isTokenWars ? (
                                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                                           pair.tokenWarsData?.dex === 'aerodrome'
-                                            ? 'bg-blue-500/20 text-blue-400'
+                                            ? 'bg-[rgba(255,208,117,0.12)] text-[#ffd075]'
                                             : pair.tokenWarsData?.dex === 'hydrex'
-                                              ? 'bg-orange-500/20 text-orange-400'
-                                              : 'bg-purple-500/20 text-purple-400'
+                                              ? 'bg-[rgba(249,105,14,0.15)] text-[#f9690e]'
+                                              : 'bg-[rgba(255,208,117,0.12)] text-[#ffd075]'
                                         }`}>
                                           {pair.tokenWarsData?.dex === 'aerodrome' ? 'AERO' : pair.tokenWarsData?.dex === 'hydrex' ? 'HYDREX' : 'V4'}
                                         </span>
                                       ) : pairChange !== undefined && (
                                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                           pairChange >= 0
-                                            ? 'text-emerald-400 bg-emerald-500/20'
-                                            : 'text-red-400 bg-red-500/20'
+                                            ? 'text-[#ffd075] bg-[rgba(255,208,117,0.12)]'
+                                            : 'text-[#FF3B5C] bg-[rgba(255,59,92,0.12)]'
                                         }`}>
                                           {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
                                         </span>
@@ -2448,18 +2361,18 @@ export function InventorySack() {
                                     {twData ? (
                                       <div className="space-y-1">
                                         <div className="flex items-center justify-between text-xs">
-                                          <span className="text-gray-400 truncate">{twData.name}</span>
-                                          <span className="text-green-400 font-medium">${twData.totalRaisedUsdc.toLocaleString()}</span>
+                                          <span className="text-[#8a9090] truncate">{twData.name}</span>
+                                          <span className="text-[#22c55e] font-medium">${(twData.totalRaisedUsdc ?? 0).toLocaleString()}</span>
                                         </div>
-                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
-                                          <span>{twData.participantCount} participants</span>
+                                        <div className="flex items-center justify-between text-[10px] text-[#6b7575]">
+                                          <span>{twData.participantCount ?? 0} participants</span>
                                           <span className="flex items-center gap-1">
                                             {twData.pairType === 'wass' ? (
                                               <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
                                             ) : (
                                               <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                                             )}
-                                            <span>{twData.pairType.toUpperCase()} pair</span>
+                                            <span>{(twData.pairType ?? 'ETH').toUpperCase()} pair</span>
                                           </span>
                                         </div>
                                         {/* External links for Token Wars tokens */}
@@ -2470,7 +2383,7 @@ export function InventorySack() {
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               onClick={(e) => e.stopPropagation()}
-                                              className="text-[9px] px-1.5 py-0.5 bg-green-600/30 text-green-400 rounded hover:bg-green-600/50"
+                                              className="text-[9px] px-1.5 py-0.5 bg-[rgba(34,197,94,0.18)] text-[#22c55e] rounded hover:bg-[rgba(34,197,94,0.3)]"
                                             >
                                               Chart
                                             </a>
@@ -2481,7 +2394,7 @@ export function InventorySack() {
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               onClick={(e) => e.stopPropagation()}
-                                              className="text-[9px] px-1.5 py-0.5 bg-gray-600/30 text-gray-400 rounded hover:bg-gray-600/50"
+                                              className="text-[9px] px-1.5 py-0.5 bg-[#2a3533]/30 text-[#8a9090] rounded hover:bg-[#2a3533]/50"
                                             >
                                               Scan
                                             </a>
@@ -2489,7 +2402,7 @@ export function InventorySack() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <div className="flex items-center justify-between text-xs text-gray-400">
+                                      <div className="flex items-center justify-between text-xs text-[#8a9090]">
                                         <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
                                         <span>1% fee</span>
                                       </div>
@@ -2500,135 +2413,6 @@ export function InventorySack() {
                           </div>
                         </div>
                       </>
-                    ) : (
-                      /* ===== LAUNCH VIEW SIDEBAR - Same Available Pairs as Swap, clicks open Swap view ===== */
-                      <>
-                        {/* Trading Header */}
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-semibold text-white">Token Pairs</h3>
-                          <span className="text-xs text-gray-500">Click to trade</span>
-                        </div>
-
-                        {/* Token Pairs List - Same as swap view but clicks switch to swap */}
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-400 mb-3">Available Pairs</h4>
-                          {launchedTokensLoading && combinedPairs.length === TOKEN_PAIRS.length && (
-                            <div className="text-xs text-gray-500 mb-2">Loading Token Wars pairs...</div>
-                          )}
-                          <div className="space-y-2">
-                            {combinedPairs
-                              .sort((a, b) => {
-                                // Primary pool always first
-                                if (a.isDefault && !b.isDefault) return -1;
-                                if (!a.isDefault && b.isDefault) return 1;
-                                // Static pairs before Token Wars
-                                if (!a.isTokenWars && b.isTokenWars) return -1;
-                                if (a.isTokenWars && !b.isTokenWars) return 1;
-                                // Token Wars sorted by raised amount (most raised first)
-                                if (a.isTokenWars && b.isTokenWars) {
-                                  const aRaised = a.tokenWarsData?.totalRaisedUsdc || 0;
-                                  const bRaised = b.tokenWarsData?.totalRaisedUsdc || 0;
-                                  return bRaised - aRaised;
-                                }
-                                // Static pairs sorted by price change
-                                const aChange = allPairChanges.get(a.id) || 0;
-                                const bChange = allPairChanges.get(b.id) || 0;
-                                return bChange - aChange;
-                              })
-                              .map((pair) => {
-                                const pairChange = allPairChanges.get(pair.id);
-                                const twData = pair.tokenWarsData;
-                                return (
-                                  <button
-                                    key={pair.id}
-                                    onClick={() => {
-                                      // Switch to swap view and select this pair
-                                      handleSidebarPairSelect(pair);
-                                      setTradingView('swap');
-                                    }}
-                                    className={`w-full block p-3 rounded-lg border transition-all text-left ${
-                                      pair.isTokenWars
-                                        ? 'bg-purple-900/20 border-purple-700/50 hover:bg-purple-800/30 hover:border-purple-600/50'
-                                        : 'bg-gray-800 border-gray-700 hover:bg-gray-750 hover:border-gray-600'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className={`font-medium flex items-center gap-1 text-white`}>
-                                        {(() => {
-                                          const img0 = getTokenImage(pair.token0);
-                                          const img1 = getTokenImage(pair.token1);
-                                          const symbol0 = getTokenSymbol(pair.token0);
-                                          const symbol1 = getTokenSymbol(pair.token1);
-                                          return (
-                                            <>
-                                              {img0 ? (
-                                                <img src={img0} alt={symbol0} className="w-4 h-4 rounded-full" />
-                                              ) : (
-                                                <span className="text-xs">{symbol0}</span>
-                                              )}
-                                              <span className="text-gray-500">/</span>
-                                              {img1 ? (
-                                                <img src={img1} alt={symbol1} className="w-4 h-4 rounded-full" />
-                                              ) : (
-                                                <span className="text-xs">{symbol1}</span>
-                                              )}
-                                            </>
-                                          );
-                                        })()}
-                                      </span>
-                                      {/* Show price change for static pairs, or DEX badge for launched tokens */}
-                                      {pair.isTokenWars ? (
-                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                                          pair.tokenWarsData?.dex === 'aerodrome'
-                                            ? 'bg-blue-500/20 text-blue-400'
-                                            : pair.tokenWarsData?.dex === 'hydrex'
-                                              ? 'bg-orange-500/20 text-orange-400'
-                                              : 'bg-purple-500/20 text-purple-400'
-                                        }`}>
-                                          {pair.tokenWarsData?.dex === 'aerodrome' ? 'AERO' : pair.tokenWarsData?.dex === 'hydrex' ? 'HYDREX' : 'V4'}
-                                        </span>
-                                      ) : pairChange !== undefined && (
-                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                          pairChange >= 0
-                                            ? 'text-emerald-400 bg-emerald-500/20'
-                                            : 'text-red-400 bg-red-500/20'
-                                        }`}>
-                                          {pairChange >= 0 ? '+' : ''}{pairChange.toFixed(2)}%
-                                        </span>
-                                      )}
-                                    </div>
-                                    {/* Token Wars specific info */}
-                                    {twData ? (
-                                      <div className="space-y-1">
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span className="text-gray-400 truncate">{twData.name}</span>
-                                          <span className="text-green-400 font-medium">${twData.totalRaisedUsdc.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
-                                          <span>{twData.participantCount} participants</span>
-                                          <span className="flex items-center gap-1">
-                                            {twData.pairType === 'wass' ? (
-                                              <img src="/Images/Token.png" alt="wASS" className="w-3 h-3" />
-                                            ) : (
-                                              <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
-                                            )}
-                                            <span>{twData.pairType.toUpperCase()} pair</span>
-                                          </span>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="flex items-center justify-between text-xs text-gray-400">
-                                        <span>{pair.isDefault ? 'Primary pool' : 'Trading pair'}</span>
-                                        <span>1% fee</span>
-                                      </div>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      </>
-                    )}
                   </>
                 ) : (
                   /* ===== NFT TABS SIDEBAR ===== */
@@ -2641,7 +2425,7 @@ export function InventorySack() {
                           setFilterType('all');
                           setSearchQuery('');
                         }}
-                        className="text-xs text-cyan-400 hover:text-cyan-300"
+                        className="text-xs text-[#ffd075] hover:text-[#c5a97b]"
                       >
                         Clear all
                       </button>
@@ -2649,7 +2433,7 @@ export function InventorySack() {
 
                     {/* Type Filter */}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-3">Type</h4>
+                      <h4 className="text-sm font-medium text-[#8a9090] mb-3">Type</h4>
                       <div className="space-y-2">
                         {(['all', 'human', 'snake', 'egg'] as FilterType[]).map((type) => {
                           const labels: Record<FilterType, { label: string; emoji: string }> = {
@@ -2664,15 +2448,15 @@ export function InventorySack() {
                               onClick={() => setFilterType(type)}
                               className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
                                 filterType === type
-                                  ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-400'
-                                  : 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-750 hover:border-gray-600'
+                                  ? 'bg-[rgba(255,208,117,0.12)] border border-[rgba(255,208,117,0.3)] text-[#ffd075]'
+                                  : 'bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#cecece] hover:bg-[#1f2827] hover:border-[rgba(255,208,117,0.15)]'
                               }`}
                             >
                               <span className="flex items-center gap-2">
                                 <span>{labels[type].emoji}</span>
                                 <span className="text-sm">{labels[type].label}</span>
                               </span>
-                              <span className="text-xs text-gray-500">{typeCounts[type]}</span>
+                              <span className="text-xs text-[#6b7575]">{typeCounts[type]}</span>
                             </button>
                           );
                         })}
@@ -2681,11 +2465,11 @@ export function InventorySack() {
 
                     {/* Sort Options */}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-3">Sort By</h4>
+                      <h4 className="text-sm font-medium text-[#8a9090] mb-3">Sort By</h4>
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as SortOption)}
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                        className="w-full px-3 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-white text-sm focus:outline-none focus:border-[rgba(255,208,117,0.4)]"
                       >
                         <option value="newest">Newest First</option>
                         <option value="oldest">Oldest First</option>
@@ -2702,7 +2486,7 @@ export function InventorySack() {
 
                     {/* Grid Size */}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-400 mb-3">Grid Size</h4>
+                      <h4 className="text-sm font-medium text-[#8a9090] mb-3">Grid Size</h4>
                       <div className="flex gap-2">
                         {(['small', 'medium', 'large'] as const).map((size) => (
                           <button
@@ -2710,8 +2494,8 @@ export function InventorySack() {
                             onClick={() => setGridSize(size)}
                             className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
                               gridSize === size
-                                ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-400'
-                                : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white'
+                                ? 'bg-[rgba(255,208,117,0.12)] border border-[rgba(255,208,117,0.3)] text-[#ffd075]'
+                                : 'bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#8a9090] hover:text-white'
                             }`}
                           >
                             {size.charAt(0).toUpperCase() + size.slice(1)}
@@ -2722,27 +2506,27 @@ export function InventorySack() {
 
                     {/* Pool Info - only show on listings and exchange tabs */}
                     {(activeTab === 'listings' || activeTab === 'exchange') && (
-                      <div className="pt-4 border-t border-gray-800">
-                        <h4 className="text-sm font-medium text-gray-400 mb-3">Pool Info</h4>
+                      <div className="pt-4 border-t border-[rgba(255,255,255,0.06)]">
+                        <h4 className="text-sm font-medium text-[#8a9090] mb-3">Pool Info</h4>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-400">Pool Size</span>
+                            <span className="text-[#8a9090]">Pool Size</span>
                             <span className="text-white font-medium flex items-center gap-1">
                               {poolNFTs.length}
                               <img src="/Images/MountianGuyHead.png" alt="NFTs" className="w-4 h-4" />
                             </span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-gray-400">Wrap Fee</span>
-                            <span className="text-orange-400 font-medium flex items-center gap-1">
+                            <span className="text-[#8a9090]">Wrap Fee</span>
+                            <span className="text-[#f9690e] font-medium flex items-center gap-1">
                               {parseFloat(wrapFeeFormatted).toFixed(4)}
                               <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                             </span>
                           </div>
                           {buyQuotePrice && (
                             <div className="flex justify-between items-center">
-                              <span className="text-gray-400">Buy Price</span>
-                              <span className="text-cyan-400 font-medium flex items-center gap-1">
+                              <span className="text-[#8a9090]">Buy Price</span>
+                              <span className="text-[#ffd075] font-medium flex items-center gap-1">
                                 ~{parseFloat(buyQuotePrice).toFixed(4)}
                                 <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                               </span>
@@ -2761,7 +2545,7 @@ export function InventorySack() {
           {/* Toggle Sidebar Button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-gray-800 border border-gray-700 rounded-r-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-all"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-r-lg text-[#8a9090] hover:text-white hover:bg-[#1f2827] transition-all"
             style={{ left: showFilters ? '256px' : '0' }}
           >
             <svg className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2777,32 +2561,32 @@ export function InventorySack() {
             {!isWalletConnected ? (
               /* Connect Wallet State */
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30 mb-6">
-                  <svg className="w-12 h-12 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[rgba(255,208,117,0.12)] via-[rgba(197,169,123,0.12)] to-[rgba(166,139,91,0.12)] flex items-center justify-center border border-[rgba(255,208,117,0.4)]/30 mb-6">
+                  <svg className="w-12 h-12 text-[#ffd075]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">Connect Your Wallet</h2>
-                <p className="text-gray-400 max-w-md">Connect your wallet to view and manage your NFT collection</p>
+                <p className="text-[#8a9090] max-w-md">Connect your wallet to view and manage your NFT collection</p>
               </div>
             ) : isLoading || isLoadingStaked ? (
               /* Loading State */
               <div className="flex flex-col items-center justify-center h-full">
                 <div className="relative">
-                  <div className="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+                  <div className="w-16 h-16 border-4 border-[rgba(255,208,117,0.4)]/20 border-t-[#ffd075] rounded-full animate-spin"></div>
                 </div>
-                <p className="mt-4 text-gray-400">Loading your collection...</p>
+                <p className="mt-4 text-[#8a9090]">Loading your collection...</p>
               </div>
             ) : displayedNFTs.length === 0 ? (
               /* Empty State */
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-cyan-500/20 via-purple-500/20 to-pink-500/20 flex items-center justify-center border border-cyan-500/30 mb-6">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[rgba(255,208,117,0.12)] via-[rgba(197,169,123,0.12)] to-[rgba(166,139,91,0.12)] flex items-center justify-center border border-[rgba(255,208,117,0.4)]/30 mb-6">
                   <span className="text-4xl">{searchQuery || filterType !== 'all' ? '🔍' : '🎁'}</span>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">
                   {searchQuery || filterType !== 'all' ? 'No Results Found' : 'No NFTs Yet'}
                 </h2>
-                <p className="text-gray-400 max-w-md mb-6">
+                <p className="text-[#8a9090] max-w-md mb-6">
                   {searchQuery || filterType !== 'all'
                     ? 'Try adjusting your search or filters'
                     : 'Start your collection today!'}
@@ -2810,7 +2594,7 @@ export function InventorySack() {
                 {!searchQuery && filterType === 'all' && (
                   <button
                     onClick={handleBuyNFT}
-                    className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400 transition-all hover:scale-105"
+                    className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] hover:from-[#ffe0a0] hover:to-[#d4b88a] transition-all hover:scale-105"
                   >
                     🛒 Get Your First NFT
                   </button>
@@ -2831,29 +2615,29 @@ export function InventorySack() {
                     <button
                       key={nft.tokenId}
                       onClick={(e) => handleNFTInteraction(nft, e)}
-                      className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left ${
+                      className={`group relative rounded-2xl bg-[#171e1d] border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 text-left ${
                         isSelected
                           ? isStaked
-                            ? 'border-purple-500 ring-2 ring-purple-500/30'
-                            : 'border-cyan-500 ring-2 ring-cyan-500/30'
+                            ? 'border-[rgba(255,208,117,0.5)] ring-2 ring-[rgba(255,208,117,0.25)]'
+                            : 'border-[rgba(255,208,117,0.4)] ring-2 ring-[rgba(255,208,117,0.2)]'
                           : isStaked
-                            ? 'border-purple-500/60 hover:border-purple-400'
-                            : 'border-gray-800 hover:border-gray-600'
+                            ? 'border-[rgba(255,208,117,0.4)] hover:border-[rgba(255,208,117,0.4)]'
+                            : 'border-[rgba(255,255,255,0.06)] hover:border-[rgba(255,208,117,0.15)]'
                       }`}
                       style={{
                         minWidth: '128px',
                         boxShadow: isSelected
                           ? isStaked
-                            ? '0 8px 32px rgba(168, 85, 247, 0.4)'
-                            : '0 8px 32px rgba(6, 182, 212, 0.3)'
+                            ? '0 8px 32px rgba(255, 208, 117, 0.4)'
+                            : '0 8px 32px rgba(255, 208, 117, 0.3)'
                           : isStaked
-                            ? '0 0 20px rgba(168, 85, 247, 0.35), 0 0 40px rgba(168, 85, 247, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3)'
+                            ? '0 0 20px rgba(255, 208, 117, 0.35), 0 0 40px rgba(255, 208, 117, 0.15), 0 4px 12px rgba(0, 0, 0, 0.3)'
                             : '0 4px 12px rgba(0, 0, 0, 0.3)',
                         animation: isStaked && !isSelected ? 'stakedGlow 2s ease-in-out infinite alternate' : undefined,
                       }}
                     >
                       {/* Image Container */}
-                      <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                      <div className="aspect-square relative bg-[#0a0d0c] overflow-hidden rounded-t-2xl">
                         <img
                           src={nft.imageUrl}
                           alt={nft.name}
@@ -2869,9 +2653,9 @@ export function InventorySack() {
                             className={`absolute top-3 right-3 w-7 h-7 rounded-lg flex items-center justify-center border-2 transition-all ${
                               isSelected
                                 ? isStaked
-                                  ? 'bg-purple-500 border-purple-400'
-                                  : 'bg-cyan-500 border-cyan-400'
-                                : 'bg-gray-900/80 border-gray-500 backdrop-blur-sm'
+                                  ? 'bg-[#ffd075] border-[rgba(255,208,117,0.4)]'
+                                  : 'bg-[#c5a97b] border-[rgba(255,208,117,0.5)]'
+                                : 'bg-[#171e1d]/80 border-[rgba(255,255,255,0.1)] backdrop-blur-sm'
                             }`}
                           >
                             {isSelected && (
@@ -2885,7 +2669,7 @@ export function InventorySack() {
                         {/* Status Badges */}
                         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                           {isStaked && (
-                            <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                            <span className="px-2 py-1 rounded-lg bg-[rgba(255,208,117,0.85)] text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                               <img src="/Images/Token.png" alt="Staked" className="w-3 h-3" />
                               <span className="inline">Staked</span>
                             </span>
@@ -2896,7 +2680,7 @@ export function InventorySack() {
                             </span>
                           )}
                           {isJailed && (
-                            <span className="px-2 py-1 rounded-lg bg-red-500/90 text-white text-xs font-bold backdrop-blur-sm">
+                            <span className="px-2 py-1 rounded-lg bg-[rgba(255,59,92,0.85)] text-white text-xs font-bold backdrop-blur-sm">
                               🔒
                             </span>
                           )}
@@ -2910,17 +2694,19 @@ export function InventorySack() {
                         </div>
 
                         {/* Edit Traits Button - only show for humans (not snakes or eggs) */}
-                        {!isEgg && !isJailed && (
-                          <button
+                        {!isEgg && !isJailed && !nft.isSnake && getLocalNFTType(nft.tokenId, nft.name) === 'human' && (
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedNFTForTraits(nft);
                               setShowTraitSwapper(true);
                             }}
-                            className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-purple-500/80 hover:bg-purple-500 backdrop-blur-md text-white text-xs font-medium border border-purple-400/50"
+                            className="absolute bottom-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded-lg bg-[rgba(255,208,117,0.75)] hover:bg-[rgba(255,208,117,0.9)] backdrop-blur-md text-white text-xs font-medium border border-[rgba(255,208,117,0.35)] cursor-pointer"
                           >
                             ✨ Edit
-                          </button>
+                          </div>
                         )}
                       </div>
 
@@ -2930,12 +2716,12 @@ export function InventorySack() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-white truncate text-sm">{nft.name}</h3>
-                            <p className="text-xs text-gray-500">#{nft.tokenId}</p>
+                            <p className="text-xs text-[#6b7575]">#{nft.tokenId}</p>
                           </div>
                           <span className={`flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium ${
-                            nft.nftType === 'snake' ? 'bg-green-500/20 text-green-400' :
+                            nft.nftType === 'snake' ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e]' :
                             nft.nftType === 'egg' ? 'bg-amber-500/20 text-amber-400' :
-                            'bg-cyan-500/20 text-cyan-400'
+                            'bg-[rgba(255,208,117,0.12)] text-[#ffd075]'
                           }`}>
                             {typeConfig.emoji} {typeConfig.title}
                           </span>
@@ -2943,7 +2729,7 @@ export function InventorySack() {
 
                         {/* Status Row */}
                         <div className="flex items-center justify-between text-xs">
-                          <span className={isStaked && nft.isSnake ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                          <span className={isStaked && nft.isSnake ? 'text-[#22c55e] font-medium' : 'text-[#8a9090]'}>
                             {nft.isSnake
                               ? (isStaked ? 'Earning $wASS' : 'Ready to stake')
                               : isEgg
@@ -2967,24 +2753,24 @@ export function InventorySack() {
                 {listingsLoading ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <div className="relative">
-                      <div className="w-16 h-16 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin"></div>
+                      <div className="w-16 h-16 border-4 border-[rgba(34,197,94,0.15)] border-t-[#22c55e] rounded-full animate-spin"></div>
                     </div>
-                    <p className="mt-4 text-gray-400">Loading marketplace listings...</p>
+                    <p className="mt-4 text-[#8a9090]">Loading marketplace listings...</p>
                   </div>
                 ) : openSeaListings.length === 0 && poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length === 0 && marketplaceListings.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center">
-                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-green-500/20 via-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-green-500/30 mb-6">
+                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[rgba(255,208,117,0.12)] via-[rgba(197,169,123,0.12)] to-[rgba(139,114,69,0.12)] flex items-center justify-center border border-[rgba(34,197,94,0.2)] mb-6">
                       <span className="text-4xl">🏪</span>
                     </div>
                     <h2 className="text-2xl font-bold text-white mb-2">No Active Listings</h2>
-                    <p className="text-gray-400 max-w-md mb-6">
+                    <p className="text-[#8a9090] max-w-md mb-6">
                       No NFTs are currently listed for sale. Check back later!
                     </p>
                     <a
                       href="https://opensea.io/collection/applesnakes"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 transition-all hover:scale-105"
+                      className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#4ade80] hover:to-[#22c55e] transition-all hover:scale-105"
                     >
                       View on OpenSea
                     </a>
@@ -2995,7 +2781,7 @@ export function InventorySack() {
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h2 className="text-xl font-bold text-white">Marketplace</h2>
-                        <p className="text-sm text-gray-400 flex items-center gap-1 flex-wrap">
+                        <p className="text-sm text-[#8a9090] flex items-center gap-1 flex-wrap">
                           {openSeaListings.length + (poolNFTs.filter(nft => !nft.isSnake && !nft.isEgg).length > 0 ? 1 : 0) + marketplaceListings.length} listings available
                           {effectiveFloorPrice && (
                             <span className="flex items-center gap-1 ml-1">
@@ -3017,7 +2803,7 @@ export function InventorySack() {
                           refetchListings();
                           fetchMarketplaceListings();
                         }}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700 transition-all"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#cecece] hover:text-white hover:bg-[#1f2827] transition-all"
                       >
                         <span>↻</span>
                         <span>Refresh</span>
@@ -3061,43 +2847,26 @@ export function InventorySack() {
                           <button
                             key="contract-buy"
                             onClick={handleBuyNFT}
-                            disabled={poolNFTsLoading || humansInPool === 0}
-                            className={`group relative rounded-2xl bg-gray-900 border-2 border-cyan-500/50 hover:border-cyan-400 transition-all duration-200 text-left ${
-                              poolNFTsLoading || humansInPool === 0
-                                ? 'opacity-70 cursor-wait'
-                                : 'hover:scale-[1.02] hover:-translate-y-1'
-                            }`}
+                            className="group relative rounded-2xl bg-[#171e1d] border-2 border-[rgba(255,208,117,0.3)] hover:border-[rgba(255,208,117,0.5)] transition-all duration-200 text-left hover:scale-[1.02] hover:-translate-y-1"
                             style={{
                               minWidth: '128px',
-                              boxShadow: '0 4px 16px rgba(6, 182, 212, 0.2)',
+                              boxShadow: '0 4px 16px rgba(255, 208, 117, 0.2)',
                             }}
                           >
                             {/* Image Container */}
-                            <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
-                              {poolNFTsLoading ? (
-                                // Loading skeleton
-                                <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-gray-900 animate-pulse flex items-center justify-center">
-                                  <div className="text-4xl animate-bounce">🔄</div>
-                                </div>
-                              ) : poolHuman ? (
-                                <img
-                                  src={poolHuman.imageUrl}
-                                  alt={poolHuman.name}
-                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                />
-                              ) : (
-                                // No humans available placeholder
-                                <div className="w-full h-full bg-gradient-to-br from-cyan-900/30 to-gray-900 flex items-center justify-center">
-                                  <div className="text-4xl">👤</div>
-                                </div>
-                              )}
+                            <div className="aspect-square relative bg-[#0a0d0c] overflow-hidden rounded-t-2xl">
+                              <img
+                                src="https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp/1.png"
+                                alt="Buy from Pool"
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                              />
 
                               {/* Gradient Overlay */}
-                              <div className="absolute inset-0 bg-gradient-to-t from-cyan-900/60 via-transparent to-transparent" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-[rgba(139,114,69,0.4)] via-transparent to-transparent" />
 
                               {/* ETH Price Badge */}
                               <div className="absolute top-2 left-2">
-                                <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                <span className="px-2 py-1 rounded-lg bg-[rgba(197,169,123,0.85)] text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                                   <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                                   <span>{contractPriceDisplay}</span>
                                 </span>
@@ -3105,7 +2874,7 @@ export function InventorySack() {
 
                               {/* Buy Button */}
                               <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white text-xs font-bold">
+                                <div className="px-3 py-1.5 rounded-lg bg-[#c5a97b] text-white text-xs font-bold">
                                   Buy Instantly
                                 </div>
                               </div>
@@ -3116,15 +2885,15 @@ export function InventorySack() {
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <h3 className="font-semibold text-white truncate text-sm">Buy from Pool</h3>
-                                  <p className="text-xs text-gray-400">
-                                    {poolNFTsLoading ? 'Loading...' : `${humansInPool} humans available`}
+                                  <p className="text-xs text-[#8a9090]">
+                                    {`${humansInPool} humans available`}
                                   </p>
                                 </div>
-                                <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-cyan-500/20 text-cyan-400">
+                                <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-[rgba(255,208,117,0.12)] text-[#ffd075]">
                                   Instant
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-[#6b7575]">
                                 No gas fees for smart wallets • Instant delivery
                               </p>
                             </div>
@@ -3135,7 +2904,7 @@ export function InventorySack() {
                       {/* Combined Listings - Sorted by USD value */}
                       {(listingsLoading || marketplaceLoading) ? (
                         <div className="col-span-full flex items-center justify-center py-4">
-                          <div className="text-gray-400 text-sm">Loading listings...</div>
+                          <div className="text-[#8a9090] text-sm">Loading listings...</div>
                         </div>
                       ) : (
                         unifiedListings
@@ -3175,8 +2944,8 @@ export function InventorySack() {
                               return (
                                 <div
                                   key={listing.orderHash}
-                                  className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
-                                    isBuyingThis ? 'border-yellow-500/70' : 'border-gray-800 hover:border-green-500/50'
+                                  className={`group relative rounded-2xl bg-[#171e1d] border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
+                                    isBuyingThis ? 'border-yellow-500/70' : 'border-[rgba(255,255,255,0.06)] hover:border-[#22c55e]/50'
                                   }`}
                                   style={{
                                     minWidth: '128px',
@@ -3184,7 +2953,7 @@ export function InventorySack() {
                                   }}
                                 >
                                   {/* Image Container */}
-                                  <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                                  <div className="aspect-square relative bg-[#0a0d0c] overflow-hidden rounded-t-2xl">
                                     <img
                                       src={listing.imageUrl}
                                       alt={listing.name}
@@ -3203,7 +2972,7 @@ export function InventorySack() {
 
                                     {/* ETH Price Badge */}
                                     <div className="absolute top-2 left-2">
-                                      <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                      <span className="px-2 py-1 rounded-lg bg-[rgba(197,169,123,0.85)] text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                                         <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                                         <span>{parseFloat(listing.priceRaw).toFixed(4)}</span>
                                       </span>
@@ -3215,9 +2984,9 @@ export function InventorySack() {
                                     <div className="flex items-start justify-between gap-2">
                                       <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
-                                        <p className="text-xs text-gray-500 truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
+                                        <p className="text-xs text-[#6b7575] truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
                                       </div>
-                                      <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-blue-500/20 text-blue-400">
+                                      <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-[rgba(255,208,117,0.12)] text-[#ffd075]">
                                         OpenSea
                                       </span>
                                     </div>
@@ -3235,8 +3004,8 @@ export function InventorySack() {
                                           isBuyingThis
                                             ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
                                             : isConnected
-                                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                            : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                            ? 'bg-[#c5a97b] hover:bg-[#a68b5b] text-white'
+                                            : 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
                                         }`}
                                       >
                                         {isBuyingThis ? 'Buying...' : 'Buy Now'}
@@ -3245,7 +3014,7 @@ export function InventorySack() {
                                         href={listing.openseaUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="py-2 px-3 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium transition-all"
+                                        className="py-2 px-3 rounded-lg bg-[#1f2827] hover:bg-[#2a3533] text-[#cecece] text-xs font-medium transition-all"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         View
@@ -3267,16 +3036,16 @@ export function InventorySack() {
                             return (
                               <div
                                 key={`marketplace-${listing.tokenId}`}
-                                className={`group relative rounded-2xl bg-gray-900 border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
-                                  isBuyingThis ? 'border-yellow-500/70' : 'border-purple-500/30 hover:border-purple-500/70'
+                                className={`group relative rounded-2xl bg-[#171e1d] border-2 transition-all duration-200 hover:scale-[1.02] hover:-translate-y-1 ${
+                                  isBuyingThis ? 'border-yellow-500/70' : 'border-[rgba(255,208,117,0.5)]/30 hover:border-[rgba(255,208,117,0.5)]/70'
                                 }`}
                                 style={{
                                   minWidth: '128px',
-                                  boxShadow: '0 4px 12px rgba(168, 85, 247, 0.2)',
+                                  boxShadow: '0 4px 12px rgba(255, 208, 117, 0.2)',
                                 }}
                               >
                                 {/* Image Container */}
-                                <div className="aspect-square relative bg-gray-950 overflow-hidden rounded-t-2xl">
+                                <div className="aspect-square relative bg-[#0a0d0c] overflow-hidden rounded-t-2xl">
                                   <img
                                     src={listing.imageUrl}
                                     alt={listing.name}
@@ -3296,13 +3065,13 @@ export function InventorySack() {
                                   {/* Price Badges - wASS and ETH */}
                                   <div className="absolute top-2 left-2 flex flex-col gap-1">
                                     {/* wASS Price */}
-                                    <span className="px-2 py-1 rounded-lg bg-purple-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                    <span className="px-2 py-1 rounded-lg bg-[rgba(255,208,117,0.85)] text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                                       <img src="/Images/Token.png" alt="wASS" className="w-3.5 h-3.5" />
                                       <span>{priceNum < 100 ? priceNum.toFixed(2) : priceNum.toFixed(0)}</span>
                                     </span>
                                     {/* ETH Price */}
                                     {ethPerWass && (
-                                      <span className="px-2 py-1 rounded-lg bg-blue-500/90 text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
+                                      <span className="px-2 py-1 rounded-lg bg-[rgba(197,169,123,0.85)] text-white text-xs font-bold backdrop-blur-sm flex items-center gap-1">
                                         <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
                                         <span>{(priceNum * ethPerWass * 1.10).toFixed(4)}</span>
                                       </span>
@@ -3315,9 +3084,9 @@ export function InventorySack() {
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex-1 min-w-0">
                                       <h3 className="font-semibold text-white truncate text-sm">{listing.name}</h3>
-                                      <p className="text-xs text-gray-500 truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
+                                      <p className="text-xs text-[#6b7575] truncate" title={listing.seller}>{getSellerIdentity(listing.seller).name || getSellerIdentity(listing.seller).shortAddress}</p>
                                     </div>
-                                    <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-purple-500/20 text-purple-400">
+                                    <span className="flex-shrink-0 px-2 py-0.5 rounded-md text-xs font-medium bg-[rgba(255,208,117,0.12)] text-[#ffd075]">
                                       For Sale
                                     </span>
                                   </div>
@@ -3348,8 +3117,8 @@ export function InventorySack() {
                                         isBuyingThis && (isBuyingWithWass || isConfirmingWassBuy || isApprovingWass || isConfirmingWassApproval)
                                           ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
                                           : !isConnected || wassBalance < BigInt(priceWei)
-                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                          : 'bg-purple-500 hover:bg-purple-600 text-white'
+                                          ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                          : 'bg-[#ffd075] hover:bg-[#a68b5b] text-white'
                                       }`}
                                       title={wassBalance < BigInt(priceWei) ? `Need ${listing.priceRaw} wASS` : 'Buy with wASS'}
                                     >
@@ -3384,8 +3153,8 @@ export function InventorySack() {
                                         isBuyingThis && (isBuyingWithEth || isConfirmingEthBuy)
                                           ? 'bg-yellow-500/20 text-yellow-400 cursor-wait'
                                           : !isConnected
-                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                          ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                          : 'bg-[#c5a97b] hover:bg-[#a68b5b] text-white'
                                       }`}
                                       title="Buy with ETH (auto-converts to wASS)"
                                     >
@@ -3408,210 +3177,153 @@ export function InventorySack() {
 
             {/* ===== BONDED ITEMS TAB ===== */}
             {activeTab === 'items' && (
-              <div className="absolute inset-0 flex flex-col overflow-hidden">
-                {/* Stats Bar */}
-                <div className="flex-shrink-0 p-4 border-b border-gray-700 bg-gray-900/50">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 text-center">
-                      <p className="text-yellow-400 text-xs">🎯 Presale</p>
-                      <p className="text-lg font-bold text-yellow-400">{presaleItems.length}</p>
+              <div className="absolute inset-0 flex overflow-hidden">
+                {/* Sidebar Filters */}
+                <div className="w-48 flex-shrink-0 border-r border-[rgba(255,255,255,0.08)] bg-[#171e1d]/50 overflow-y-auto">
+                  <div className="p-3 space-y-4">
+                    {/* Phase Filters */}
+                    <div>
+                      <p className="text-[#8a9090] text-[10px] uppercase tracking-wider mb-2">Filter</p>
+                      <div className="space-y-1">
+                        {(['all', 'presale', 'trading', 'owned'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => setItemFilter(filter)}
+                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium text-left transition-all ${
+                              itemFilter === filter
+                                ? filter === 'presale' ? 'bg-yellow-600 text-white'
+                                  : filter === 'trading' ? 'bg-green-600 text-white'
+                                  : filter === 'owned' ? 'bg-[#a68b5b] text-white'
+                                  : 'bg-[#2a3533] text-white'
+                                : 'bg-[#1a2221]/50 text-[#8a9090] hover:bg-[#1f2827]'
+                            }`}
+                          >
+                            {filter === 'all' && `🏠 All (${bondedItems.length})`}
+                            {filter === 'presale' && `🎯 Presale (${presaleItems.length})`}
+                            {filter === 'trading' && `📈 Trading (${tradingItems.length})`}
+                            {filter === 'owned' && `💰 Owned (${ownedItems.filter(i => i.phase !== 3).length})`}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
-                      <p className="text-green-400 text-xs">📈 Trading</p>
-                      <p className="text-lg font-bold text-green-400">{tradingItems.length}</p>
-                    </div>
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-center">
-                      <p className="text-blue-400 text-xs">💰 Owned</p>
-                      <p className="text-lg font-bold text-blue-400">{ownedItems.filter(i => i.phase !== 3).length}</p>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Filter & Sort Controls */}
-                <div className="flex-shrink-0 p-3 border-b border-gray-700 bg-gray-900/30 space-y-2">
-                  {/* Phase Filters Row */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {(['all', 'presale', 'trading', 'owned'] as const).map((filter) => (
-                      <button
-                        key={filter}
-                        onClick={() => setItemFilter(filter)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                          itemFilter === filter
-                            ? filter === 'presale' ? 'bg-yellow-600 text-white'
-                              : filter === 'trading' ? 'bg-green-600 text-white'
-                              : filter === 'owned' ? 'bg-blue-600 text-white'
-                              : 'bg-gray-600 text-white'
-                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                        }`}
+                    {/* Category Filters */}
+                    <div>
+                      <p className="text-[#8a9090] text-[10px] uppercase tracking-wider mb-2">Category</p>
+                      <div className="space-y-1">
+                        {ITEM_CATEGORIES.map((cat) => (
+                          <button
+                            key={cat.id}
+                            onClick={() => setItemCategory(cat.id)}
+                            className={`w-full px-2 py-1.5 rounded text-[11px] font-medium text-left transition-all ${
+                              itemCategory === cat.id
+                                ? 'bg-[#a68b5b] text-white'
+                                : 'bg-[#1a2221]/50 text-[#8a9090] hover:bg-[#1f2827]'
+                            }`}
+                          >
+                            {cat.label} {categoryCounts[cat.id] > 0 && cat.id !== 'all' ? `(${categoryCounts[cat.id]})` : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Sort */}
+                    <div>
+                      <p className="text-[#8a9090] text-[10px] uppercase tracking-wider mb-2">Sort</p>
+                      <select
+                        value={itemSort}
+                        onChange={(e) => setItemSort(e.target.value as 'price-asc' | 'price-desc' | 'volume-high')}
+                        className="w-full px-2 py-1.5 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded text-white text-xs focus:outline-none focus:border-[rgba(255,208,117,0.4)]"
                       >
-                        {filter === 'all' && '🏠 All'}
-                        {filter === 'presale' && '🎯 Presale'}
-                        {filter === 'trading' && '📈 Trading'}
-                        {filter === 'owned' && `💰 Owned (${ownedItems.filter(i => i.phase !== 3).length})`}
-                      </button>
-                    ))}
-                    <button onClick={() => refetchItems()} className="ml-auto px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-xs">🔄 Refresh</button>
-                  </div>
+                        <option value="volume-high">Volume ↓</option>
+                        <option value="price-asc">Price ↑</option>
+                        <option value="price-desc">Price ↓</option>
+                      </select>
+                    </div>
 
-                  {/* Category Filters Row */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {ITEM_CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        onClick={() => setItemCategory(cat.id)}
-                        className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
-                          itemCategory === cat.id
-                            ? 'bg-cyan-600 text-white'
-                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                        }`}
-                      >
-                        {cat.label} {categoryCounts[cat.id] > 0 && cat.id !== 'all' ? `(${categoryCounts[cat.id]})` : ''}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Sort Dropdown */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-xs">Sort by:</span>
-                    <select
-                      value={itemSort}
-                      onChange={(e) => setItemSort(e.target.value as 'price-asc' | 'price-desc' | 'volume-high')}
-                      className="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-xs focus:outline-none focus:border-cyan-500"
+                    {/* Refresh */}
+                    <button
+                      onClick={() => refetchItems()}
+                      className="w-full px-3 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-[#cecece] hover:bg-[#1f2827] text-xs"
                     >
-                      <option value="volume-high">📊 Volume: High → Low</option>
-                      <option value="price-asc">💰 Price: Low → High</option>
-                      <option value="price-desc">💰 Price: High → Low</option>
-                    </select>
-                    <span className="text-gray-500 text-[10px] ml-auto">{displayedItems.length} items</span>
+                      🔄 Refresh
+                    </button>
+
                   </div>
                 </div>
 
-                {/* TEMPORARILY HIDDEN - Trait Editor Inventory Section
-                {itemFilter === 'owned' && (
-                  <div className="border-b border-gray-700 p-3 bg-blue-900/20">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">🌉</span>
-                        <h3 className="font-medium text-blue-300">Trait Editor Inventory</h3>
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+
+                {/* Trait Editor Sub-Header - Always visible when user has bridged items */}
+                {totalBridgedItems > 0 && (
+                  <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-[rgba(255,208,117,0.08)] to-[rgba(197,169,123,0.08)] border-b border-[rgba(255,208,117,0.2)]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[#ffd075] font-medium">🌉 Trait Editor</span>
+                        <div className="flex items-center gap-1">
+                          {Object.entries(bridgedBalance).slice(0, 6).map(([tokenId, amount]) => {
+                            const item = bondedItems.find(i => i.tokenId.toString() === tokenId);
+                            return (
+                              <div key={tokenId} className="relative">
+                                <img
+                                  src={item?.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${tokenId}.png`}
+                                  alt={item?.name || `#${tokenId}`}
+                                  className="w-8 h-8 rounded object-cover border border-[rgba(255,208,117,0.3)]"
+                                />
+                                <span className="absolute -top-1 -right-1 bg-[#a68b5b] text-white text-[8px] px-1 rounded-full">{amount}</span>
+                              </div>
+                            );
+                          })}
+                          {Object.keys(bridgedBalance).length > 6 && (
+                            <div className="w-8 h-8 rounded bg-[#1f2827] flex items-center justify-center text-[10px] text-[#8a9090]">
+                              +{Object.keys(bridgedBalance).length - 6}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[#8a9090] text-sm">({totalBridgedItems} items ready)</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400">{totalBridgedItems} items</span>
                         <button
                           onClick={async () => {
                             try {
                               const result = await fulfilBridge();
                               if (result.success) {
                                 refetchItems();
-                                console.log('Deposits claimed:', result.fulfilled);
-                              } else if (result.error) {
-                                if (result.error.includes('cooldown') || result.error.includes('wait')) {
-                                  alert(result.error);
-                                } else {
-                                  console.log('Fulfil result:', result.error);
-                                }
                               }
                             } catch (err) {
                               console.error('Claim failed:', err);
                             }
                           }}
                           disabled={isBridgePending || !canFulfil}
-                          className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                             canFulfil
-                              ? 'bg-green-500/20 border border-green-500/30 text-green-300 hover:bg-green-500/30'
-                              : 'bg-gray-500/20 border border-gray-500/30 text-gray-400'
+                              ? 'bg-[rgba(34,197,94,0.12)] border border-[#22c55e]/50 text-green-300 hover:bg-[rgba(34,197,94,0.18)]'
+                              : 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)]/30 text-[#8a9090]'
                           } disabled:opacity-50`}
                         >
-                          {isBridgePending ? '...' : canFulfil ? '✨ Claim Deposits' : `⏳ ${fulfilCooldown}s`}
+                          {isBridgePending ? '⏳ Claiming...' : canFulfil ? '✨ Claim Items' : `⏳ ${fulfilCooldown}s`}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTab('collection');
+                          }}
+                          className="px-4 py-2 rounded-lg text-sm font-medium bg-[rgba(255,208,117,0.12)] border border-[rgba(255,208,117,0.3)] text-[#c5a97b] hover:bg-[#c5a97b]/30 transition-all"
+                        >
+                          ✨ Edit NFT
                         </button>
                       </div>
                     </div>
-                    {Object.keys(bridgedBalance).length > 0 ? (
-                      <>
-                        <div className="mb-3 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-purple-300">✨ Select an NFT to edit traits:</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {nfts.filter(n => !n.isEgg && !n.isJailed).slice(0, 6).map(nft => (
-                              <button
-                                key={nft.tokenId}
-                                onClick={() => {
-                                  setSelectedNFTForTraits(nft as InventoryNFT);
-                                  setShowTraitSwapper(true);
-                                }}
-                                className="relative group"
-                              >
-                                <img
-                                  src={nft.imageUrl}
-                                  alt={nft.name}
-                                  className="w-10 h-10 rounded-lg object-cover border-2 border-purple-500/30 hover:border-purple-500 transition-colors"
-                                />
-                                <span className="absolute -bottom-1 -right-1 text-[8px] bg-gray-800 px-1 rounded">#{nft.tokenId}</span>
-                              </button>
-                            ))}
-                            {nfts.filter(n => !n.isEgg && !n.isJailed).length > 6 && (
-                              <button
-                                onClick={() => setActiveTab('collection')}
-                                className="w-10 h-10 rounded-lg bg-gray-700 border border-gray-600 flex items-center justify-center text-xs text-gray-400 hover:bg-gray-600"
-                              >
-                                +{nfts.filter(n => !n.isEgg && !n.isJailed).length - 6}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(bridgedBalance).map(([tokenId, amount]) => {
-                            const item = bondedItems.find(i => i.tokenId.toString() === tokenId);
-                            return (
-                              <div key={tokenId} className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-2 flex items-center gap-2">
-                                <img
-                                  src={item?.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${tokenId}.png`}
-                                  alt={item?.name || `Item #${tokenId}`}
-                                  className="w-8 h-8 rounded object-cover"
-                                />
-                                <div>
-                                  <p className="text-white text-xs font-medium">{item?.name || `Item #${tokenId}`}</p>
-                                  <p className="text-blue-300 text-[10px]">x{amount}</p>
-                                </div>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await requestWithdraw([Number(tokenId)], [1]);
-                                      refetchItems();
-                                      refetchBridge();
-                                    } catch (err) {
-                                      console.error('Withdraw failed:', err);
-                                    }
-                                  }}
-                                  disabled={isWithdrawing || !canWithdraw}
-                                  className={`ml-auto px-2 py-1 rounded text-[10px] transition-colors ${
-                                    canWithdraw
-                                      ? 'bg-orange-500/20 border border-orange-500/30 text-orange-300 hover:bg-orange-500/30'
-                                      : 'bg-gray-500/20 border border-gray-500/30 text-gray-400'
-                                  } disabled:opacity-50`}
-                                >
-                                  {isWithdrawing ? '...' : canWithdraw ? 'Withdraw' : `${withdrawCooldown}s`}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-xs text-gray-500">No items bridged yet. Deposit items to use in Trait Editor.</p>
-                    )}
                   </div>
                 )}
-                END TEMPORARILY HIDDEN */}
 
                 {/* Items Grid */}
                 <div className="flex-1 overflow-y-auto p-4">
                   {itemsLoading ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                        <p className="text-gray-400">Loading items...</p>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgba(255,208,117,0.5)] mx-auto mb-4"></div>
+                        <p className="text-[#8a9090]">Loading items...</p>
                       </div>
                     </div>
                   ) : displayedItems.length === 0 ? (
@@ -3621,7 +3333,7 @@ export function InventorySack() {
                         <h2 className="text-xl font-bold text-white mb-2">
                           {itemFilter === 'owned' ? 'No Items Owned' : 'No Items Found'}
                         </h2>
-                        <p className="text-gray-400 text-sm">
+                        <p className="text-[#8a9090] text-sm">
                           {itemFilter === 'presale' && 'No items currently in presale'}
                           {itemFilter === 'trading' && 'No items trading on bonding curves'}
                           {itemFilter === 'owned' && 'Buy some items to see them here!'}
@@ -3647,7 +3359,7 @@ export function InventorySack() {
                             style={{ background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(31, 41, 55, 0.9))', border: `1px solid rgba(${isPresale ? '234, 179, 8' : isCurve ? '34, 197, 94' : '168, 85, 247'}, 0.3)` }}
                           >
                             {/* Item Image */}
-                            <div className="relative aspect-square bg-gradient-to-br from-gray-700 to-gray-800">
+                            <div className="relative aspect-square bg-gradient-to-br from-[#1f2827] to-[#1a2221]">
                               <img
                                 src={item.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${item.tokenId.toString()}.png`}
                                 alt={item.name || `Item #${item.tokenId.toString()}`}
@@ -3661,13 +3373,13 @@ export function InventorySack() {
                               />
                               <div className={`absolute top-2 left-2 px-2 py-1 rounded text-[10px] font-medium ${
                                 isPresale ? 'bg-yellow-500/30 text-yellow-400 border border-yellow-500/50' :
-                                isCurve ? 'bg-green-500/30 text-green-400 border border-green-500/50' :
-                                'bg-purple-500/30 text-purple-400 border border-purple-500/50'
+                                isCurve ? 'bg-green-500/30 text-[#22c55e] border border-[#22c55e]/50' :
+                                'bg-[#ffd075]/30 text-[#ffd075] border border-[rgba(255,208,117,0.3)]'
                               }`}>
                                 {item.phaseName}
                               </div>
                               {item.userBalance > 0n && (
-                                <div className="absolute top-2 right-2 px-2 py-1 bg-blue-600 rounded text-[10px] text-white font-medium">
+                                <div className="absolute top-2 right-2 px-2 py-1 bg-[#a68b5b] rounded text-[10px] text-white font-medium">
                                   x{item.userBalance.toString()}
                                 </div>
                               )}
@@ -3675,16 +3387,16 @@ export function InventorySack() {
 
                             <div className="p-3">
                               <p className="text-white font-medium text-sm">{item.name || `Item #${item.tokenId}`}</p>
-                              <p className="text-gray-500 text-[10px]">#{item.tokenId.toString()}</p>
+                              <p className="text-[#6b7575] text-[10px]">#{item.tokenId.toString()}</p>
 
                               {/* Progress bar for presale */}
                               {isPresale && (
                                 <div className="mt-2">
                                   <div className="flex justify-between text-[10px] mb-1">
-                                    <span className="text-gray-400">Progress</span>
+                                    <span className="text-[#8a9090]">Progress</span>
                                     <span className="text-yellow-400">{item.presaleProgress}%</span>
                                   </div>
-                                  <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                                  <div className="h-1 bg-[#1f2827] rounded-full overflow-hidden">
                                     <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${item.presaleProgress}%` }} />
                                   </div>
                                 </div>
@@ -3692,13 +3404,13 @@ export function InventorySack() {
 
                               {/* Price */}
                               <div className="mt-2">
-                                <p className="text-gray-500 text-[10px]">Price</p>
-                                <p className={`font-bold text-sm ${isPresale ? 'text-yellow-400' : isCurve ? 'text-green-400' : 'text-purple-400'}`}>{formatItemPrice(item.currentPrice, 4)} wASS</p>
+                                <p className="text-[#6b7575] text-[10px]">Price</p>
+                                <p className={`font-bold text-sm ${isPresale ? 'text-yellow-400' : isCurve ? 'text-[#22c55e]' : 'text-[#ffd075]'}`}>{formatItemPrice(item.currentPrice, 4)} wASS</p>
                               </div>
 
                               {/* Curve liquidity */}
                               {isCurve && item.curve && (
-                                <div className="mt-1 text-[10px] text-gray-400">
+                                <div className="mt-1 text-[10px] text-[#8a9090]">
                                   Liquidity: {item.curve.realWassFormatted} wASS
                                 </div>
                               )}
@@ -3724,12 +3436,12 @@ export function InventorySack() {
                                   </button>
                                 )}
                                 {isRare && (
-                                  <button disabled className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-gray-700 text-gray-400 cursor-not-allowed">
+                                  <button disabled className="flex-1 py-1.5 rounded-lg text-xs font-medium bg-[#1f2827] text-[#8a9090] cursor-not-allowed">
                                     P2P Only
                                   </button>
                                 )}
                               </div>
-                              {/* Bridge button for owned items - AUTO-FULFIL enabled - TEMPORARILY HIDDEN
+                              {/* Bridge button for owned items - AUTO-FULFIL enabled */}
                               {item.userBalance > 0n && (
                                 <button
                                   onClick={async () => {
@@ -3746,12 +3458,11 @@ export function InventorySack() {
                                   }}
                                   disabled={isBridgePending || !canBridge}
                                   className="w-full mt-2 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
-                                  style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8))', color: 'white' }}
+                                  style={{ background: 'linear-gradient(135deg, rgba(197, 169, 123, 0.8), rgba(139, 114, 69, 0.8))', color: 'white' }}
                                 >
                                   {isBridgePending ? '⏳ Bridging...' : '🌉 Bridge to Editor'}
                                 </button>
                               )}
-                              END TEMPORARILY HIDDEN */}
                             </div>
                           </div>
                         );
@@ -3771,11 +3482,11 @@ export function InventorySack() {
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="rounded-t-2xl p-4" style={{ background: `linear-gradient(135deg, rgba(${itemAction === 'buy' ? '34, 197, 94' : '239, 68, 68'}, 0.3), rgba(168, 85, 247, 0.3))` }}>
+                      <div className="rounded-t-2xl p-4" style={{ background: `linear-gradient(135deg, rgba(${itemAction === 'buy' ? '34, 197, 94' : '239, 68, 68'}, 0.3), rgba(255, 208, 117, 0.3))` }}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             {/* Item preview image instead of emoji */}
-                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800/50 border border-gray-700">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#1a2221]/50 border border-[rgba(255,255,255,0.08)]">
                               <img
                                 src={selectedBondedItem.imageUrl || `https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dhjx71frx5mayqp1qrxt86fb4j1xrensivrd3l2uq8n72b9ac7i/images/${selectedBondedItem.tokenId}.png`}
                                 alt={selectedBondedItem.name || `Item #${selectedBondedItem.tokenId}`}
@@ -3795,51 +3506,51 @@ export function InventorySack() {
                         {/* Payment Method Selector - Only for Buy */}
                         {itemAction === 'buy' && (
                           <div className="mb-4">
-                            <p className="text-gray-400 text-sm mb-2">Payment Method</p>
+                            <p className="text-[#8a9090] text-sm mb-2">Payment Method</p>
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 onClick={() => setItemPaymentMethod('wass')}
-                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'wass' ? 'border-green-500 bg-green-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'wass' ? 'border-[#22c55e] bg-green-900/30' : 'border-[rgba(255,255,255,0.08)] bg-[#1a2221]/50'}`}
                               >
                                 <div className="flex items-center justify-center gap-2">
                                   <img src="/Images/Token.png" alt="wASS" className="w-5 h-5" />
                                   <span className="font-bold text-white">wASS</span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
+                                <p className="text-xs text-[#8a9090] mt-1">{parseFloat(wassBalanceFormatted).toFixed(2)} available</p>
                               </button>
                               <button
                                 onClick={() => setItemPaymentMethod('eth')}
-                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'eth' ? 'border-blue-500 bg-blue-900/30' : 'border-gray-700 bg-gray-800/50'}`}
+                                className={`p-3 rounded-lg border-2 transition-all ${itemPaymentMethod === 'eth' ? 'border-[rgba(255,208,117,0.4)] bg-[rgba(255,208,117,0.08)]' : 'border-[rgba(255,255,255,0.08)] bg-[#1a2221]/50'}`}
                               >
                                 <div className="flex items-center justify-center gap-2">
                                   <img src="/Images/Ether.png" alt="ETH" className="w-5 h-5" />
                                   <span className="font-bold text-white">ETH</span>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1">{ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} available</p>
+                                <p className="text-xs text-[#8a9090] mt-1">{ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} available</p>
                               </button>
                             </div>
                           </div>
                         )}
 
                         {/* Item Info - Price formatting fix applied */}
-                        <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                        <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                           <div className="flex justify-between text-sm mb-2">
-                            <span className="text-gray-400">Phase</span>
-                            <span className={`font-medium ${selectedBondedItem.phase === TokenPhase.Presale ? 'text-yellow-400' : 'text-green-400'}`}>{selectedBondedItem.phaseName}</span>
+                            <span className="text-[#8a9090]">Phase</span>
+                            <span className={`font-medium ${selectedBondedItem.phase === TokenPhase.Presale ? 'text-yellow-400' : 'text-[#22c55e]'}`}>{selectedBondedItem.phaseName}</span>
                           </div>
                           <div className="flex justify-between text-sm mb-2">
-                            <span className="text-gray-400">Price per Item</span>
+                            <span className="text-[#8a9090]">Price per Item</span>
                             <span className="text-white">{formatItemPrice(selectedBondedItem.currentPrice, 4)} wASS</span>
                           </div>
                           {selectedBondedItem.phase === TokenPhase.Presale && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Remaining</span>
+                              <span className="text-[#8a9090]">Remaining</span>
                               <span className="text-white">{selectedBondedItem.presaleRemaining.toString()} / {selectedBondedItem.presaleSupply.toString()}</span>
                             </div>
                           )}
                           {itemAction === 'sell' && (
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Your Balance</span>
+                              <span className="text-[#8a9090]">Your Balance</span>
                               <span className="text-white">{selectedBondedItem.userBalance.toString()} items</span>
                             </div>
                           )}
@@ -3847,31 +3558,31 @@ export function InventorySack() {
 
                         {/* Pool Info - Only for Bonding Curve items */}
                         {selectedBondedItem.phase === TokenPhase.BondingCurve && curveInfo && (
-                          <div className="mb-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded-lg">
-                            <p className="text-purple-300 text-xs font-semibold mb-2">📊 Pool Info</p>
+                          <div className="mb-4 p-3 bg-[rgba(255,208,117,0.06)] border border-[rgba(255,208,117,0.5)]/30 rounded-lg">
+                            <p className="text-[#c5a97b] text-xs font-semibold mb-2">📊 Pool Info</p>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div>
-                                <span className="text-gray-500">Available</span>
+                                <span className="text-[#6b7575]">Available</span>
                                 <p className="text-white font-medium">{curveInfo.tokensAvailableFormatted} items</p>
                               </div>
                               <div>
-                                <span className="text-gray-500">Sold</span>
+                                <span className="text-[#6b7575]">Sold</span>
                                 <p className="text-white font-medium">{curveInfo.tokensSoldFormatted} items</p>
                               </div>
                               <div>
-                                <span className="text-gray-500">Liquidity</span>
+                                <span className="text-[#6b7575]">Liquidity</span>
                                 <p className="text-white font-medium">{curveInfo.realWassFormatted} wASS</p>
                               </div>
                               <div>
-                                <span className="text-gray-500">Volume</span>
+                                <span className="text-[#6b7575]">Volume</span>
                                 <p className="text-white font-medium">{curveInfo.totalVolumeFormatted} wASS</p>
                               </div>
                               <div>
-                                <span className="text-gray-500">Trades</span>
+                                <span className="text-[#6b7575]">Trades</span>
                                 <p className="text-white font-medium">{curveInfo.totalTrades.toString()}</p>
                               </div>
                               <div className="col-span-2">
-                                <span className="text-gray-500">Curve Price (full precision)</span>
+                                <span className="text-[#6b7575]">Curve Price (full precision)</span>
                                 <p className="text-white font-medium text-[10px] break-all">{formatItemPrice(curveInfo.currentPrice, 18)} wASS</p>
                               </div>
                             </div>
@@ -3880,7 +3591,7 @@ export function InventorySack() {
 
                         {/* Amount Input */}
                         <div className="mb-4">
-                          <label className="block text-gray-400 text-sm mb-2">Amount to {itemAction === 'buy' ? 'Buy' : 'Sell'}</label>
+                          <label className="block text-[#8a9090] text-sm mb-2">Amount to {itemAction === 'buy' ? 'Buy' : 'Sell'}</label>
                           <div className="flex gap-2">
                             <input
                               type="number"
@@ -3888,16 +3599,16 @@ export function InventorySack() {
                               onChange={(e) => setItemAmount(e.target.value)}
                               min="1"
                               max={itemAction === 'sell' ? selectedBondedItem.userBalance.toString() : (selectedBondedItem.phase === TokenPhase.Presale ? selectedBondedItem.presaleRemaining.toString() : '1000')}
-                              className={`flex-1 bg-gray-800/50 border ${itemAction === 'buy' ? 'border-green-500/30 focus:border-green-500' : 'border-red-500/30 focus:border-red-500'} rounded-lg px-4 py-3 text-white text-lg focus:outline-none`}
+                              className={`flex-1 bg-[#1a2221]/50 border ${itemAction === 'buy' ? 'border-[rgba(34,197,94,0.2)] focus:border-[#22c55e]' : 'border-red-500/30 focus:border-red-500'} rounded-lg px-4 py-3 text-white text-lg focus:outline-none`}
                             />
                             <div className="flex gap-1">
                               {['1', '5', '10'].map((qty) => (
-                                <button key={qty} onClick={() => setItemAmount(qty)} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                                <button key={qty} onClick={() => setItemAmount(qty)} className="px-3 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-[#cecece] hover:bg-[#1f2827] text-sm">
                                   {qty}
                                 </button>
                               ))}
                               {itemAction === 'sell' && (
-                                <button onClick={() => setItemAmount(selectedBondedItem.userBalance.toString())} className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-700 text-sm">
+                                <button onClick={() => setItemAmount(selectedBondedItem.userBalance.toString())} className="px-3 py-2 bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-[#cecece] hover:bg-[#1f2827] text-sm">
                                   Max
                                 </button>
                               )}
@@ -3906,14 +3617,14 @@ export function InventorySack() {
                         </div>
 
                         {/* Cost Summary - Use accurate quote for curve, simple math for presale */}
-                        <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                        <div className="mb-4 p-3 bg-[#171e1d]/50 rounded-lg">
                           {itemAction === 'buy' ? (
                             <>
                               {/* For presale: simple price × amount, for curve: use actual quote */}
                               {selectedBondedItem.phase === TokenPhase.Presale ? (
                                 <div className="flex justify-between text-sm font-bold">
                                   <span className="text-white">Total Cost</span>
-                                  <span className="text-green-400">
+                                  <span className="text-[#22c55e]">
                                     {formatWass(selectedBondedItem.presalePrice * BigInt(parseInt(itemAmount) || 0), 4)} wASS
                                   </span>
                                 </div>
@@ -3921,13 +3632,13 @@ export function InventorySack() {
                                 <>
                                   <div className="flex justify-between text-sm font-bold">
                                     <span className="text-white">Total Cost</span>
-                                    <span className="text-green-400">{buyQuote.totalCostFormatted} wASS</span>
+                                    <span className="text-[#22c55e]">{buyQuote.totalCostFormatted} wASS</span>
                                   </div>
-                                  <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                  <div className="flex justify-between text-xs mt-1 text-[#6b7575]">
                                     <span>Base cost</span>
                                     <span>{buyQuote.wassCostFormatted} wASS</span>
                                   </div>
-                                  <div className="flex justify-between text-xs text-gray-500">
+                                  <div className="flex justify-between text-xs text-[#6b7575]">
                                     <span>Fee ({(buyQuote.feeBps / 100).toFixed(1)}%)</span>
                                     <span>{buyQuote.feeFormatted} wASS</span>
                                   </div>
@@ -3937,7 +3648,7 @@ export function InventorySack() {
                                       <span>+{buyQuote.priceImpact.toFixed(2)}%</span>
                                     </div>
                                   )}
-                                  <div className="flex justify-between text-xs text-gray-500">
+                                  <div className="flex justify-between text-xs text-[#6b7575]">
                                     <span>New price after buy</span>
                                     <span>{formatItemPrice(buyQuote.newPrice, 4)} wASS</span>
                                   </div>
@@ -3945,7 +3656,7 @@ export function InventorySack() {
                               ) : (
                                 <div className="flex justify-between text-sm font-bold">
                                   <span className="text-white">Total Cost</span>
-                                  <span className="text-gray-500">Loading...</span>
+                                  <span className="text-[#6b7575]">Loading...</span>
                                 </div>
                               )}
                             </>
@@ -3955,13 +3666,13 @@ export function InventorySack() {
                               <>
                                 <div className="flex justify-between text-sm font-bold">
                                   <span className="text-white">You Receive</span>
-                                  <span className="text-green-400">{sellQuote.netReturnFormatted} wASS</span>
+                                  <span className="text-[#22c55e]">{sellQuote.netReturnFormatted} wASS</span>
                                 </div>
-                                <div className="flex justify-between text-xs mt-1 text-gray-500">
+                                <div className="flex justify-between text-xs mt-1 text-[#6b7575]">
                                   <span>Gross return</span>
                                   <span>{sellQuote.wassReturnFormatted} wASS</span>
                                 </div>
-                                <div className="flex justify-between text-xs text-gray-500">
+                                <div className="flex justify-between text-xs text-[#6b7575]">
                                   <span>Fee ({(sellQuote.feeBps / 100).toFixed(1)}%)</span>
                                   <span>-{sellQuote.feeFormatted} wASS</span>
                                 </div>
@@ -3975,18 +3686,18 @@ export function InventorySack() {
                             ) : (
                               <div className="flex justify-between text-sm font-bold">
                                 <span className="text-white">You Receive</span>
-                                <span className="text-gray-500">Loading...</span>
+                                <span className="text-[#6b7575]">Loading...</span>
                               </div>
                             )
                           )}
                           {itemAction === 'buy' && itemPaymentMethod === 'eth' && (
-                            <div className="flex justify-between text-xs mt-2 text-blue-400">
+                            <div className="flex justify-between text-xs mt-2 text-[#ffd075]">
                               <span>Paid via OTC Router</span>
                               <span>Auto-swap ETH → wASS</span>
                             </div>
                           )}
                           <div className="flex justify-between text-xs mt-2">
-                            <span className="text-gray-500">Your {itemPaymentMethod === 'wass' ? 'wASS' : 'ETH'} Balance</span>
+                            <span className="text-[#6b7575]">Your {itemPaymentMethod === 'wass' ? 'wASS' : 'ETH'} Balance</span>
                             <span className={
                               itemPaymentMethod === 'wass'
                                 ? (Number(wassBalance) >= Number(
@@ -3995,8 +3706,8 @@ export function InventorySack() {
                                           ? selectedBondedItem.presalePrice * BigInt(parseInt(itemAmount) || 0)
                                           : buyQuote?.totalCost ?? 0n)
                                       : 0n
-                                  ) ? 'text-gray-400' : 'text-red-400')
-                                : 'text-gray-400'
+                                  ) ? 'text-[#8a9090]' : 'text-[#FF3B5C]')
+                                : 'text-[#8a9090]'
                             }>
                               {itemPaymentMethod === 'wass' ? `${wassBalanceFormatted} wASS` : `${ethBalance ? parseFloat(formatEther(ethBalance.value)).toFixed(4) : '0'} ETH`}
                             </span>
@@ -4079,6 +3790,7 @@ export function InventorySack() {
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             )}
 
@@ -4086,14 +3798,14 @@ export function InventorySack() {
             {activeTab === 'exchange' && (
               <div className="absolute inset-0 flex flex-col overflow-hidden">
                 {/* Sub-tab Navigation */}
-                <div className="flex-shrink-0 border-b border-gray-700 px-4 bg-gray-900/50">
+                <div className="flex-shrink-0 border-b border-[rgba(255,255,255,0.08)] px-4 bg-[#171e1d]/50">
                   <div className="flex gap-1">
                     <button
                       onClick={() => setExchangeSubTab('pool')}
                       className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
                         exchangeSubTab === 'pool'
-                          ? 'border-orange-500 text-orange-400'
-                          : 'border-transparent text-gray-400 hover:text-white'
+                          ? 'border-orange-500 text-[#f9690e]'
+                          : 'border-transparent text-[#8a9090] hover:text-white'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -4105,8 +3817,8 @@ export function InventorySack() {
                       onClick={() => setExchangeSubTab('wass')}
                       className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
                         exchangeSubTab === 'wass'
-                          ? 'border-blue-500 text-blue-400'
-                          : 'border-transparent text-gray-400 hover:text-white'
+                          ? 'border-[rgba(255,208,117,0.4)] text-[#ffd075]'
+                          : 'border-transparent text-[#8a9090] hover:text-white'
                       }`}
                     >
                       <span className="flex items-center gap-2">
@@ -4135,16 +3847,16 @@ export function InventorySack() {
                     /* ===== WASS SWAP - Wrap/Unwrap Interface (Tabbed) ===== */
                     <div className="h-full flex flex-col">
                       {/* Header with mode toggle */}
-                      <div className="flex-shrink-0 p-4 border-b border-gray-700">
+                      <div className="flex-shrink-0 p-4 border-b border-[rgba(255,255,255,0.08)]">
                         <div className="max-w-xl mx-auto">
                           {/* Mode Toggle Tabs */}
-                          <div className="flex bg-gray-800 rounded-xl p-1 mb-3">
+                          <div className="flex bg-[#1a2221] rounded-xl p-1 mb-3">
                             <button
                               onClick={() => setWassMode('unwrap')}
                               className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
                                 wassMode === 'unwrap'
-                                  ? 'bg-purple-500 text-white shadow-lg'
-                                  : 'text-gray-400 hover:text-white'
+                                  ? 'bg-[#ffd075] text-white shadow-lg'
+                                  : 'text-[#8a9090] hover:text-white'
                               }`}
                             >
                               <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
@@ -4154,8 +3866,8 @@ export function InventorySack() {
                               onClick={() => setWassMode('wrap')}
                               className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
                                 wassMode === 'wrap'
-                                  ? 'bg-blue-500 text-white shadow-lg'
-                                  : 'text-gray-400 hover:text-white'
+                                  ? 'bg-[#c5a97b] text-white shadow-lg'
+                                  : 'text-[#8a9090] hover:text-white'
                               }`}
                             >
                               <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-4 h-4" />
@@ -4167,15 +3879,15 @@ export function InventorySack() {
                           <div className="flex items-center justify-between text-sm">
                             <div className="flex items-center gap-2">
                               <img src="/Images/Token.png" alt="wASS" className="w-4 h-4" />
-                              <span className="text-gray-400">Balance:</span>
+                              <span className="text-[#8a9090]">Balance:</span>
                               <span className="text-white font-bold">
                                 {wTokenBalance ? parseFloat(formatUnits(wTokenBalance as bigint, 18)).toFixed(2) : '0.00'}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <img src="/Images/Ether.png" alt="ETH" className="w-3.5 h-3.5" />
-                              <span className="text-gray-400">Fee:</span>
-                              <span className="text-orange-400 font-medium">{parseFloat(wrapFeeFormatted).toFixed(4)}/NFT</span>
+                              <span className="text-[#8a9090]">Fee:</span>
+                              <span className="text-[#f9690e] font-medium">{parseFloat(wrapFeeFormatted).toFixed(4)}/NFT</span>
                             </div>
                           </div>
                         </div>
@@ -4188,17 +3900,17 @@ export function InventorySack() {
                             /* ===== UNWRAP MODE ===== */
                             <div className="flex-1 flex flex-col">
                               {/* How it works - compact */}
-                              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 mb-4">
-                                <p className="text-xs text-gray-400">
-                                  <span className="text-purple-400 font-medium">Unwrap:</span> Burn $wASS tokens to receive NFTs from the pool (FIFO order)
+                              <div className="bg-[#ffd075]/10 border border-[rgba(255,208,117,0.5)]/20 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-[#8a9090]">
+                                  <span className="text-[#ffd075] font-medium">Unwrap:</span> Burn $wASS tokens to receive NFTs from the pool (FIFO order)
                                 </p>
                               </div>
 
                               {/* Amount Selector */}
-                              <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700 mb-4">
+                              <div className="bg-[#1a2221]/50 rounded-xl p-4 border border-[rgba(255,255,255,0.08)] mb-4">
                                 <div className="flex items-center justify-between mb-3">
-                                  <span className="text-gray-400 text-sm">Amount to unwrap</span>
-                                  <span className="text-gray-500 text-xs">
+                                  <span className="text-[#8a9090] text-sm">Amount to unwrap</span>
+                                  <span className="text-[#6b7575] text-xs">
                                     Max: {wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 0}
                                   </span>
                                 </div>
@@ -4206,7 +3918,7 @@ export function InventorySack() {
                                   <button
                                     onClick={() => setUnwrapAmount(Math.max(1, unwrapAmount - 1))}
                                     disabled={unwrapAmount <= 1}
-                                    className="w-10 h-10 rounded-lg bg-gray-700 text-white font-bold text-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="w-10 h-10 rounded-lg bg-[#1f2827] text-white font-bold text-lg hover:bg-[#2a3533] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                   >
                                     -
                                   </button>
@@ -4220,7 +3932,7 @@ export function InventorySack() {
                                       const max = wTokenBalance ? Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18))) : 1;
                                       setUnwrapAmount(Math.min(Math.max(1, val), Math.max(1, max)));
                                     }}
-                                    className="flex-1 h-10 text-center bg-gray-800 border border-gray-600 rounded-lg text-white font-bold text-xl focus:outline-none focus:border-purple-500"
+                                    className="flex-1 h-10 text-center bg-[#1a2221] border border-[rgba(255,255,255,0.08)] rounded-lg text-white font-bold text-xl focus:outline-none focus:border-[rgba(255,208,117,0.4)]"
                                   />
                                   <button
                                     onClick={() => {
@@ -4228,7 +3940,7 @@ export function InventorySack() {
                                       setUnwrapAmount(Math.min(unwrapAmount + 1, Math.max(1, max)));
                                     }}
                                     disabled={!wTokenBalance || unwrapAmount >= Math.floor(parseFloat(formatUnits(wTokenBalance as bigint, 18)))}
-                                    className="w-10 h-10 rounded-lg bg-gray-700 text-white font-bold text-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="w-10 h-10 rounded-lg bg-[#1f2827] text-white font-bold text-lg hover:bg-[#2a3533] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                   >
                                     +
                                   </button>
@@ -4238,7 +3950,7 @@ export function InventorySack() {
                                       setUnwrapAmount(Math.max(1, max));
                                     }}
                                     disabled={!wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < 1}
-                                    className="px-4 h-10 rounded-lg bg-purple-500/20 text-purple-400 font-medium hover:bg-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    className="px-4 h-10 rounded-lg bg-[rgba(255,208,117,0.12)] text-[#ffd075] font-medium hover:bg-[rgba(255,208,117,0.9)]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                   >
                                     Max
                                   </button>
@@ -4246,26 +3958,26 @@ export function InventorySack() {
                               </div>
 
                               {/* Cost Summary */}
-                              <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700 mb-4">
+                              <div className="bg-[#1a2221]/30 rounded-xl p-4 border border-[rgba(255,255,255,0.08)] mb-4">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-gray-400">You pay</span>
+                                  <span className="text-[#8a9090]">You pay</span>
                                   <div className="flex items-center gap-2">
                                     <img src="/Images/Token.png" alt="wASS" className="w-5 h-5" />
                                     <span className="text-white font-bold text-lg">{unwrapAmount} $wASS</span>
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-gray-400">+ Fee</span>
+                                  <span className="text-[#8a9090]">+ Fee</span>
                                   <div className="flex items-center gap-2">
                                     <img src="/Images/Ether.png" alt="ETH" className="w-4 h-4" />
-                                    <span className="text-orange-400 font-medium">{parseFloat(formatEther(wrapFee * BigInt(unwrapAmount))).toFixed(4)} ETH</span>
+                                    <span className="text-[#f9690e] font-medium">{parseFloat(formatEther(wrapFee * BigInt(unwrapAmount))).toFixed(4)} ETH</span>
                                   </div>
                                 </div>
-                                <div className="flex items-center justify-between pt-2 border-t border-gray-700">
-                                  <span className="text-gray-300 font-medium">You receive</span>
+                                <div className="flex items-center justify-between pt-2 border-t border-[rgba(255,255,255,0.08)]">
+                                  <span className="text-[#cecece] font-medium">You receive</span>
                                   <div className="flex items-center gap-2">
                                     <img src="/Images/MountianGuyHead.png" alt="NFT" className="w-5 h-5" />
-                                    <span className="text-purple-400 font-bold text-lg">{unwrapAmount} NFT{unwrapAmount !== 1 ? 's' : ''}</span>
+                                    <span className="text-[#ffd075] font-bold text-lg">{unwrapAmount} NFT{unwrapAmount !== 1 ? 's' : ''}</span>
                                   </div>
                                 </div>
                               </div>
@@ -4288,8 +4000,8 @@ export function InventorySack() {
                                 disabled={!wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < unwrapAmount || isWritePending || isBatchPending}
                                 className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                                   !wTokenBalance || parseFloat(formatUnits(wTokenBalance as bigint, 18)) < unwrapAmount || isWritePending || isBatchPending
-                                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/25'
+                                    ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] hover:from-[#c5a97b] hover:to-[#a68b5b] shadow-lg shadow-[rgba(255,208,117,0.2)]'
                                 }`}
                               >
                                 {isWritePending || isBatchPending ? (
@@ -4311,23 +4023,23 @@ export function InventorySack() {
                             /* ===== WRAP MODE ===== */
                             <div className="flex-1 flex flex-col">
                               {/* How it works - compact */}
-                              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
-                                <p className="text-xs text-gray-400">
-                                  <span className="text-blue-400 font-medium">Wrap:</span> Lock your NFTs in the wrapper contract and receive $wASS tokens
+                              <div className="bg-[#c5a97b]/10 border border-[rgba(255,208,117,0.4)]/20 rounded-lg p-3 mb-4">
+                                <p className="text-xs text-[#8a9090]">
+                                  <span className="text-[#ffd075] font-medium">Wrap:</span> Lock your NFTs in the wrapper contract and receive $wASS tokens
                                 </p>
                               </div>
 
                               {/* NFT Grid */}
                               {isLoading ? (
                                 <div className="flex-1 flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+                                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[rgba(255,208,117,0.4)]"></div>
                                 </div>
                               ) : nfts.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center">
-                                  <p className="text-gray-400 mb-3">No NFTs available to wrap</p>
+                                  <p className="text-[#8a9090] mb-3">No NFTs available to wrap</p>
                                   <button
                                     onClick={() => setExchangeSubTab('pool')}
-                                    className="px-4 py-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors text-sm"
+                                    className="px-4 py-2 bg-[rgba(249,105,14,0.15)] text-[#f9690e] rounded-lg hover:bg-orange-500/30 transition-colors text-sm"
                                   >
                                     Get NFTs from Pool
                                   </button>
@@ -4352,8 +4064,8 @@ export function InventorySack() {
                                             }}
                                             className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
                                               isSelected
-                                                ? 'border-blue-500 ring-2 ring-blue-500/50 scale-95'
-                                                : 'border-gray-700 hover:border-blue-400'
+                                                ? 'border-[rgba(255,208,117,0.4)] ring-2 ring-[rgba(255,208,117,0.3)] scale-95'
+                                                : 'border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,208,117,0.35)]'
                                             }`}
                                           >
                                             <img
@@ -4362,8 +4074,8 @@ export function InventorySack() {
                                               className="w-full h-full object-cover"
                                             />
                                             {isSelected && (
-                                              <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
-                                                <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
+                                              <div className="absolute inset-0 bg-[#c5a97b]/30 flex items-center justify-center">
+                                                <div className="w-5 h-5 rounded-full bg-[#c5a97b] flex items-center justify-center">
                                                   <span className="text-white text-xs">✓</span>
                                                 </div>
                                               </div>
@@ -4375,14 +4087,14 @@ export function InventorySack() {
                                   </div>
 
                                   {/* Wrap Summary & Action */}
-                                  <div className="flex-shrink-0 bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+                                  <div className="flex-shrink-0 bg-[#1a2221]/50 rounded-xl p-4 border border-[rgba(255,255,255,0.08)]">
                                     <div className="flex items-center justify-between mb-3">
                                       <div className="flex items-center gap-3">
                                         <span className="text-white font-medium">{selectedNFTs.size} NFT{selectedNFTs.size !== 1 ? 's' : ''} selected</span>
                                         {selectedNFTs.size > 0 && (
                                           <button
                                             onClick={() => setSelectedNFTs(new Set())}
-                                            className="text-xs text-gray-400 hover:text-white"
+                                            className="text-xs text-[#8a9090] hover:text-white"
                                           >
                                             Clear
                                           </button>
@@ -4390,8 +4102,8 @@ export function InventorySack() {
                                       </div>
                                       {selectedNFTs.size > 0 && (
                                         <div className="flex items-center gap-2 text-sm">
-                                          <span className="text-gray-400">Fee:</span>
-                                          <span className="text-orange-400 font-medium">{parseFloat(formatEther(wrapFee * BigInt(selectedNFTs.size))).toFixed(4)} ETH</span>
+                                          <span className="text-[#8a9090]">Fee:</span>
+                                          <span className="text-[#f9690e] font-medium">{parseFloat(formatEther(wrapFee * BigInt(selectedNFTs.size))).toFixed(4)} ETH</span>
                                         </div>
                                       )}
                                     </div>
@@ -4440,8 +4152,8 @@ export function InventorySack() {
                                       disabled={selectedNFTs.size === 0 || isWritePending || isBatchPending || isBatchConfirming}
                                       className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                                         selectedNFTs.size === 0 || isWritePending || isBatchPending || isBatchConfirming
-                                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                                          : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25'
+                                          ? 'bg-[#1f2827] text-[#8a9090] cursor-not-allowed'
+                                          : 'bg-gradient-to-r from-[#c5a97b] to-[#a68b5b] text-white hover:from-[#a68b5b] hover:to-[#8b7245] shadow-lg shadow-[rgba(197,169,123,0.2)]'
                                       }`}
                                     >
                                       {isWritePending || isBatchPending || isBatchConfirming ? (
@@ -4470,31 +4182,23 @@ export function InventorySack() {
               </div>
             )}
 
-            {/* ===== TRADING TAB - Chart and Trading Interface OR Token Launcher ===== */}
+            {/* ===== TRADING TAB - Chart and Trading Interface ===== */}
             {activeTab === 'trading' && (
               <div className="absolute inset-0 flex flex-col overflow-hidden">
-                {tradingView === 'swap' ? (
-                  /* ===== SWAP VIEW - Chart and Trading Interface ===== */
-                  <ChartModal
-                    isOpen={true}
-                    onClose={() => setActiveTab('collection')}
-                    embedded={true}
-                    layout="horizontal"
-                    onPairChange={setCurrentPoolAddress}
-                    onSwapComplete={refetchTrades}
-                    trades={poolTrades}
-                    tradesLoading={tradesLoading}
-                    selectedPairId={selectedPairId}
-                    externalPairData={selectedPairData?.isTokenWars ? selectedPairData : undefined}
-                    additionalPairs={chartModalAdditionalPairs}
-                    externalPairChanges={allPairChanges}
-                  />
-                ) : (
-                  /* ===== LAUNCH VIEW - Token Wars ===== */
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <TokenWars onTradeToken={handleTradeToken} />
-                  </div>
-                )}
+                <ChartModal
+                  isOpen={true}
+                  onClose={() => setActiveTab('collection')}
+                  embedded={true}
+                  layout="horizontal"
+                  onPairChange={setCurrentPoolAddress}
+                  onSwapComplete={refetchTrades}
+                  trades={poolTrades}
+                  tradesLoading={tradesLoading}
+                  selectedPairId={selectedPairId}
+                  externalPairData={selectedPairData?.isTokenWars ? selectedPairData : undefined}
+                  additionalPairs={chartModalAdditionalPairs}
+                  externalPairChanges={allPairChanges}
+                />
               </div>
             )}
           </main>
@@ -4502,20 +4206,20 @@ export function InventorySack() {
 
         {/* Selection Action Bar - shown when NFTs are selected */}
         {selectedNFTs.size > 0 && (
-          <div className="flex-shrink-0 border-t border-gray-800 bg-gray-900/95 backdrop-blur-xl px-4 md:px-6 py-4">
+          <div className="flex-shrink-0 border-t border-[rgba(255,255,255,0.06)] bg-[#171e1d]/95 backdrop-blur-xl px-4 md:px-6 py-4">
             <div className="flex items-center justify-between max-w-7xl mx-auto">
               <div className="flex items-center gap-4">
                 <span className="text-white font-medium">
                   {selectedNFTs.size} NFT{selectedNFTs.size > 1 ? 's' : ''} selected
                 </span>
                 {selectedSnakes.length > 0 && selectedSnakes.length !== selectedNFTs.size && (
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-[#8a9090]">
                     ({selectedSnakes.length} snake{selectedSnakes.length > 1 ? 's' : ''})
                   </span>
                 )}
                 <button
                   onClick={clearSelections}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700 hover:border-gray-600 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1a2221] border border-[rgba(255,255,255,0.08)] text-[#8a9090] hover:text-white hover:bg-[#1f2827] hover:border-[rgba(255,208,117,0.15)] transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -4547,15 +4251,15 @@ export function InventorySack() {
                       disabled={isProcessing || selectedHumans.length !== 3}
                       className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
                         selectedHumans.length !== 3
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:from-pink-400 hover:to-rose-400 disabled:opacity-50 disabled:cursor-not-allowed'
+                          ? 'bg-[#2a3533] text-[#8a9090] cursor-not-allowed'
+                          : 'bg-gradient-to-r from-[#FF3B5C] to-[#e11d48] text-white hover:from-[#ff6b84] hover:to-[#FF3B5C] disabled:opacity-50 disabled:cursor-not-allowed'
                       }`}
                       title={selectedHumans.length !== 3 ? `Select exactly 3 humans to breed (${selectedHumans.length}/3)` : 'Breed 3 humans into an AppleSnake egg'}
                     >
                       🧬 Breed
                     </button>
                     <span className={`text-xs whitespace-nowrap ${
-                      selectedHumans.length === 3 ? 'text-green-400' : 'text-gray-400'
+                      selectedHumans.length === 3 ? 'text-[#22c55e]' : 'text-[#8a9090]'
                     }`}>
                       {selectedHumans.length}/3 humans
                     </span>
@@ -4569,8 +4273,8 @@ export function InventorySack() {
                     disabled={isProcessing || hasHumansSelected || selectedForStake.length === 0}
                     className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
                       hasHumansSelected || selectedForStake.length === 0
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-400 hover:to-blue-400 disabled:opacity-50 disabled:cursor-not-allowed'
+                        ? 'bg-[#2a3533] text-[#8a9090] cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] hover:from-[#ffe0a0] hover:to-[#d4b88a] disabled:opacity-50 disabled:cursor-not-allowed'
                     }`}
                     title={hasHumansSelected ? 'Cannot stake humans - only snakes can be staked' : selectedForStake.length === 0 ? 'Select snakes to stake' : undefined}
                   >
@@ -4592,7 +4296,7 @@ export function InventorySack() {
                   <button
                     onClick={handleUnstake}
                     disabled={isProcessing}
-                    className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-400 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-[#ffd075] to-[#c5a97b] text-[#0a0d0c] hover:from-[#ffe0a0] hover:to-[#d4b88a] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {isProcessing && currentOperation === 'unstake' ? 'Unstaking...' : `🔓 Unstake ${selectedForUnstake.length} Snake${selectedForUnstake.length > 1 ? 's' : ''}`}
                   </button>
@@ -4615,7 +4319,7 @@ export function InventorySack() {
                         setShowListingModal(true);
                       }}
                       disabled={isProcessing}
-                      className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-400 hover:to-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#4ade80] hover:to-[#22c55e] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       🏪 List{listCount > 1 ? ` ${listCount}` : ''}
                     </button>
@@ -4629,10 +4333,10 @@ export function InventorySack() {
                     disabled={isProcessing || selectedForWrap.length === 0}
                     className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${
                       selectedForWrap.length === 0
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        ? 'bg-[#2a3533] text-[#8a9090] cursor-not-allowed'
                         : selectedSnakes.length > 0
                           ? 'bg-gradient-to-r from-red-600 to-orange-500 text-white hover:from-red-500 hover:to-orange-400 ring-2 ring-red-500/50 disabled:opacity-50'
-                          : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 disabled:opacity-50'
+                          : 'bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white hover:from-[#4ade80] hover:to-[#22c55e] disabled:opacity-50'
                     }`}
                     title={selectedSnakes.length > 0 ? 'Warning: AppleSnakes are rare NFTs!' : undefined}
                   >
@@ -4651,7 +4355,7 @@ export function InventorySack() {
                   </button>
                   {/* Wrap Fee Display */}
                   {selectedForWrap.length > 0 && (
-                    <span className="text-xs text-orange-400 whitespace-nowrap flex items-center gap-1">
+                    <span className="text-xs text-[#f9690e] whitespace-nowrap flex items-center gap-1">
                       Fee: {parseFloat(formatEther(wrapFee * BigInt(selectedForWrap.length))).toFixed(4)}
                       <img src="/Images/Ether.png" alt="ETH" className="w-3 h-3" />
                     </span>
@@ -4674,15 +4378,15 @@ export function InventorySack() {
           <div
             className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg backdrop-blur-xl transition-all ${
               txOverlay.status === 'pending'
-                ? 'bg-purple-900/90 border-purple-500/50 text-purple-100'
+                ? 'bg-[rgba(139,114,69,0.85)] border-[rgba(255,208,117,0.3)] text-[#ffd075]'
                 : txOverlay.status === 'success'
-                  ? 'bg-green-900/90 border-green-500/50 text-green-100'
+                  ? 'bg-green-900/90 border-[#22c55e]/50 text-green-100'
                   : 'bg-red-900/90 border-red-500/50 text-red-100'
             }`}
           >
             {/* Status Icon */}
             {txOverlay.status === 'pending' ? (
-              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-[rgba(255,208,117,0.4)] border-t-transparent rounded-full animate-spin" />
             ) : txOverlay.status === 'success' ? (
               <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4712,7 +4416,7 @@ export function InventorySack() {
               rel="noopener noreferrer"
               className={`p-2 rounded-lg transition-all ${
                 txOverlay.status === 'pending'
-                  ? 'bg-purple-800 hover:bg-purple-700'
+                  ? 'bg-[#8b7245] hover:bg-[#8b7245]'
                   : txOverlay.status === 'success'
                     ? 'bg-green-800 hover:bg-green-700'
                     : 'bg-red-800 hover:bg-red-700'

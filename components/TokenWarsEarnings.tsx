@@ -29,23 +29,23 @@ export function FeeDisplay({ amount, className = '', compact = false }: FeeDispl
 
   if (compact) {
     return (
-      <div className={`text-xs text-gray-400 ${className}`}>
+      <div className={`text-xs text-[#8a9090] ${className}`}>
         Fee: ${fees.totalFee.toFixed(2)} (2%) → Pool: ${fees.netAmount.toFixed(2)}
       </div>
     );
   }
 
   return (
-    <div className={`bg-gray-800/50 rounded-lg p-3 space-y-2 ${className}`}>
+    <div className={`bg-[#1a2221]/50 rounded-lg p-3 space-y-2 ${className}`}>
       <div className="flex justify-between text-sm">
-        <span className="text-gray-400">Your Bet</span>
+        <span className="text-[#8a9090]">Your Bet</span>
         <span className="text-white font-medium">${amount.toFixed(2)}</span>
       </div>
       <div className="flex justify-between text-sm text-red-400">
         <span>Fee (2%)</span>
         <span>-${fees.totalFee.toFixed(2)}</span>
       </div>
-      <div className="pl-4 space-y-1 text-xs text-gray-500">
+      <div className="pl-4 space-y-1 text-xs text-[#6b7575]">
         <div className="flex justify-between">
           <span>→ Creator (1%)</span>
           <span>${fees.creatorFee.toFixed(2)}</span>
@@ -55,8 +55,8 @@ export function FeeDisplay({ amount, className = '', compact = false }: FeeDispl
           <span>${fees.platformFee.toFixed(2)}</span>
         </div>
       </div>
-      <div className="border-t border-gray-700 pt-2 flex justify-between text-sm font-semibold">
-        <span className="text-gray-300">Goes to Pool</span>
+      <div className="border-t border-[rgba(255,255,255,0.06)] pt-2 flex justify-between text-sm font-semibold">
+        <span className="text-[#cecece]">Goes to Pool</span>
         <span className="text-green-400">${fees.netAmount.toFixed(2)}</span>
       </div>
     </div>
@@ -101,12 +101,12 @@ export function CreatorEarningsDashboard({
 
   if (isLoading) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+          <div className="h-6 bg-[#1f2827] rounded w-1/3"></div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="h-16 bg-gray-700 rounded"></div>
-            <div className="h-16 bg-gray-700 rounded"></div>
+            <div className="h-16 bg-[#1f2827] rounded"></div>
+            <div className="h-16 bg-[#1f2827] rounded"></div>
           </div>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function CreatorEarningsDashboard({
 
   if (error || !data?.success) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <p className="text-red-400">Failed to load creator earnings</p>
       </div>
     );
@@ -124,7 +124,7 @@ export function CreatorEarningsDashboard({
   const { creatorSummary } = data;
 
   return (
-    <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+    <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
       <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <span className="text-2xl">💰</span>
         Your Creator Earnings
@@ -152,20 +152,20 @@ export function CreatorEarningsDashboard({
       {/* Wars List */}
       {creatorSummary.wars.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-400 mb-2">Your Wars</h4>
+          <h4 className="text-sm font-semibold text-[#8a9090] mb-2">Your Wars</h4>
           {creatorSummary.wars.map((war) => (
             <div
               key={war.warId}
-              className="flex items-center justify-between bg-gray-700/30 rounded-lg p-3"
+              className="flex items-center justify-between bg-[#1f2827]/30 rounded-lg p-3"
             >
               <div className="flex-1">
                 <p className="text-sm text-white font-medium truncate">{war.warId}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-[#8a9090]">
                   Volume: ${war.volume.toLocaleString()} • Earnings: ${war.earnings.toFixed(2)}
                 </p>
               </div>
               {war.claimed ? (
-                <span className="text-xs text-gray-500 px-2 py-1 bg-gray-600/30 rounded">
+                <span className="text-xs text-[#6b7575] px-2 py-1 bg-[#2a3533]/30 rounded">
                   Claimed
                 </span>
               ) : war.earnings > 0 ? (
@@ -174,7 +174,7 @@ export function CreatorEarningsDashboard({
                   disabled={isClaiming}
                   className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
                     claimingWarId === war.warId
-                      ? 'bg-gray-600 text-gray-300 cursor-wait'
+                      ? 'bg-[#2a3533] text-[#cecece] cursor-wait'
                       : 'bg-green-600 hover:bg-green-500 text-white'
                   }`}
                 >
@@ -187,7 +187,7 @@ export function CreatorEarningsDashboard({
       )}
 
       {creatorSummary.wars.length === 0 && (
-        <p className="text-gray-500 text-sm text-center py-4">
+        <p className="text-[#6b7575] text-sm text-center py-4">
           No wars created yet. Create a Token War to start earning!
         </p>
       )}
@@ -209,9 +209,9 @@ interface UserRewardsProps {
 const REWARD_TYPE_LABELS: Record<RewardType, { label: string; emoji: string; color: string }> = {
   prediction_win: { label: 'Prediction Win', emoji: '🎯', color: 'text-green-400' },
   creator_fee: { label: 'Creator Fee', emoji: '💰', color: 'text-yellow-400' },
-  referral: { label: 'Referral', emoji: '🤝', color: 'text-blue-400' },
-  bonus: { label: 'Bonus', emoji: '🎁', color: 'text-purple-400' },
-  refund: { label: 'Refund', emoji: '↩️', color: 'text-gray-400' },
+  referral: { label: 'Referral', emoji: '🤝', color: 'text-[#ffd075]' },
+  bonus: { label: 'Bonus', emoji: '🎁', color: 'text-[#ffd075]' },
+  refund: { label: 'Refund', emoji: '↩️', color: 'text-[#8a9090]' },
 };
 
 /**
@@ -250,12 +250,12 @@ export function UserRewards({
 
   if (isLoading) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+          <div className="h-6 bg-[#1f2827] rounded w-1/3"></div>
           <div className="space-y-2">
-            <div className="h-12 bg-gray-700 rounded"></div>
-            <div className="h-12 bg-gray-700 rounded"></div>
+            <div className="h-12 bg-[#1f2827] rounded"></div>
+            <div className="h-12 bg-[#1f2827] rounded"></div>
           </div>
         </div>
       </div>
@@ -264,7 +264,7 @@ export function UserRewards({
 
   if (error || !data?.success) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <p className="text-red-400">Failed to load rewards</p>
       </div>
     );
@@ -274,7 +274,7 @@ export function UserRewards({
   const displayRewards = rewards.slice(0, maxItems);
 
   return (
-    <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+    <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-bold text-white flex items-center gap-2">
           <span className="text-2xl">🏆</span>
@@ -286,7 +286,7 @@ export function UserRewards({
             disabled={isClaiming || isClaimingAll}
             className={`text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
               isClaimingAll
-                ? 'bg-gray-600 text-gray-300 cursor-wait'
+                ? 'bg-[#2a3533] text-[#cecece] cursor-wait'
                 : 'bg-green-600 hover:bg-green-500 text-white'
             }`}
           >
@@ -319,7 +319,7 @@ export function UserRewards({
               <div
                 key={reward.id}
                 className={`flex items-center justify-between rounded-lg p-3 ${
-                  reward.claimed ? 'bg-gray-700/20' : 'bg-gray-700/40'
+                  reward.claimed ? 'bg-[#1f2827]/20' : 'bg-[#1f2827]/40'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -327,18 +327,18 @@ export function UserRewards({
                   <div>
                     <p className={`text-sm font-medium ${typeInfo.color}`}>{typeInfo.label}</p>
                     {reward.description && (
-                      <p className="text-xs text-gray-500">{reward.description}</p>
+                      <p className="text-xs text-[#6b7575]">{reward.description}</p>
                     )}
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-[#5a6565]">
                       {new Date(reward.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-bold ${reward.claimed ? 'text-gray-500' : 'text-white'}`}>
+                  <p className={`font-bold ${reward.claimed ? 'text-[#6b7575]' : 'text-white'}`}>
                     ${reward.amountUsdc.toFixed(2)}
                   </p>
-                  <p className={`text-xs ${reward.claimed ? 'text-gray-600' : 'text-green-400'}`}>
+                  <p className={`text-xs ${reward.claimed ? 'text-[#5a6565]' : 'text-green-400'}`}>
                     {reward.claimed ? 'Claimed' : 'Pending'}
                   </p>
                 </div>
@@ -347,13 +347,13 @@ export function UserRewards({
           })}
         </div>
       ) : (
-        <p className="text-gray-500 text-sm text-center py-4">
+        <p className="text-[#6b7575] text-sm text-center py-4">
           No rewards yet. Participate in Token Wars to earn!
         </p>
       )}
 
       {rewards.length > maxItems && (
-        <p className="text-gray-500 text-xs text-center mt-4">
+        <p className="text-[#6b7575] text-xs text-center mt-4">
           Showing {maxItems} of {rewards.length} rewards
         </p>
       )}
@@ -378,13 +378,13 @@ export function EarningsSummaryPanel({ className = '' }: EarningsSummaryPanelPro
 
   if (isLoading) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <div className="animate-pulse space-y-4">
-          <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+          <div className="h-6 bg-[#1f2827] rounded w-1/3"></div>
           <div className="grid grid-cols-3 gap-4">
-            <div className="h-20 bg-gray-700 rounded"></div>
-            <div className="h-20 bg-gray-700 rounded"></div>
-            <div className="h-20 bg-gray-700 rounded"></div>
+            <div className="h-20 bg-[#1f2827] rounded"></div>
+            <div className="h-20 bg-[#1f2827] rounded"></div>
+            <div className="h-20 bg-[#1f2827] rounded"></div>
           </div>
         </div>
       </div>
@@ -393,7 +393,7 @@ export function EarningsSummaryPanel({ className = '' }: EarningsSummaryPanelPro
 
   if (error || !data?.success) {
     return (
-      <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+      <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
         <p className="text-red-400">Failed to load earnings summary</p>
       </div>
     );
@@ -402,7 +402,7 @@ export function EarningsSummaryPanel({ className = '' }: EarningsSummaryPanelPro
   const { summary } = data;
 
   return (
-    <div className={`bg-gray-800/30 rounded-xl p-6 ${className}`}>
+    <div className={`bg-[#1a2221]/30 rounded-xl p-6 ${className}`}>
       <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <span className="text-2xl">📊</span>
         Platform Stats
@@ -430,15 +430,15 @@ export function EarningsSummaryPanel({ className = '' }: EarningsSummaryPanelPro
       </div>
 
       {/* Treasury Breakdown */}
-      <div className="bg-gray-700/30 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-400 mb-3">Treasury Breakdown</h4>
+      <div className="bg-[#1f2827]/30 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-[#8a9090] mb-3">Treasury Breakdown</h4>
         <div className="space-y-2 text-sm">
           <TreasuryRow label="Participant Funds" value={summary.treasury.participantFunds} />
           <TreasuryRow label="Market Pools" value={summary.treasury.marketPools} />
           <TreasuryRow label="Creator Pending" value={summary.treasury.creatorPending} accent="yellow" />
           <TreasuryRow label="Platform Earnings" value={summary.treasury.platformEarnings} accent="purple" />
           <TreasuryRow label="User Rewards" value={summary.treasury.userRewards} accent="green" />
-          <div className="border-t border-gray-600 pt-2 mt-2">
+          <div className="border-t border-[rgba(255,255,255,0.1)] pt-2 mt-2">
             <TreasuryRow label="Total" value={summary.treasury.total} bold />
           </div>
         </div>
@@ -464,18 +464,18 @@ function StatCard({
 }) {
   const accentColors = {
     green: 'text-green-400',
-    blue: 'text-blue-400',
+    blue: 'text-[#ffd075]',
     yellow: 'text-yellow-400',
-    purple: 'text-purple-400',
+    purple: 'text-[#ffd075]',
   };
 
   return (
     <div
       className={`rounded-lg p-3 ${
-        highlight ? 'bg-green-500/20 border border-green-500/30' : 'bg-gray-700/30'
+        highlight ? 'bg-green-500/20 border border-green-500/30' : 'bg-[#1f2827]/30'
       }`}
     >
-      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <p className="text-xs text-[#8a9090] mb-1">{label}</p>
       <p
         className={`text-lg font-bold ${
           highlight ? 'text-green-400' : accent ? accentColors[accent] : 'text-white'
@@ -501,13 +501,13 @@ function TreasuryRow({
   const accentColors = {
     green: 'text-green-400',
     yellow: 'text-yellow-400',
-    purple: 'text-purple-400',
+    purple: 'text-[#ffd075]',
   };
 
   return (
     <div className="flex justify-between">
-      <span className={bold ? 'text-white font-semibold' : 'text-gray-400'}>{label}</span>
-      <span className={bold ? 'text-white font-bold' : accent ? accentColors[accent] : 'text-gray-300'}>
+      <span className={bold ? 'text-white font-semibold' : 'text-[#8a9090]'}>{label}</span>
+      <span className={bold ? 'text-white font-bold' : accent ? accentColors[accent] : 'text-[#cecece]'}>
         ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </span>
     </div>
@@ -539,7 +539,7 @@ export function BetConfirmation({
 
   if (!isTokenWarsMarket) {
     return (
-      <div className={`text-sm text-gray-300 ${className}`}>
+      <div className={`text-sm text-[#cecece] ${className}`}>
         Betting ${amount.toFixed(2)} (no fees)
       </div>
     );
@@ -548,7 +548,7 @@ export function BetConfirmation({
   return (
     <div className={`space-y-3 ${className}`}>
       <FeeDisplay amount={amount} />
-      <p className="text-xs text-gray-500 text-center">
+      <p className="text-xs text-[#6b7575] text-center">
         2% fee supports war creators and platform
       </p>
     </div>

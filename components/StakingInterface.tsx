@@ -417,11 +417,11 @@ export function StakingInterface({
       {/* Rewards Info */}
       <div
         style={{
-          backgroundColor: 'rgba(6, 182, 212, 0.1)',
+          backgroundColor: 'rgba(255, 208, 117, 0.1)',
           borderRadius: 'clamp(8px, 1.6vw, 12px)',
           padding: 'clamp(12px, 2.5vw, 16px)',
           marginBottom: 'clamp(12px, 2vw, 16px)',
-          border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.3)',
+          border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.3)',
           flexShrink: 0,
         }}
       >
@@ -431,10 +431,10 @@ export function StakingInterface({
           justifyContent: 'space-between',
           marginBottom: 'clamp(8px, 1.5vw, 10px)',
           paddingBottom: 'clamp(8px, 1.5vw, 10px)',
-          borderBottom: '1px solid rgba(6, 182, 212, 0.2)',
+          borderBottom: '1px solid rgba(255, 208, 117, 0.2)',
         }}>
           <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Total Staked:</span>
-          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(168, 85, 247, 1)', fontWeight: 700 }}>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 208, 117, 1)', fontWeight: 700 }}>
             {globalTotalStaked.toLocaleString()} snakes ({totalUniqueStakers} stakers)
           </span>
         </div>
@@ -442,7 +442,7 @@ export function StakingInterface({
         {/* User Stats */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'clamp(8px, 1.5vw, 10px)' }}>
           <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Your Staked:</span>
-          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(6, 182, 212, 1)', fontWeight: 700 }}>{stakedCount}</span>
+          <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 208, 117, 1)', fontWeight: 700 }}>{stakedCount}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 'clamp(10px, 2vw, 12px)', color: 'rgba(255, 255, 255, 0.6)' }}>Pending Rewards:</span>
@@ -510,11 +510,11 @@ export function StakingInterface({
             borderRadius: 'clamp(6px, 1.2vw, 8px)',
             fontWeight: 600,
             fontSize: 'clamp(10px, 2vw, 12px)',
-            border: `clamp(1px, 0.2vw, 1.5px) solid rgba(6, 182, 212, ${activeView === 'stake' ? '0.8' : '0.4'})`,
+            border: `clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, ${activeView === 'stake' ? '0.8' : '0.4'})`,
             background: activeView === 'stake'
-              ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'
-              : 'linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(59, 130, 246, 0.1))',
-            color: 'rgba(6, 182, 212, 1)',
+              ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+              : 'linear-gradient(135deg, rgba(255, 208, 117, 0.1), rgba(197, 169, 123, 0.1))',
+            color: 'rgba(255, 208, 117, 1)',
             cursor: 'pointer',
             transition: 'all 0.2s ease',
             opacity: activeView === 'stake' ? 1 : 0.6,
@@ -534,11 +534,11 @@ export function StakingInterface({
             borderRadius: 'clamp(6px, 1.2vw, 8px)',
             fontWeight: 600,
             fontSize: 'clamp(10px, 2vw, 12px)',
-            border: `clamp(1px, 0.2vw, 1.5px) solid rgba(168, 85, 247, ${activeView === 'unstake' ? '0.8' : '0.4'})`,
+            border: `clamp(1px, 0.2vw, 1.5px) solid rgba(255, 208, 117, ${activeView === 'unstake' ? '0.8' : '0.4'})`,
             background: activeView === 'unstake'
-              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))'
-              : 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(139, 92, 246, 0.1))',
-            color: 'rgba(168, 85, 247, 1)',
+              ? 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))'
+              : 'linear-gradient(135deg, rgba(255, 208, 117, 0.1), rgba(197, 169, 123, 0.1))',
+            color: 'rgba(255, 208, 117, 1)',
             cursor: 'pointer',
             transition: 'all 0.2s ease',
             opacity: activeView === 'unstake' ? 1 : 0.6,
@@ -583,10 +583,10 @@ export function StakingInterface({
                     borderRadius: 'clamp(6px, 1.2vw, 8px)',
                     overflow: 'hidden',
                     border: selectedSnakesForStaking.has(nft.tokenId)
-                      ? 'clamp(2px, 0.4vw, 3px) solid rgba(6, 182, 212, 1)'
+                      ? 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)'
                       : 'clamp(2px, 0.4vw, 3px) solid transparent',
                     boxShadow: selectedSnakesForStaking.has(nft.tokenId)
-                      ? '0 0 15px rgba(6, 182, 212, 0.5)'
+                      ? '0 0 15px rgba(255, 208, 117, 0.5)'
                       : 'none',
                     transition: 'all 0.2s ease',
                   }}
@@ -609,7 +609,7 @@ export function StakingInterface({
                         width: 'clamp(16px, 3vw, 20px)',
                         height: 'clamp(16px, 3vw, 20px)',
                         borderRadius: '50%',
-                        background: 'rgba(6, 182, 212, 1)',
+                        background: 'rgba(255, 208, 117, 1)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -643,7 +643,7 @@ export function StakingInterface({
             style={{
               textAlign: 'center',
               padding: 'clamp(20px, 4vw, 40px)',
-              color: 'rgba(168, 85, 247, 0.6)',
+              color: 'rgba(255, 208, 117, 0.6)',
               fontSize: 'clamp(10px, 2vw, 12px)',
             }}
           >
@@ -658,7 +658,7 @@ export function StakingInterface({
               style={{
                 fontSize: 'clamp(11px, 2.2vw, 13px)',
                 fontWeight: 600,
-                color: 'rgba(168, 85, 247, 1)',
+                color: 'rgba(255, 208, 117, 1)',
                 marginBottom: 'clamp(8px, 1.5vw, 12px)',
               }}
             >
@@ -681,10 +681,10 @@ export function StakingInterface({
                     borderRadius: 'clamp(6px, 1.2vw, 8px)',
                     overflow: 'hidden',
                     border: selectedStakedSnakes.has(nft.tokenId)
-                      ? 'clamp(2px, 0.4vw, 3px) solid rgba(168, 85, 247, 1)'
+                      ? 'clamp(2px, 0.4vw, 3px) solid rgba(255, 208, 117, 1)'
                       : 'clamp(2px, 0.4vw, 3px) solid transparent',
                     boxShadow: selectedStakedSnakes.has(nft.tokenId)
-                      ? '0 0 15px rgba(168, 85, 247, 0.5)'
+                      ? '0 0 15px rgba(255, 208, 117, 0.5)'
                       : 'none',
                     transition: 'all 0.2s ease',
                   }}
@@ -707,7 +707,7 @@ export function StakingInterface({
                         width: 'clamp(16px, 3vw, 20px)',
                         height: 'clamp(16px, 3vw, 20px)',
                         borderRadius: '50%',
-                        background: 'rgba(168, 85, 247, 1)',
+                        background: 'rgba(255, 208, 117, 1)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -726,7 +726,7 @@ export function StakingInterface({
                       background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
                       padding: 'clamp(4px, 0.8vw, 6px)',
                       fontSize: 'clamp(8px, 1.6vw, 10px)',
-                      color: 'rgba(168, 85, 247, 1)',
+                      color: 'rgba(255, 208, 117, 1)',
                       fontWeight: 600,
                       textAlign: 'center',
                     }}
@@ -763,12 +763,12 @@ export function StakingInterface({
                     borderRadius: 'clamp(8px, 1.5vw, 12px)',
                     fontWeight: 700,
                     fontSize: 'clamp(12px, 2.5vw, 16px)',
-                    border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)',
-                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))',
-                    color: 'rgba(6, 182, 212, 1)',
+                    border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)',
+                    background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+                    color: 'rgba(255, 208, 117, 1)',
                     cursor: isWritePending || isConfirming || isBatchPending || isBatchConfirming ? 'not-allowed' : 'pointer',
                     opacity: isWritePending || isConfirming || isBatchPending || isBatchConfirming ? 0.5 : 1,
-                    boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
+                    boxShadow: '0 0 20px rgba(255, 208, 117, 0.3)',
                     transition: 'all 0.2s ease',
                   }}
                 >
@@ -807,12 +807,12 @@ export function StakingInterface({
                   borderRadius: 'clamp(8px, 1.5vw, 12px)',
                   fontWeight: 700,
                   fontSize: 'clamp(12px, 2.5vw, 16px)',
-                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(6, 182, 212, 0.6)',
-                  background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))',
-                  color: 'rgba(6, 182, 212, 1)',
+                  border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)',
+                  background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+                  color: 'rgba(255, 208, 117, 1)',
                   cursor: isWritePending || isConfirming ? 'not-allowed' : 'pointer',
                   opacity: isWritePending || isConfirming ? 0.5 : 1,
-                  boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
+                  boxShadow: '0 0 20px rgba(255, 208, 117, 0.3)',
                   transition: 'all 0.2s ease',
                 }}
               >
@@ -832,12 +832,12 @@ export function StakingInterface({
               borderRadius: 'clamp(8px, 1.5vw, 12px)',
               fontWeight: 700,
               fontSize: 'clamp(12px, 2.5vw, 16px)',
-              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(168, 85, 247, 0.6)',
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(139, 92, 246, 0.3))',
-              color: 'rgba(168, 85, 247, 1)',
+              border: 'clamp(1.5px, 0.3vw, 2px) solid rgba(255, 208, 117, 0.6)',
+              background: 'linear-gradient(135deg, rgba(255, 208, 117, 0.3), rgba(197, 169, 123, 0.3))',
+              color: 'rgba(255, 208, 117, 1)',
               cursor: isWritePending || isConfirming ? 'not-allowed' : 'pointer',
               opacity: isWritePending || isConfirming ? 0.5 : 1,
-              boxShadow: '0 0 20px rgba(168, 85, 247, 0.3)',
+              boxShadow: '0 0 20px rgba(255, 208, 117, 0.3)',
               transition: 'all 0.2s ease',
             }}
           >

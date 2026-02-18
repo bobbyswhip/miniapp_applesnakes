@@ -12,8 +12,11 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // Local layers path (from /public/layers/)
 const LAYERS_BASE = '/layers';
 
-// NFT images IPNS (for "Current" display)
-const NFT_IPNS_BASE = 'https://ipfs.filebase.io/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp';
+// Cache version - increment to bust browser/CDN cache when IPNS content updates
+const NFT_CACHE_VERSION = 'v2';
+
+// NFT images IPNS (for "Current" display) - NFT bucket
+const NFT_IPNS_BASE = 'https://applesnakes.myfilebase.com/ipns/k51qzi5uqu5dm7e0kn5ud2iogv1fonqr7if8ijb9w61bpcbjxuk0cp177dv2pp';
 
 // Base traits that use simple {Value}.png format (no weight suffix)
 const BASE_TRAIT_LAYERS = ['Skin', 'Eyes', 'Mouth', 'Outline'];
@@ -33,6 +36,176 @@ const REQUIRED_DEFAULT_LAYERS: Record<string, Record<string, string>> = {
     OutlineSnake: 'Snake', // Snake outline is always needed
   },
 };
+
+// =============================================================================
+// Item Name to Layer Value Mapping
+// Maps full inventory item names (e.g., "Blue Shirt") to layer values (e.g., "Blue")
+// =============================================================================
+
+const ITEM_NAME_TO_LAYER_VALUE: Record<string, Record<string, string>> = {
+  // SHIRTS - Strip " Shirt" suffix
+  Shirt: {
+    'Base Shirt': 'Base',
+    'Based Shirt': 'Based',
+    'Blue Shirt': 'Blue',
+    'Cyan Shirt': 'Cyan',
+    'Green Shirt': 'Green',
+    'Grey Shirt': 'Grey',
+    'Lime Shirt': 'Lime',
+    'Nougat Shirt': 'Nougat',
+    'Orange Shirt': 'Orange',
+    'Pink Shirt': 'Pink',
+    'Plum Shirt': 'Plum',
+    'Red Shirt': 'Red',
+    'Sun Shirt': 'Sun',
+    'White Shirt': 'White',
+    'Yellow Shirt': 'Yellow',
+  },
+  // PANTS - Strip " Pants" suffix
+  Pants: {
+    'Based Pants': 'Based',
+    'Blue Pants': 'Blue',
+    'Grey Pants': 'Grey',
+    'Purple Pants': 'Purple',
+    'Red Pants': 'Red',
+    'Sky Pants': 'Sky',
+    'Sol Pants': 'Sol',
+    'White Pants': 'White',
+  },
+  // HANDS/GLOVES - Map full names to layer values
+  Hands: {
+    'Grey Gloves': 'GreyGloves',
+    'Pink Gloves': 'PinkGloves',
+    'Purple Gloves': 'PurpleGloves',
+    'Red Gloves': 'RedGloves',
+    'White Gloves': 'WhiteGloves',
+  },
+  // WEAPONS - Map full names to layer values
+  Weapons: {
+    'Apple Shooter': 'AppleShooter',
+    'Baseball Bat': 'Baseball',
+    'Earth Wand': 'EarthWand',
+    'Electric Wand': 'ElectricWand',
+    'Fire Wand': 'FireWand',
+    'Hammer': 'Hammer',
+    'Knife': 'Knife',
+    'Mace': 'Mace',
+    'Sickle': 'Sickle',
+    'Spear': 'Spear',
+    'Water Wand': 'WaterWand',
+  },
+  // HIP - Fanny Packs
+  Hip: {
+    'Purple Fanny Pack': 'PurpleFannyPack',
+    'Red Fanny Pack': 'RedFannyPack',
+    'Yellow Fanny Pack': 'YellowFannyPack',
+  },
+  // NECK - Amulets and chains
+  Neck: {
+    'Amulet of Apple': 'AmuletOfApple',
+    'Amulet of Health': 'AmuletOfHealth',
+    'Ethereal Amulet': 'EtherealAmulet',
+    'Base Chain': 'BaseChain',
+  },
+  // HATS
+  Hat: {
+    'Santa Hat': 'SantaHat',
+    'Doug Dimmadome': 'DougDimmadome',
+    'Blue Partyhat': 'BluePartyhat',
+    'Warden Hat': 'warden',
+  },
+  // FACE - Beards
+  Face: {
+    'White Beard': 'WhiteBeard',
+  },
+  // HAIR - Map full names
+  Hair: {
+    'Blonde Hair': 'Blonde',
+    'Brown Hair': 'Brown',
+    'Buzz Cut': 'Buzz',
+    'Buzz Cut Alt': 'Buzz',
+    'One Hair': 'One',
+    'One Hair Alt': 'One',
+    'Poop Hair': 'Poop',
+    'Three Hair': 'Three',
+    'Three Hair Alt': 'Three',
+    'None': 'None',
+    'None2': 'None2',
+    'None3': 'None3',
+  },
+  // BACKGROUNDS
+  Background: {
+    'Cave Background': 'Cave',
+    'Moon Background': 'Moon',
+    'Mount Blowamanjaro': 'MountBlowamanjaro',
+    'Pond Background': 'Pond',
+    'Sun Background': 'Sun',
+    'Sunny Background': 'Sunny',
+    'The Last Eclipse': 'TheLastEclipse',
+  },
+};
+
+/**
+ * Convert inventory item name to layer value
+ * E.g., "Blue Shirt" -> "Blue", "Apple Shooter" -> "AppleShooter"
+ * Handles multiple input formats: full names, short names, with/without suffixes
+ */
+function convertItemNameToLayerValue(layer: string, itemName: string): string {
+  if (!itemName || itemName === 'None') return itemName;
+
+  const trimmedName = itemName.trim();
+
+  // Check mapping FIRST for layers that need compound names (Hat, Weapons, etc.)
+  // "Santa Hat" -> "SantaHat", "Apple Shooter" -> "AppleShooter"
+  const mapping = ITEM_NAME_TO_LAYER_VALUE[layer];
+  if (mapping && mapping[trimmedName]) {
+    console.log(`[convertItemName] Found in mapping: "${trimmedName}" -> "${mapping[trimmedName]}"`);
+    return mapping[trimmedName];
+  }
+
+  // Direct suffix stripping for simple color-based layers
+  // This handles cases like "Blue Shirt" -> "Blue" for layer "Shirt"
+  // NOTE: Hat is NOT included because hat names need compound conversion (Santa Hat -> SantaHat)
+  const layerSuffixMap: Record<string, string> = {
+    'Shirt': ' Shirt',
+    'Pants': ' Pants',
+    'Hair': ' Hair',
+    'Background': ' Background',
+    // 'Hat' excluded - hat names use compound format (SantaHat, not Santa)
+  };
+
+  const suffix = layerSuffixMap[layer];
+  if (suffix && trimmedName.endsWith(suffix)) {
+    const stripped = trimmedName.slice(0, -suffix.length);
+    console.log(`[convertItemName] Stripped suffix "${suffix}" from "${trimmedName}" -> "${stripped}"`);
+    return stripped;
+  }
+
+  // Mapping was already checked above, skip duplicate check
+
+  // Check if the value already exists directly in LAYER_FILE_MAP
+  if (LAYER_FILE_MAP[layer]?.[trimmedName]) {
+    console.log(`[convertItemName] Value exists in LAYER_FILE_MAP: "${trimmedName}"`);
+    return trimmedName;
+  }
+
+  // Try removing all spaces for compound names (e.g., "Apple Shooter" -> "AppleShooter")
+  const noSpaces = trimmedName.replace(/\s+/g, '');
+  if (LAYER_FILE_MAP[layer]?.[noSpaces]) {
+    console.log(`[convertItemName] Found without spaces: "${trimmedName}" -> "${noSpaces}"`);
+    return noSpaces;
+  }
+
+  // Check if already a valid layer value (use the mapping declared earlier)
+  const layerMapping = ITEM_NAME_TO_LAYER_VALUE[layer];
+  if (layerMapping && Object.values(layerMapping).includes(trimmedName)) {
+    console.log(`[convertItemName] Already a valid layer value: "${trimmedName}"`);
+    return trimmedName;
+  }
+
+  console.log(`[convertItemName] No conversion found for "${trimmedName}" in layer "${layer}", returning as-is`);
+  return trimmedName;
+}
 
 // =============================================================================
 // Layer File Path Mapping
@@ -305,19 +478,37 @@ function encodeLayerPath(path: string): string {
  * Get URL for a layer image using local /layers/ path
  */
 function getLayerUrl(layerName: string, value: string): string {
-  const normalizedValue = normalizeTraitValue(value);
+  // Handle None/empty values
+  if (!value || value === 'None') {
+    console.log(`[getLayerUrl] Skipping ${layerName}: value is None or empty`);
+    return '';
+  }
 
-  // Check the comprehensive LAYER_FILE_MAP first
-  const filePath = LAYER_FILE_MAP[layerName]?.[normalizedValue];
+  // First, convert inventory item name to layer value if needed
+  // E.g., "Blue Shirt" -> "Blue", "Apple Shooter" -> "AppleShooter"
+  const convertedValue = convertItemNameToLayerValue(layerName, value);
+  console.log(`[getLayerUrl] Converting ${layerName}/"${value}" → "${convertedValue}"`);
+
+  // Check the comprehensive LAYER_FILE_MAP first (with converted value)
+  let filePath = LAYER_FILE_MAP[layerName]?.[convertedValue];
   if (filePath) {
     const url = `${LAYERS_BASE}/${encodeLayerPath(filePath)}`;
-    console.log(`[getLayerUrl] ${layerName}/${value} → ${url}`);
+    console.log(`[getLayerUrl] Found in LAYER_FILE_MAP: ${url}`);
+    return url;
+  }
+
+  // Try normalized (no spaces) version
+  const normalizedValue = normalizeTraitValue(convertedValue);
+  filePath = LAYER_FILE_MAP[layerName]?.[normalizedValue];
+  if (filePath) {
+    const url = `${LAYERS_BASE}/${encodeLayerPath(filePath)}`;
+    console.log(`[getLayerUrl] Found with normalized value "${normalizedValue}": ${url}`);
     return url;
   }
 
   // Fallback: try simple {LayerName}/{Value}.png format
   const fallbackUrl = `${LAYERS_BASE}/${layerName}/${normalizedValue}.png`;
-  console.log(`[getLayerUrl] ${layerName}/${value} → fallback: ${fallbackUrl}`);
+  console.warn(`[getLayerUrl] ⚠️ Using fallback for ${layerName}/"${value}" → "${normalizedValue}": ${fallbackUrl}`);
   return fallbackUrl;
 }
 
@@ -357,8 +548,13 @@ function buildLayerList(
 
     if (traitValue) {
       const url = getLayerUrl(layer, traitValue);
-      layers.push({ layer, url });
-      console.log(`[buildLayerList] Added layer: ${layer} = ${traitValue} → ${url}`);
+      // Only add layer if we got a valid URL (getLayerUrl returns '' for None values)
+      if (url) {
+        layers.push({ layer, url });
+        console.log(`[buildLayerList] Added layer: ${layer} = ${traitValue} → ${url}`);
+      } else {
+        console.log(`[buildLayerList] Skipped layer: ${layer} = ${traitValue} (no URL)`);
+      }
     }
   }
 
@@ -523,15 +719,15 @@ export function CanvasPreview({
         <img
           src={previewUrl}
           alt="NFT Preview"
-          className="w-full h-full rounded-lg border border-gray-700 object-contain"
+          className="w-full h-full rounded-lg border border-[rgba(255,255,255,0.08)] object-contain"
         />
       )}
 
       {/* Loading overlay */}
       {showLoading && loading && (
-        <div className="w-full aspect-square flex flex-col items-center justify-center bg-gray-900/70 rounded-lg">
-          <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full" />
-          <span className="text-gray-400 text-sm mt-2">
+        <div className="w-full aspect-square flex flex-col items-center justify-center bg-[#171e1d]/70 rounded-lg">
+          <div className="animate-spin w-8 h-8 border-2 border-[#ffd075] border-t-transparent rounded-full" />
+          <span className="text-[#8a9090] text-sm mt-2">
             {totalLayers > 0
               ? `Loading layers (${loadedLayers}/${totalLayers})...`
               : 'Generating preview...'}
@@ -548,8 +744,8 @@ export function CanvasPreview({
 
       {/* Placeholder when no image */}
       {!previewUrl && !loading && !error && (
-        <div className="w-full aspect-square rounded-lg border border-gray-700 bg-gray-800 flex items-center justify-center">
-          <span className="text-gray-500 text-sm">No preview available</span>
+        <div className="w-full aspect-square rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#1a2221] flex items-center justify-center">
+          <span className="text-[#6b7575] text-sm">No preview available</span>
         </div>
       )}
     </div>
@@ -585,7 +781,7 @@ export function TraitEditorPreview({
   const [imageError, setImageError] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Fetch full NFT traits from API to get base traits (Skin, Eyes, Mouth, etc.)
+  // Fetch full NFT traits from IPNS metadata (with cache buster for fresh data)
   useEffect(() => {
     // CRITICAL: Clear previous data immediately when tokenId changes
     // This prevents showing stale traits from a different NFT
@@ -595,23 +791,33 @@ export function TraitEditorPreview({
 
     async function fetchFullTraits() {
       try {
-        console.log(`[TraitEditorPreview] Fetching full traits for token ${tokenId}`);
-        const response = await fetch(`https://api.applesnakes.com/api/nft/${tokenId}`);
-        const data = await response.json();
+        // Fetch from IPNS with cache buster for fresh metadata (not stale EC2 API)
+        const metadataUrl = `${NFT_IPNS_BASE}/${tokenId}.json?${NFT_CACHE_VERSION}`;
+        console.log(`[TraitEditorPreview] Fetching fresh traits from IPNS: ${metadataUrl}`);
+        const response = await fetch(metadataUrl);
 
-        if (data.success && data.nft?.traits) {
-          console.log('[TraitEditorPreview] Full traits from API:', data.nft.traits);
-          setFullTraits(data.nft.traits);
-        } else if (data.traits) {
-          // Alternative response format
-          console.log('[TraitEditorPreview] Full traits from API:', data.traits);
-          setFullTraits(data.traits);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const metadata = await response.json();
+
+        // Parse traits from IPNS metadata attributes array
+        if (metadata.attributes && Array.isArray(metadata.attributes)) {
+          const traits: Record<string, string> = {};
+          for (const attr of metadata.attributes) {
+            if (attr.trait_type && attr.value !== undefined) {
+              traits[attr.trait_type] = String(attr.value);
+            }
+          }
+          console.log('[TraitEditorPreview] Fresh traits from IPNS:', traits);
+          setFullTraits(traits);
         } else {
-          console.warn('[TraitEditorPreview] No traits in API response:', data);
+          console.warn('[TraitEditorPreview] No attributes in IPNS metadata:', metadata);
           setFetchError('Failed to load NFT traits');
         }
       } catch (error) {
-        console.warn('[TraitEditorPreview] Failed to fetch full NFT traits:', error);
+        console.warn('[TraitEditorPreview] Failed to fetch IPNS metadata:', error);
         setFetchError('Failed to load NFT traits');
       }
     }
@@ -684,21 +890,21 @@ export function TraitEditorPreview({
     <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${className}`}>
       {/* Current (from IPFS) */}
       <div className="space-y-2">
-        <h3 className="text-xs sm:text-sm font-medium text-gray-400 flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-gray-500" />
+        <h3 className="text-xs sm:text-sm font-medium text-[#8a9090] flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-[#6b7575]" />
           Current
         </h3>
         <div className="relative aspect-square">
           {!imageError ? (
             <img
-              src={`${NFT_IPNS_BASE}/${tokenId}.png`}
+              src={`${NFT_IPNS_BASE}/${tokenId}.png?${NFT_CACHE_VERSION}`}
               alt={`NFT #${tokenId}`}
-              className="w-full h-full rounded-lg border border-gray-700 object-contain"
+              className="w-full h-full rounded-lg border border-[rgba(255,255,255,0.08)] object-contain"
               onError={() => setImageError(true)}
             />
           ) : (
-            <div className="w-full h-full rounded-lg border border-gray-700 bg-gray-800 flex items-center justify-center">
-              <span className="text-gray-500 text-sm">Image unavailable</span>
+            <div className="w-full h-full rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#1a2221] flex items-center justify-center">
+              <span className="text-[#6b7575] text-sm">Image unavailable</span>
             </div>
           )}
         </div>
@@ -706,7 +912,7 @@ export function TraitEditorPreview({
 
       {/* Live Preview (client-side canvas compositing using local layers) */}
       <div className="space-y-2">
-        <h3 className="text-xs sm:text-sm font-medium text-gray-400 flex items-center gap-1">
+        <h3 className="text-xs sm:text-sm font-medium text-[#8a9090] flex items-center gap-1">
           <span className={`w-2 h-2 rounded-full ${hasChanges ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
           Preview
           {hasChanges && <span className="text-yellow-400 text-xs">(unsaved)</span>}
@@ -719,12 +925,12 @@ export function TraitEditorPreview({
               className="w-full h-full"
             />
           ) : fetchError ? (
-            <div className="w-full h-full rounded-lg border border-gray-700 bg-red-900/20 flex items-center justify-center">
+            <div className="w-full h-full rounded-lg border border-[rgba(255,255,255,0.08)] bg-red-900/20 flex items-center justify-center">
               <span className="text-red-400 text-sm text-center px-2">{fetchError}</span>
             </div>
           ) : (
-            <div className="w-full h-full rounded-lg border border-gray-700 bg-gray-800 flex items-center justify-center">
-              <div className="animate-spin w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full" />
+            <div className="w-full h-full rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#1a2221] flex items-center justify-center">
+              <div className="animate-spin w-6 h-6 border-2 border-[#ffd075] border-t-transparent rounded-full" />
             </div>
           )}
         </div>
