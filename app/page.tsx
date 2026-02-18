@@ -28,8 +28,6 @@ interface Location {
   backgroundImage: string;
   description?: string;
   classification: LocationClassification;
-  musicPath: string;
-  musicVolume: number; // Base multiplier for this song (0.0 - 1.0)
 }
 
 // Location configurations
@@ -40,8 +38,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/WebBackground.png',
     description: 'The main village',
     classification: 'Valley',
-    musicPath: '/Music/Grassy_Valley_River_Basin.wav',
-    musicVolume: 1.0
   },
   mountain: {
     id: 'mountain',
@@ -49,8 +45,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/Mountain.png',
     description: 'A mysterious mountain',
     classification: 'Snow',
-    musicPath: '/Music/Frozen_Heights.wav',
-    musicVolume: 1.0
   },
   meteor: {
     id: 'meteor',
@@ -58,8 +52,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/SnowBlind.png',
     description: 'A massive meteor impact site',
     classification: 'Snow',
-    musicPath: '/Music/Frozen_Heights.wav',
-    musicVolume: 1.0
   },
   cave: {
     id: 'cave',
@@ -67,8 +59,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/CaveBackground.png',
     description: 'A dark and mysterious cave',
     classification: 'Cave',
-    musicPath: '/Music/Echoes_in_the_Hollow.wav',
-    musicVolume: 1.0
   },
   town: {
     id: 'town',
@@ -76,8 +66,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/TownBackground.png',
     description: 'The bustling town center',
     classification: 'Valley',
-    musicPath: '/Music/Grassy_Valley_River_Basin.wav',
-    musicVolume: 1.0
   },
   jailhouse: {
     id: 'jailhouse',
@@ -85,8 +73,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/GreenScreen.png',
     description: 'The town jail house',
     classification: 'Valley',
-    musicPath: '/Music/Grassy_Valley_River_Basin.wav',
-    musicVolume: 1.0
   },
   store: {
     id: 'store',
@@ -94,8 +80,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/StoreBackground.png',
     description: 'The town general store',
     classification: 'Valley',
-    musicPath: '/Music/Grassy_Valley_River_Basin.wav',
-    musicVolume: 1.0
   },
   wizardhouse: {
     id: 'wizardhouse',
@@ -103,8 +87,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/WizardHouseBackground.png',
     description: 'The wizard\'s mysterious dwelling',
     classification: 'Valley',
-    musicPath: '/Music/Grassy_Valley_River_Basin.wav',
-    musicVolume: 1.0
   },
   mountainhut: {
     id: 'mountainhut',
@@ -112,8 +94,6 @@ const LOCATIONS: Record<LocationId, Location> = {
     backgroundImage: '/Images/MountianHutBackground.png',
     description: 'A cozy mountain shelter',
     classification: 'Snow',
-    musicPath: '/Music/Frozen_Heights.wav',
-    musicVolume: 1.0
   }
 };
 
@@ -121,8 +101,6 @@ function HomeContent() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [currentLocation, setCurrentLocation] = useState<LocationId>('main');
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-  const [masterVolume] = useState(0.3); // 30% volume
   const [isSpooky, setIsSpooky] = useState(false); // For cave spooky effects
   const [townFrame, setTownFrame] = useState(0); // Town sprite animation frame (0-3)
   const [wizardHouseFrame, setWizardHouseFrame] = useState(0); // WizardHouse sprite animation frame (0-3)
@@ -989,40 +967,6 @@ function HomeContent() {
     }
   }, [showBreed]);
 
-  // Initialize audio element
-  useEffect(() => {
-    const audio = new Audio();
-    audio.loop = true;
-    audio.volume = masterVolume * LOCATIONS['main'].musicVolume;
-    audio.src = LOCATIONS['main'].musicPath;
-
-    // Attempt to play, but handle autoplay restrictions
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          console.log('🎵 Background music started successfully');
-        })
-        .catch((_e) => {
-          console.log('⚠️ Audio autoplay prevented by browser. Music will start on first user interaction.');
-          // Try to play on first user click anywhere
-          const startAudio = () => {
-            audio.play()
-              .then(() => console.log('🎵 Music started after user interaction'))
-              .catch(err => console.log('Audio play error:', err));
-            document.removeEventListener('click', startAudio);
-          };
-          document.addEventListener('click', startAudio);
-        });
-    }
-
-    setAudioElement(audio);
-
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
-  }, [masterVolume]);
 
   // Fast travel to mint (triggered by header mint button)
   useEffect(() => {
@@ -1030,51 +974,11 @@ function HomeContent() {
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to mint triggered!');
-
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to store location (where shopkeeper is)
         setCurrentLocation('store');
-
-        // Change music if needed (handled by location change effect)
-        if (audioElement && LOCATIONS['store'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['store'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['store'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['store'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open mint UI after screen fades
         setTimeout(() => {
@@ -1084,7 +988,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router]);
+  }, [searchParams, router]);
 
   // Fast travel to hatch (triggered by inventory hatch button)
   useEffect(() => {
@@ -1092,51 +996,11 @@ function HomeContent() {
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to hatch triggered!');
-
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to wizardhouse location
         setCurrentLocation('wizardhouse');
-
-        // Change music if needed
-        if (audioElement && LOCATIONS['wizardhouse'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['wizardhouse'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['wizardhouse'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['wizardhouse'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open hatch UI after screen fades
         setTimeout(() => {
@@ -1146,7 +1010,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router, openHatch]);
+  }, [searchParams, router, openHatch]);
 
   // Fast travel to breed (triggered by inventory sacrifice button)
   useEffect(() => {
@@ -1154,51 +1018,11 @@ function HomeContent() {
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to breed triggered!');
-
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to cave location
         setCurrentLocation('cave');
-
-        // Change music if needed (cave has different music!)
-        if (audioElement && LOCATIONS['cave'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['cave'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['cave'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['cave'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open breed UI after screen fades
         setTimeout(() => {
@@ -1208,7 +1032,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router, openBreed]);
+  }, [searchParams, router, openBreed]);
 
   // Fast travel to staking (triggered by inventory stake button)
   useEffect(() => {
@@ -1216,51 +1040,11 @@ function HomeContent() {
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to staking triggered!');
-
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to cave location
         setCurrentLocation('cave');
-
-        // Change music if needed (cave has different music!)
-        if (audioElement && LOCATIONS['cave'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['cave'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['cave'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['cave'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open breed UI with staking tab after screen fades
         setTimeout(() => {
@@ -1271,7 +1055,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router, openBreed]);
+  }, [searchParams, router, openBreed]);
 
   // Fast travel to jail (triggered by inventory jail button)
   useEffect(() => {
@@ -1279,51 +1063,11 @@ function HomeContent() {
 
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to jail triggered!');
-
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to jailhouse location
         setCurrentLocation('jailhouse');
-
-        // Change music if needed
-        if (audioElement && LOCATIONS['jailhouse'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['jailhouse'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['jailhouse'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['jailhouse'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open jail UI after screen fades
         setTimeout(() => {
@@ -1333,7 +1077,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router]);
+  }, [searchParams, router]);
 
   // Fast travel to mountain hut and open prediction market (triggered by /blackjack page)
   useEffect(() => {
@@ -1343,7 +1087,6 @@ function HomeContent() {
     if (shouldFastTravel) {
       console.log('⚡ Fast travel to mountain hut (prediction market) triggered!');
 
-      // Set shared game ID if provided (for direct navigation to specific game)
       if (gameIdParam) {
         setSharedGameId(BigInt(gameIdParam));
         console.log(`🎮 Opening specific game: #${gameIdParam}`);
@@ -1351,50 +1094,11 @@ function HomeContent() {
         setSharedGameId(null);
       }
 
-      // Clear the query param
       router.replace('/');
-
-      // Start fast travel sequence
       setIsTransitioning(true);
 
       setTimeout(() => {
-        // Change to mountainhut location
         setCurrentLocation('mountainhut');
-
-        // Change music if needed
-        if (audioElement && LOCATIONS['mountainhut'].musicPath !== LOCATIONS[currentLocation].musicPath) {
-          const targetVolume = masterVolume * LOCATIONS['mountainhut'].musicVolume;
-
-          // Fade out current music
-          const fadeOut = setInterval(() => {
-            if (audioElement.volume > 0.05) {
-              audioElement.volume = Math.max(0, audioElement.volume - 0.05);
-            } else {
-              clearInterval(fadeOut);
-              audioElement.pause();
-
-              // Switch to new music
-              audioElement.src = LOCATIONS['mountainhut'].musicPath;
-              audioElement.volume = 0;
-
-              audioElement.play()
-                .then(() => {
-                  console.log(`🎵 Playing ${LOCATIONS['mountainhut'].musicPath.split('/').pop()} from beginning`);
-
-                  // Fade in new music
-                  const fadeIn = setInterval(() => {
-                    if (audioElement.volume < targetVolume - 0.05) {
-                      audioElement.volume = Math.min(targetVolume, audioElement.volume + 0.05);
-                    } else {
-                      audioElement.volume = targetVolume;
-                      clearInterval(fadeIn);
-                    }
-                  }, 50);
-                })
-                .catch(err => console.error('Error playing music:', err));
-            }
-          }, 50);
-        }
 
         // Open PredictionJack UI after screen fades
         setTimeout(() => {
@@ -1404,7 +1108,7 @@ function HomeContent() {
         }, 600);
       }, 400);
     }
-  }, [searchParams, audioElement, currentLocation, masterVolume, router, openPredictionJack]);
+  }, [searchParams, router, openPredictionJack]);
 
   // Handle opening NFT Hub via query params (for backwards compatibility)
   useEffect(() => {
@@ -1424,59 +1128,13 @@ function HomeContent() {
     }
   }, [searchParams, router, openNFTHub]);
 
-  // Handle location changes with fade-to-black transition and music switching
+  // Handle location changes with fade-to-black transition
   const navigateToLocation = (newLocation: LocationId) => {
-    setShowChat(false); // Close chat when navigating
-    setCurrentCharacter(''); // Clear current character when navigating
-    setShowSwapMint(false); // Close swap mint interface when navigating
-    setShowHatch(false); // Close hatch interface when navigating
+    setShowChat(false);
+    setCurrentCharacter('');
+    setShowSwapMint(false);
+    setShowHatch(false);
     setIsTransitioning(true);
-
-    // Change music if different from current location
-    if (audioElement && LOCATIONS[newLocation].musicPath !== LOCATIONS[currentLocation].musicPath) {
-      const targetVolume = masterVolume * LOCATIONS[newLocation].musicVolume;
-      const currentVolume = audioElement.volume;
-      const fadeSteps = 20; // Number of fade steps
-      const fadeInterval = 10; // ms between steps
-
-      // Fade out old music during first 200ms
-      let step = 0;
-      const fadeOutInterval = setInterval(() => {
-        step++;
-        const progress = step / fadeSteps;
-        audioElement.volume = currentVolume * (1 - progress);
-
-        if (step >= fadeSteps) {
-          clearInterval(fadeOutInterval);
-
-          // Change track at the darkest point (200ms mark)
-          audioElement.pause();
-          audioElement.currentTime = 0; // Reset to beginning
-          audioElement.src = LOCATIONS[newLocation].musicPath;
-          audioElement.volume = 0;
-
-          // Start playing new track
-          audioElement.play()
-            .then(() => {
-              console.log(`🎵 Playing ${LOCATIONS[newLocation].musicPath.split('/').pop()} from beginning`);
-
-              // Fade in new music during next 200ms
-              let fadeInStep = 0;
-              const fadeInInterval = setInterval(() => {
-                fadeInStep++;
-                const fadeInProgress = fadeInStep / fadeSteps;
-                audioElement.volume = targetVolume * fadeInProgress;
-
-                if (fadeInStep >= fadeSteps) {
-                  clearInterval(fadeInInterval);
-                  audioElement.volume = targetVolume;
-                }
-              }, fadeInterval);
-            })
-            .catch((e) => console.log('Audio play error:', e));
-        }
-      }, fadeInterval);
-    }
 
     // Fade to black (200ms), change location at peak, then fade from black (200ms)
     setTimeout(() => {

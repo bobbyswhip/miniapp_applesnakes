@@ -2397,18 +2397,29 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                 console.log('=== MULTI-HOP SELL QUOTE: Token → wASS → ETH ===');
 
                 if (wassOut > 0n) {
-                  // Step 2: Get wASS → ETH quote using the deeper liquidity pool for sells
-                  const hookAddress = await publicClient.readContract({
-                    address: contracts.nft.address as `0x${string}`,
-                    abi: contracts.nft.abi,
-                    functionName: 'hook',
-                    args: [],
-                  }) as `0x${string}`;
+                  // Step 2: Get wASS → ETH quote using the default pool from NFT contract
+                  // Note: SELL_POOL_ID lives on the config HOOK_ADDRESS, but the NFT's hook()
+                  // may point to a different contract. Use poolIdRaw (default pool) which is
+                  // always available on the NFT's hook and matches the execution path.
+                  const [sellHookPoolIdRaw, sellHookAddress] = await Promise.all([
+                    publicClient.readContract({
+                      address: contracts.nft.address as `0x${string}`,
+                      abi: contracts.nft.abi,
+                      functionName: 'poolIdRaw',
+                      args: [],
+                    }) as Promise<`0x${string}`>,
+                    publicClient.readContract({
+                      address: contracts.nft.address as `0x${string}`,
+                      abi: contracts.nft.abi,
+                      functionName: 'hook',
+                      args: [],
+                    }) as Promise<`0x${string}`>,
+                  ]);
 
-                  console.log('[ChartModal] Multi-hop sell: Using deeper liquidity pool for wASS→ETH:', SELL_POOL_ID);
+                  console.log('[ChartModal] Multi-hop sell: Using default wASS/ETH pool for quote, hook:', sellHookAddress);
 
                   const wassEthPoolKey = await publicClient.readContract({
-                    address: hookAddress,
+                    address: sellHookAddress,
                     abi: [{
                       inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
                       name: 'getPoolKey',
@@ -2428,7 +2439,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                       type: 'function',
                     }],
                     functionName: 'getPoolKey',
-                    args: [SELL_POOL_ID],
+                    args: [sellHookPoolIdRaw],
                   }) as unknown as {
                     currency0: `0x${string}`;
                     currency1: `0x${string}`;
@@ -2437,7 +2448,8 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
                     hooks: `0x${string}`;
                   };
 
-                  // wASS → ETH direction: zeroForOne = false (wASS is currency0, ETH is currency1)
+                  // wASS → ETH direction: ETH is currency0 (0x0), wASS is currency1
+                  // Selling wASS (currency1) for ETH (currency0) = zeroForOne = false
                   const ethOut = await getSimulateQuote(wassEthPoolKey, false, wassOut);
                   console.log('wASS→ETH quote:', formatEther(ethOut), 'ETH for', formatUnits(wassOut, 18), 'wASS');
                   console.log('=== MULTI-HOP FINAL:', formatEther(ethOut), 'ETH for', formatUnits(tokenIn, 18), 'Token ===');
@@ -2464,8 +2476,13 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
               }
             } catch (err) {
               console.error('Sell quoter failed:', err);
-              console.log('Using 1:1 estimate');
-              setOutputAmount(formatUnits(tokenIn, 18));
+              if (sellOutputCurrency === 'eth') {
+                setSwapError('Unable to get sell quote for ETH');
+                setOutputAmount('');
+              } else {
+                console.log('Using 1:1 estimate for wASS');
+                setOutputAmount(formatUnits(tokenIn, 18));
+              }
             }
           }
         } else {
@@ -2478,17 +2495,17 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             args: [],
           }) as `0x${string}`;
 
-          // For sells, use the deeper liquidity pool; for buys, use the default pool
-          const poolIdToUse = swapTab === 'sell' ? SELL_POOL_ID : await publicClient.readContract({
+          // Use the default pool from NFT contract (poolIdRaw) for both buys and sells
+          // Note: SELL_POOL_ID lives on a different hook contract than the NFT's hook(),
+          // so we use the default pool which is always available on the current hook.
+          const poolIdToUse = await publicClient.readContract({
             address: contracts.nft.address as `0x${string}`,
             abi: contracts.nft.abi,
             functionName: 'poolIdRaw',
             args: [],
           }) as `0x${string}`;
 
-          if (swapTab === 'sell') {
-            console.log('[ChartModal] Using sell pool for quote:', SELL_POOL_ID);
-          }
+          console.log('[ChartModal] Using default pool for quote:', poolIdToUse);
 
           const poolKeyData = await publicClient.readContract({
             address: hookAddress,
@@ -2907,13 +2924,16 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       const minTokensOut = 0n;
       const minWassOut = 0n;
 
-      // Determine if wASS is token0 in the output pool
-      const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+      // Sort tokens for V4 pool key (currency0 must be lower address)
+      const [sortedC0, sortedC1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+        ? [selectedPair.token0, selectedPair.token1]
+        : [selectedPair.token1, selectedPair.token0];
+      const wassIsToken0 = sortedC0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
 
       // Build the output pool key for swapToToken
       const outputPoolKey = {
-        currency0: selectedPair.token0,
-        currency1: selectedPair.token1,
+        currency0: sortedC0,
+        currency1: sortedC1,
         fee: selectedPair.fee,
         tickSpacing: selectedPair.tickSpacing,
         hooks: selectedPair.hook,
@@ -2969,13 +2989,16 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800); // 30 minutes
 
       // wASS → Token is a single-hop V4 swap
-      // Determine swap direction based on pool token order
-      const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+      // Sort tokens for V4 pool key (currency0 must be lower address)
+      const [sortedC0, sortedC1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+        ? [selectedPair.token0, selectedPair.token1]
+        : [selectedPair.token1, selectedPair.token0];
+      const wassIsToken0 = sortedC0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
 
       // Build pool key for wASS/Token pair
       const tokenPoolKey = {
-        currency0: selectedPair.token0,
-        currency1: selectedPair.token1,
+        currency0: sortedC0,
+        currency1: sortedC1,
         fee: selectedPair.fee,
         tickSpacing: selectedPair.tickSpacing,
         hooks: selectedPair.hook,
@@ -3381,14 +3404,18 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
       // Build and add the swap call
       if (isTokenPair && outputTokenAddress) {
         // Single-hop sell: Token -> wASS
+        // Sort tokens for V4 pool key (currency0 must be lower address)
+        const [sortedC0, sortedC1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+          ? [selectedPair.token0, selectedPair.token1]
+          : [selectedPair.token1, selectedPair.token0];
         const tokenPoolKey = {
-          currency0: selectedPair.token0,
-          currency1: selectedPair.token1,
+          currency0: sortedC0,
+          currency1: sortedC1,
           fee: selectedPair.fee,
           tickSpacing: selectedPair.tickSpacing,
           hooks: selectedPair.hook,
         };
-        const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+        const wassIsToken0 = sortedC0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
         const zeroForOne = !wassIsToken0;
 
         const { commands, inputs } = buildV4SwapCalldataForTokenPair(
@@ -3410,17 +3437,24 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           data: swapData,
         });
       } else if (publicClient) {
-        // Single-hop sell: wASS -> ETH (using deeper liquidity pool)
-        // Fetch sell pool key inline for batched transaction
-        const hookAddress = await publicClient.readContract({
-          address: contracts.nft.address as `0x${string}`,
-          abi: contracts.nft.abi,
-          functionName: 'hook',
-          args: [],
-        }) as `0x${string}`;
+        // Single-hop sell: wASS -> ETH using default pool from NFT contract
+        const [batchSellHookAddress, batchSellPoolId] = await Promise.all([
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'hook',
+            args: [],
+          }) as Promise<`0x${string}`>,
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'poolIdRaw',
+            args: [],
+          }) as Promise<`0x${string}`>,
+        ]);
 
         const sellPoolKeyData = await publicClient.readContract({
-          address: hookAddress,
+          address: batchSellHookAddress,
           abi: [{
             inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
             name: 'getPoolKey',
@@ -3440,7 +3474,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             type: 'function',
           }],
           functionName: 'getPoolKey',
-          args: [SELL_POOL_ID],
+          args: [batchSellPoolId],
         }) as unknown as {
           currency0: `0x${string}`;
           currency1: `0x${string}`;
@@ -3450,7 +3484,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         };
 
         const minEthOut = outputAmount ? parseEther((parseFloat(outputAmount) * 0.95).toString()) : 0n;
-        console.log('[ChartModal] Batched sell using deeper liquidity pool:', SELL_POOL_ID);
+        console.log('[ChartModal] Batched sell using default pool:', batchSellPoolId);
         const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, sellPoolKeyData);
 
         const swapData = encodeFunctionData({
@@ -4368,16 +4402,20 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
         }
       } else if (isTokenPair && outputTokenAddress) {
         // wASS/TOKEN pair sell: either single-hop to wASS or multi-hop to ETH
+        // Sort tokens for V4 pool key (currency0 must be lower address)
+        const [sortedC0, sortedC1] = selectedPair.token0.toLowerCase() < selectedPair.token1.toLowerCase()
+          ? [selectedPair.token0, selectedPair.token1]
+          : [selectedPair.token1, selectedPair.token0];
         const tokenPoolKey = {
-          currency0: selectedPair.token0,
-          currency1: selectedPair.token1,
+          currency0: sortedC0,
+          currency1: sortedC1,
           fee: selectedPair.fee,
           tickSpacing: selectedPair.tickSpacing,
           hooks: selectedPair.hook,
         };
 
         // Determine zeroForOne direction
-        const wassIsToken0 = selectedPair.token0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
+        const wassIsToken0 = sortedC0.toLowerCase() === WASS_TOKEN_ADDRESS.toLowerCase();
         const zeroForOne = !wassIsToken0; // TOKEN -> wASS direction
 
         if (sellOutputCurrency === 'eth') {
@@ -4546,24 +4584,31 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           }
         }
       } else {
-        // Single-hop sell: wASS -> ETH
-        // Fetch sell pool key inline (deeper liquidity pool)
+        // Single-hop sell: wASS -> ETH using default pool from NFT contract
         if (!publicClient) {
           setSwapError('Client not ready');
           return;
         }
 
-        console.log('[ChartModal] Fetching sell pool for deeper liquidity:', SELL_POOL_ID);
+        const [singleSellHookAddress, singleSellPoolId] = await Promise.all([
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'hook',
+            args: [],
+          }) as Promise<`0x${string}`>,
+          publicClient.readContract({
+            address: contracts.nft.address as `0x${string}`,
+            abi: contracts.nft.abi,
+            functionName: 'poolIdRaw',
+            args: [],
+          }) as Promise<`0x${string}`>,
+        ]);
 
-        const hookAddress = await publicClient.readContract({
-          address: contracts.nft.address as `0x${string}`,
-          abi: contracts.nft.abi,
-          functionName: 'hook',
-          args: [],
-        }) as `0x${string}`;
+        console.log('[ChartModal] Fetching default pool for sell:', singleSellPoolId);
 
         const sellPoolKeyData = await publicClient.readContract({
-          address: hookAddress,
+          address: singleSellHookAddress,
           abi: [{
             inputs: [{ internalType: 'bytes32', name: 'id', type: 'bytes32' }],
             name: 'getPoolKey',
@@ -4583,7 +4628,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
             type: 'function',
           }],
           functionName: 'getPoolKey',
-          args: [SELL_POOL_ID],
+          args: [singleSellPoolId],
         }) as unknown as {
           currency0: `0x${string}`;
           currency1: `0x${string}`;
@@ -4592,7 +4637,7 @@ export function ChartModal({ isOpen, onClose, tokenPrice, embedded = false, layo
           hooks: `0x${string}`;
         };
 
-        console.log('[ChartModal] Sell pool loaded:', sellPoolKeyData);
+        console.log('[ChartModal] Default sell pool loaded:', sellPoolKeyData);
         const { commands, inputs } = buildV4SwapCalldata(sellAmount, minEthOut, sellPoolKeyData);
 
         writeContract({

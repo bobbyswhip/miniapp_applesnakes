@@ -775,8 +775,8 @@ export function InventorySack() {
         };
       });
 
-    return [...staticPairs, ...tokenWarsPairs];
-  }, [launchedTokens, computeV4PoolId]);
+    return [...staticPairs];
+  }, []);
 
   // Get the currently selected pair data (for passing to ChartModal)
   // Uses clickedToken as fallback when pair isn't in combinedPairs yet (timing issue)
@@ -2271,9 +2271,6 @@ export function InventorySack() {
                         {/* Token Pairs List - Combines static pairs with Token Wars launches */}
                         <div>
                           <h4 className="text-sm font-medium text-[#8a9090] mb-3">Available Pairs</h4>
-                          {launchedTokensLoading && combinedPairs.length === TOKEN_PAIRS.length && (
-                            <div className="text-xs text-[#6b7575] mb-2">Loading Token Wars pairs...</div>
-                          )}
                           <div className="space-y-2">
                             {combinedPairs
                               .sort((a, b) => {

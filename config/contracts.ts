@@ -163,10 +163,19 @@ export const TOKEN_PAIRS: TokenPairConfig[] = [
     isDefault: true,
   },
   {
+    id: 'wass-x402c',
+    token0: WASS_TOKEN_ADDRESS, // wASS is token0
+    token1: '0x001373f663c235a2112A14e03799813EAa7bC6F1', // x402c Protocol token
+    hook: WASS_PAIR_HOOK_ADDRESS,
+    fee: 3000,
+    tickSpacing: 60,
+    geckoPoolAddress: '0xaa23e7a32d1a83bc8f43913536ab77c65523e9bc406d3a3f996eadb0bb599cb4',
+  },
+  {
     id: 'wass-token',
     token0: WASS_TOKEN_ADDRESS, // wASS is token0
     token1: '0x92C4Cc88e010D772CEE651FBfceEBC4F0E12d500', // MANTIS token
-    hook: '0x35B9b5b023897DA8C7375ba6141245B8416460CC' as `0x${string}`,
+    hook: WASS_PAIR_HOOK_ADDRESS,
     fee: 3000,
     tickSpacing: 60,
     geckoPoolAddress: '0x280f48fab8afcd1c8f08830a78a9702020d94f5c378a0fad27ac49ef6ba04170',
